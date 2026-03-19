@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine # Versão estável e leve
+    container_name: melhoramais_db
+    restart: always
+    environment:
+      POSTGRES_USER: kauan
+      POSTGRES_PASSWORD: viruss # Pode trocar, mas anote!
+      POSTGRES_DB: melhoramais_agro
+    ports:
+      - "5432:5432" # Porta padrão do Postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Garante que os dados não sumam se o container parar
+
+volumes:
+  postgres_data:

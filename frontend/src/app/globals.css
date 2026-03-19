@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Geist", "sans-serif";
+  
+  /* Modern HSL Color Palette */
+  --color-primary: hsl(220, 100%, 60%);
+  --color-primary-dark: hsl(220, 100%, 40%);
+  --color-accent: hsl(160, 100%, 50%);
+  --color-bg-dark: hsl(222, 47%, 4%);
+  --color-bg-card: hsla(222, 47%, 8%, 0.7);
+  --color-border: hsla(222, 47%, 15%, 1);
+  --color-text-muted: hsl(215, 20%, 65%);
+}
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 2, 6, 23;
+  --background-end-rgb: 8, 10, 30;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: radial-gradient(circle at top left, hsla(220, 100%, 15%, 0.3), transparent),
+              radial-gradient(circle at bottom right, hsla(160, 100%, 15%, 0.1), transparent),
+              rgb(var(--background-start-rgb));
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+@layer utilities {
+  .bento-card {
+    @apply bg-slate-900/40 border border-slate-800/60 rounded-[2rem] p-8 backdrop-blur-xl hover:border-blue-500/40 transition-all duration-500 shadow-2xl shadow-black/20;
+  }
+  
+  .glass-card {
+    @apply bg-white/5 border border-white/10 backdrop-blur-lg rounded-3xl p-8;
+  }
+
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 text-white font-semibold py-4 px-8 rounded-2xl transition-all shadow-xl shadow-blue-600/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-blue-400;
+  }
+
+  .mesh-bg {
+    background-color: hsla(222, 47%, 4%, 1);
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(220, 100%, 15%, 1) 0px, transparent 50%),
+      radial-gradient(at 50% 0%, hsla(160, 100%, 10%, 1) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(220, 100%, 15%, 1) 0px, transparent 50%);
+  }
+
+  .input-premium {
+    @apply w-full bg-slate-950/50 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 text-white placeholder-slate-500 rounded-xl py-4 px-5 outline-none transition-all;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-800 rounded-full hover:bg-slate-700 transition-colors;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
