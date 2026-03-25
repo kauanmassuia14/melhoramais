@@ -11,12 +11,17 @@ import {
   ArrowRightOnRectangleIcon,
   DocumentArrowUpIcon,
   CpuChipIcon,
+  Squares2X2Icon,
+  BuildingOffice2Icon,
 } from "@heroicons/react/24/outline";
 import { Logo } from "@/components/ui/logo";
+import { useAuth } from "@/lib/auth-context";
 
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: HomeIcon, href: "/" },
   { id: "upload", label: "Upload", icon: DocumentArrowUpIcon, href: "/upload" },
+  { id: "animals", label: "Animais", icon: Squares2X2Icon, href: "/animals" },
+  { id: "farms", label: "Fazendas", icon: BuildingOffice2Icon, href: "/farms" },
   { id: "history", label: "Histórico", icon: ClockIcon, href: "/history" },
   { id: "analytics", label: "Análises", icon: ChartBarIcon, href: "/analytics" },
   { id: "settings", label: "Configurações", icon: Cog6ToothIcon, href: "/settings" },
@@ -24,6 +29,7 @@ const MENU_ITEMS = [
 
 export const Sidebar = () => {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   return (
     <aside className="w-[260px] border-r border-white/[0.04] bg-deep-dark-900/60 backdrop-blur-2xl hidden lg:flex flex-col sticky top-0 h-screen">
@@ -83,6 +89,21 @@ export const Sidebar = () => {
 
       {/* Bottom Section */}
       <div className="p-4 space-y-3">
+        {/* User info */}
+        {user && (
+          <div className="px-3 py-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <p className="text-xs text-text-primary font-medium truncate">{user.nome}</p>
+            <p className="text-[10px] text-text-muted truncate">{user.email}</p>
+            <span className={`inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full ${
+              user.role === "admin"
+                ? "bg-cyan-glow/10 text-cyan-glow-400"
+                : "bg-violet-glow/10 text-violet-glow-400"
+            }`}>
+              {user.role.toUpperCase()}
+            </span>
+          </div>
+        )}
+
         {/* Version */}
         <div className="px-3 py-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
           <div className="flex items-center gap-2">
@@ -94,13 +115,13 @@ export const Sidebar = () => {
         </div>
 
         {/* Logout */}
-        <Link
-          href="/login"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/[0.04] transition-all group"
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/[0.04] transition-all group"
         >
           <ArrowRightOnRectangleIcon className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
           <span className="text-sm font-medium">Sair</span>
-        </Link>
+        </button>
       </div>
     </aside>
   );

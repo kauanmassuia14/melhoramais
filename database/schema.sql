@@ -107,6 +107,24 @@ CREATE INDEX IF NOT EXISTS idx_raw_data_farm ON silver.raw_animal_data(id_farm);
 CREATE INDEX IF NOT EXISTS idx_raw_data_source ON silver.raw_animal_data(source_system);
 
 -- ============================================
+-- USERS TABLE (Auth)
+-- ============================================
+CREATE TABLE IF NOT EXISTS silver.usuarios (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    senha_hash VARCHAR(255) NOT NULL,
+    id_farm INTEGER REFERENCES silver.fazendas(id_farm),
+    role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
+    ativo BOOLEAN DEFAULT true,
+    ultimo_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_usuarios_email ON silver.usuarios(email);
+CREATE INDEX IF NOT EXISTS idx_usuarios_farm ON silver.usuarios(id_farm);
+
+-- ============================================
 -- INITIAL DATA: Default Farm (for dev)
 -- ============================================
 INSERT INTO silver.fazendas (nome_farm, responsavel)

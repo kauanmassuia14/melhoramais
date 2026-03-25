@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 from datetime import date, datetime
 
@@ -137,3 +137,53 @@ class ReportRequest(BaseModel):
     farm_id: Optional[int] = None
     source_system: Optional[str] = None
     raca: Optional[str] = None
+
+
+# ============================================
+# User / Auth Schemas
+# ============================================
+class UserCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    senha: str = Field(..., min_length=6, max_length=128)
+    id_farm: Optional[int] = None
+    role: Optional[str] = "user"
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    senha: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    nome: str
+    email: str
+    id_farm: Optional[int]
+    role: str
+    ativo: bool
+    ultimo_login: Optional[datetime]
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ChangePasswordRequest(BaseModel):
+    senha_atual: str
+    senha_nova: str = Field(..., min_length=6, max_length=128)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

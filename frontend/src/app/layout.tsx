@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -40,7 +41,9 @@ export default function RootLayout({
           <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-violet-glow/[0.02] rounded-full blur-[120px]" />
         </div>
 
-        <div className="relative z-10">{children}</div>
+        <AuthProvider>
+          <div className="relative z-10">{children}</div>
+        </AuthProvider>
       </body>
     </html>
   );

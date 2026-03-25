@@ -17,8 +17,10 @@ import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
 import { GlassCard } from "@/components/ui/glass-card";
 import { BorderBeam } from "@/components/ui/border-beam";
+import { useAuth } from "@/lib/auth-context";
 
 export default function RegisterPage() {
+  const { register } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -52,9 +54,20 @@ export default function RegisterPage() {
     e.preventDefault();
     if (!validate()) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    setIsLoading(false);
-    window.location.href = "/";
+    setErrors({});
+    try {
+      await register({
+        nome: form.name,
+        email: form.email,
+        senha: form.password,
+      });
+      window.location.href = "/";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao criar conta";
+      setErrors({ email: message });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -196,7 +196,7 @@ export default function DashboardPage() {
                   {
                     label: "Upload ANCP",
                     desc: "Processar relatório genético",
-                    href: "/",
+                    href: "/upload",
                     color: "cyan",
                   },
                   {

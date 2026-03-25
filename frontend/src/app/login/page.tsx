@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   EnvelopeIcon,
   LockClosedIcon,
-  UserIcon,
   EyeIcon,
   EyeSlashIcon,
   ArrowRightIcon,
@@ -16,6 +15,7 @@ import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
 import { GlassCard } from "@/components/ui/glass-card";
 import { BorderBeam } from "@/components/ui/border-beam";
+import { useAuth } from "@/lib/auth-context";
 
 const DNA_HELIX = [
   { x: 0, delay: 0 },
@@ -29,6 +29,7 @@ const DNA_HELIX = [
 ];
 
 export default function LoginPage() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -53,10 +54,16 @@ export default function LoginPage() {
     e.preventDefault();
     if (!validate()) return;
     setIsLoading(true);
-    // Simulate auth
-    await new Promise((r) => setTimeout(r, 2000));
-    setIsLoading(false);
-    window.location.href = "/";
+    setErrors({});
+    try {
+      await login(email, password);
+      window.location.href = "/";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao autenticar";
+      setErrors({ password: message });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -265,12 +272,12 @@ export default function LoginPage() {
                         )}
                         {showPassword ? "Ocultar" : "Mostrar"}
                       </button>
-                      <button
-                        type="button"
+                      <Link
+                        href="/forgot-password"
                         className="text-xs text-cyan-glow-400 hover:text-cyan-glow-300 transition-colors font-medium"
                       >
                         Esqueceu a senha?
-                      </button>
+                      </Link>
                     </div>
                   </div>
 

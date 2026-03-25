@@ -117,3 +117,20 @@ class RawAnimalData(Base):
     processing_log_id = Column(Integer, _fk("audit.processing_log.id"))
     raw_data = Column(JSON, nullable=False)  # ALL columns as JSON dict
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class User(Base):
+    __tablename__ = "usuarios"
+    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    senha_hash = Column(String(255), nullable=False)
+    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), index=True)
+    role = Column(String(20), default="user")  # admin, user, viewer
+    ativo = Column(Boolean, default=True)
+    ultimo_login = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    farm = relationship("Farm", foreign_keys=[id_farm])

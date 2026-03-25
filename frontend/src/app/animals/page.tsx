@@ -1,0 +1,315 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import {
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { GlassCard } from "@/components/ui/glass-card";
+import { api, Animal } from "@/lib/api";
+
+const PAGE_SIZE = 20;
+
+export default function AnimalsPage() {
+  const [animals, setAnimals] = useState<Animal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [source, setSource] = useState("");
+  const [sexo, setSexo] = useState("");
+  const [raca, setRaca] = useState("");
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchAnimals = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.getAnimals({
+        search: search || undefined,
+        source: source || undefined,
+        sexo: sexo || undefined,
+        raca: raca || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setAnimals(data);
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro ao carregar animais");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, source, sexo, raca, page]);
+
+  useEffect(() => {
+    fetchAnimals();
+  }, [fetchAnimals]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(0);
+    fetchAnimals();
+  };
+
+  const getSexLabel = (s: string | null) => {
+    if (s === "M") return "Macho";
+    if (s === "F") return "Fêmea";
+    return "—";
+  };
+
+  const getSexColor = (s: string | null) => {
+    if (s === "M") return "text-blue-400 bg-blue-400/10";
+    if (s === "F") return "text-pink-400 bg-pink-400/10";
+    return "text-text-muted bg-white/5";
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">
+              Animais
+            </h1>
+            <p className="text-text-secondary text-sm mt-1">
+              Busque e visualize os dados genéticos dos animais
+            </p>
+          </div>
+          <button
+            onClick={fetchAnimals}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.06] bg-white/[0.02] text-sm text-text-secondary hover:bg-white/[0.04] transition-all"
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </button>
+        </div>
+
+        {/* Filters */}
+        <GlassCard className="p-4">
+          <form onSubmit={handleSearch} className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
+                Buscar
+              </label>
+              <div className="relative">
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="RGN ou nome do animal..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary placeholder:text-text-muted focus:border-cyan-glow/30 focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="w-36">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
+                Fonte
+              </label>
+              <select
+                value={source}
+                onChange={(e) => { setSource(e.target.value); setPage(0); }}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none"
+              >
+                <option value="">Todas</option>
+                <option value="ANCP">ANCP</option>
+                <option value="PMGZ">PMGZ</option>
+                <option value="Geneplus">Geneplus</option>
+              </select>
+            </div>
+
+            <div className="w-28">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
+                Sexo
+              </label>
+              <select
+                value={sexo}
+                onChange={(e) => { setSexo(e.target.value); setPage(0); }}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none"
+              >
+                <option value="">Todos</option>
+                <option value="M">Macho</option>
+                <option value="F">Fêmea</option>
+              </select>
+            </div>
+
+            <div className="w-32">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
+                Raça
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: NEL"
+                value={raca}
+                onChange={(e) => { setRaca(e.target.value); setPage(0); }}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary placeholder:text-text-muted focus:border-cyan-glow/30 focus:outline-none transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 text-cyan-glow-400 text-sm font-medium hover:bg-cyan-glow/20 transition-all"
+            >
+              <FunnelIcon className="w-4 h-4" />
+              Filtrar
+            </button>
+          </form>
+        </GlassCard>
+
+        {/* Error state */}
+        {error && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-neon/[0.06] border border-rose-neon/20">
+            <ExclamationTriangleIcon className="w-5 h-5 text-rose-neon-400 flex-shrink-0" />
+            <span className="text-sm text-rose-neon-400">{error}</span>
+          </div>
+        )}
+
+        {/* Table */}
+        <GlassCard className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/[0.04]">
+                  <th className="text-left px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    RGN
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    Nome
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    Sexo
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    Raça
+                  </th>
+                  <th className="text-right px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    P210
+                  </th>
+                  <th className="text-right px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    P365
+                  </th>
+                  <th className="text-right px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    P450
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+                    Fonte
+                  </th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i} className="border-b border-white/[0.02]">
+                      {Array.from({ length: 9 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3">
+                          <div className="h-4 bg-white/[0.04] rounded animate-pulse" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : animals.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-12 text-center">
+                      <p className="text-text-muted text-sm">
+                        Nenhum animal encontrado
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  animals.map((animal, i) => (
+                    <motion.tr
+                      key={animal.id_animal}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.02 }}
+                      className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-sm text-cyan-glow-400">
+                          {animal.rgn_animal}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-text-primary">
+                        {animal.nome_animal || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${getSexColor(
+                            animal.sexo
+                          )}`}
+                        >
+                          {getSexLabel(animal.sexo)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-text-secondary">
+                        {animal.raca || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                        {animal.p210_peso_desmama?.toFixed(1) || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                        {animal.p365_peso_ano?.toFixed(1) || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                        {animal.p450_peso_sobreano?.toFixed(1) || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">
+                          {animal.fonte_origem || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/animals/${animal.id_animal}`}
+                          className="text-xs text-cyan-glow-400 hover:text-cyan-glow-300 transition-colors"
+                        >
+                          Detalhes
+                        </Link>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {!loading && animals.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.04]">
+              <p className="text-xs text-text-muted">
+                Página {page + 1} · {animals.length} resultados
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="p-2 rounded-lg border border-white/[0.06] text-text-muted hover:text-text-primary hover:bg-white/[0.03] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeftIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={!hasMore}
+                  className="p-2 rounded-lg border border-white/[0.06] text-text-muted hover:text-text-primary hover:bg-white/[0.03] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronRightIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </GlassCard>
+      </div>
+    </DashboardLayout>
+  );
+}
