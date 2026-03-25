@@ -1,62 +1,105 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { 
-  HomeIcon, 
-  ClockIcon, 
-  ChartBarIcon, 
-  Cog6ToothIcon, 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+  HomeIcon,
+  ClockIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
-  BeakerIcon 
-} from '@heroicons/react/24/outline';
+  DocumentArrowUpIcon,
+  CpuChipIcon,
+} from "@heroicons/react/24/outline";
+import { Logo } from "@/components/ui/logo";
 
 const MENU_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, href: '/' },
-  { id: 'history', label: 'Histórico', icon: ClockIcon, href: '/history' },
-  { id: 'analytics', label: 'Análises', icon: ChartBarIcon, href: '/analytics' },
-  { id: 'settings', label: 'Configurações', icon: Cog6ToothIcon, href: '/settings' },
+  { id: "dashboard", label: "Dashboard", icon: HomeIcon, href: "/" },
+  { id: "upload", label: "Upload", icon: DocumentArrowUpIcon, href: "/upload" },
+  { id: "history", label: "Histórico", icon: ClockIcon, href: "/history" },
+  { id: "analytics", label: "Análises", icon: ChartBarIcon, href: "/analytics" },
+  { id: "settings", label: "Configurações", icon: Cog6ToothIcon, href: "/settings" },
 ];
 
 export const Sidebar = () => {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 border-r border-slate-800 bg-slate-900/20 backdrop-blur-md hidden lg:flex flex-col p-6 space-y-8 sticky top-0 h-screen">
-      <div className="flex items-center gap-3 px-2">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-600/20">
-          <BeakerIcon className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-xl font-bold gradient-text tracking-tight">Melhora+</span>
+    <aside className="w-[260px] border-r border-white/[0.04] bg-deep-dark-900/60 backdrop-blur-2xl hidden lg:flex flex-col sticky top-0 h-screen">
+      {/* Brand */}
+      <div className="px-6 py-6">
+        <Logo size="md" />
       </div>
 
-      <nav className="flex-1 space-y-2">
+      {/* System Status */}
+      <div className="mx-4 mb-4 px-3 py-2.5 rounded-xl glass">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-glow animate-pulse" />
+          <span className="text-[11px] text-text-muted font-mono">
+            SYSTEM ONLINE
+          </span>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 space-y-1">
+        <p className="px-3 py-2 text-[10px] text-text-muted font-semibold tracking-[0.2em] uppercase">
+          Navegação
+        </p>
         {MENU_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href));
           return (
-            <Link 
-              key={item.id}
-              href={item.href} 
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${
-                isActive 
-                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' 
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="font-medium text-sm">{item.label}</span>
+            <Link key={item.id} href={item.href} className="block relative">
+              <motion.div
+                whileHover={{ x: 2 }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 relative ${
+                  isActive
+                    ? "text-cyan-glow-400"
+                    : "text-text-secondary hover:text-text-primary hover:bg-white/[0.03]"
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute inset-0 rounded-xl bg-cyan-glow/[0.06] border border-cyan-glow/20"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+                <item.icon className="w-5 h-5 relative z-10" />
+                <span className="text-sm font-medium relative z-10">
+                  {item.label}
+                </span>
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-cyan-glow rounded-r-full glow-cyan-strong" />
+                )}
+              </motion.div>
             </Link>
           );
         })}
       </nav>
 
-      <div className="pt-6 border-t border-slate-800 space-y-4">
-        <Link 
-          href="/login" 
-          className="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white transition-colors group"
+      {/* Bottom Section */}
+      <div className="p-4 space-y-3">
+        {/* Version */}
+        <div className="px-3 py-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+          <div className="flex items-center gap-2">
+            <CpuChipIcon className="w-4 h-4 text-violet-glow-400" />
+            <span className="text-[11px] text-text-muted font-mono">
+              v2.0.0-beta
+            </span>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <Link
+          href="/login"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/[0.04] transition-all group"
         >
-          <ArrowRightOnRectangleIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          <span className="font-medium text-sm">Sair</span>
+          <ArrowRightOnRectangleIcon className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          <span className="text-sm font-medium">Sair</span>
         </Link>
       </div>
     </aside>

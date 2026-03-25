@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-sans",
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Melhora+ | Unificador de Dados Genéticos",
-  description: "Transforme relatórios brutos em insights padronizados com inteligência e precisão.",
+  title: "Melhora+ | Plataforma Genética",
+  description:
+    "Unifique dados genéticos de ANCP, PMGZ e Geneplus em uma única visão do animal.",
 };
 
 export default function RootLayout({
@@ -20,10 +30,17 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${inter.variable} h-full antialiased dark`}
+      className={`dark ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full bg-slate-950 font-sans selection:bg-blue-500/30">
-        {children}
+      <body className="min-h-screen bg-deep-dark text-text-primary antialiased noise-bg">
+        {/* Ambient background glow */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-cyan-glow/[0.03] rounded-full blur-[120px]" />
+          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-violet-glow/[0.02] rounded-full blur-[120px]" />
+        </div>
+
+        <div className="relative z-10">{children}</div>
       </body>
     </html>
   );
