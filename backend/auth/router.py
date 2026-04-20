@@ -2,17 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from ..models import User
-from ..database import get_db
-from ..schemas import (
+from backend.models import User
+from backend.database import get_db
+from backend.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
     ForgotPasswordRequest, ChangePasswordRequest, RefreshTokenRequest,
 )
-from .security import (
+from backend.auth.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
 )
-from .dependencies import get_current_user, require_role
+from backend.auth.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

@@ -11,9 +11,9 @@ from datetime import datetime
 import os
 import io
 
-from .models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification
-from .database import get_db, engine
-from .schemas import (
+from backend.models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification
+from backend.database import get_db, engine
+from backend.schemas import (
     FarmCreate, FarmResponse,
     AnimalResponse, AnimalFilter,
     ColumnMappingCreate, ColumnMappingUpdate, ColumnMappingResponse,
