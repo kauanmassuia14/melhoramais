@@ -1,0 +1,9 @@
+backend/
+*.py
+pyproject.toml
+poetry.lock
+requirements.txt
+nixpacks.toml
+railway.json
+Dockerfile
+docker-compose.yml
