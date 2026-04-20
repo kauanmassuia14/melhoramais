@@ -1,11 +1,8 @@
-[phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
+[build]
+command = "cd backend && pip install -r requirements.txt"
 
-[phases.install]
-cmds = ["cd backend && pip install poetry && poetry config virtualenvs.create false && poetry install --no-dev"]
-
-[phases.build]
-cmds = ["echo 'Build complete'"]
+[build.environment]
+PYTHON_VERSION = "3.11"
 
 [start]
-cmd = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+command = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
