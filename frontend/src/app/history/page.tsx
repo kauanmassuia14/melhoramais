@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
-import { api, type ProcessingLog } from '@/lib/api';
+import { api, type ProcessingLog, type ApiError } from '@/lib/api';
 import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   TagIcon,
+  ArrowRightIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 export default function HistoryPage() {
@@ -15,11 +18,17 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadLogs = () => {
+    setLoading(true);
+    setError(null);
     api.getLogs()
       .then(setLogs)
-      .catch((e) => setError(e.message))
+      .catch((err: ApiError) => setError(err.message || 'Erro ao carregar histórico'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadLogs();
   }, []);
 
   const formatDate = (dateStr: string | null) => {
@@ -30,15 +39,39 @@ export default function HistoryPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8 animate-in fade-in duration-700">
-        <section className="space-y-2">
-          <h1 className="text-4xl font-bold text-white tracking-tight">Histórico de Tratamentos</h1>
-          <p className="text-slate-400 text-lg">Gerencie e faça download de todos os seus processamentos anteriores.</p>
+        <section className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold text-white tracking-tight">Histórico de Tratamentos</h1>
+            <p className="text-slate-400 text-lg">Gerencie e faça download de todos os seus processamentos anteriores.</p>
+          </div>
+          <button
+            onClick={loadLogs}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.06] bg-white/[0.02] text-sm text-text-secondary hover:bg-white/[0.04] transition-all disabled:opacity-50"
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
         </section>
 
-        {loading && <p className="text-slate-400">Carregando histórico...</p>}
-        {error && <p className="text-red-400">Erro: {error}</p>}
+        {error && (
+          <div className="flex items-center justify-between p-4 rounded-xl bg-rose-neon/[0.08] border border-rose-neon/20">
+            <div className="flex items-center gap-3">
+              <ExclamationCircleIcon className="w-5 h-5 text-rose-neon-400" />
+              <span className="text-sm text-rose-neon-400">{error}</span>
+            </div>
+            <button
+              onClick={loadLogs}
+              className="px-4 py-2 rounded-lg bg-rose-neon/10 border border-rose-neon/20 text-rose-neon-400 text-sm hover:bg-rose-neon/20 transition-all"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
-        {!loading && logs.length === 0 && (
+        {loading && <p className="text-slate-400">Carregando histórico...</p>}
+
+        {!loading && logs.length === 0 && !error && (
           <Card variant="bento" className="p-12 text-center">
             <p className="text-slate-500 text-lg">Nenhum processamento encontrado.</p>
             <p className="text-slate-600 text-sm mt-2">Faça upload de um arquivo para começar.</p>
@@ -57,6 +90,7 @@ export default function HistoryPage() {
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Inseridos</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Atualizados</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -89,6 +123,15 @@ export default function HistoryPage() {
                           Processando
                         </span>
                       )}
+                    </td>
+                    <td className="px-6 py-5">
+                      <Link
+                        href={`/history/${log.id}`}
+                        className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-medium border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
+                      >
+                        Ver detalhes
+                        <ArrowRightIcon className="w-3 h-3" />
+                      </Link>
                     </td>
                   </tr>
                 ))}

@@ -1,16 +1,43 @@
 services:
   db:
-    image: postgres:16-alpine # Versão estável e leve
+    image: postgres:16-alpine
     container_name: melhoramais_db
     restart: always
     environment:
       POSTGRES_USER: kauan
-      POSTGRES_PASSWORD: viruss # Pode trocar, mas anote!
+      POSTGRES_PASSWORD: viruss
       POSTGRES_DB: melhoramais_agro
     ports:
-      - "5432:5432" # Porta padrão do Postgres
+      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Garante que os dados não sumam se o container parar
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: melhoramais_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://kauan:viruss@db:5432/melhoramais_agro
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: melhoramais_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

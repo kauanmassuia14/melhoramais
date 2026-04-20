@@ -19,25 +19,13 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {/*
-        ============================================
-        TO CHANGE THE LOGO:
-        1. Put your logo file in: frontend/public/logo.png
-        2. Uncomment the <Image> below
-        3. Comment out or remove the placeholder div
-        ============================================
-      */}
-      {/* <Image src="/logo.png" alt="Melhora+" width={s.icon} height={s.icon} className="rounded-xl" /> */}
-
-      {/* Placeholder icon — remove when you add your logo */}
-      <div
-        className="rounded-xl bg-gradient-to-br from-cyan-glow-deep to-cyan-glow flex items-center justify-center glow-cyan"
-        style={{ width: s.icon, height: s.icon }}
-      >
-        <span className="text-white font-bold" style={{ fontSize: s.icon * 0.5 }}>
-          M+
-        </span>
-      </div>
+      <Image
+        src="/assets/images/logomelhoramais.png"
+        alt="Melhora+"
+        width={s.icon}
+        height={s.icon}
+        className="rounded-xl"
+      />
 
       {showText && (
         <div>

@@ -12,15 +12,13 @@ import {
   BellAlertIcon,
   KeyIcon,
   AdjustmentsHorizontalIcon,
-  LinkIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  GlobeAltIcon,
-  SignalIcon,
   TrashIcon,
   LockClosedIcon,
   PlusIcon,
   XMarkIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "@/lib/auth-context";
 import { api, ColumnMapping } from "@/lib/api";
@@ -29,38 +27,7 @@ const NAV_ITEMS = [
   { id: "profile", label: "Perfil", icon: UserIcon },
   { id: "security", label: "Segurança", icon: ShieldCheckIcon },
   { id: "mappings", label: "Mapeamentos", icon: AdjustmentsHorizontalIcon },
-  { id: "integrations", label: "Integrações", icon: LinkIcon },
   { id: "notifications", label: "Notificações", icon: BellAlertIcon },
-];
-
-const INTEGRATIONS = [
-  {
-    id: "ancp",
-    name: "ANCP",
-    description: "Associação Nacional de Criadores e Pesquisadores",
-    status: "connected",
-    color: "cyan",
-    lastSync: "2 min atrás",
-    apiKey: "ancp_live_****_x7k2",
-  },
-  {
-    id: "pmgz",
-    name: "PMGZ",
-    description: "Programa de Melhoramento Genético Zebuíno",
-    status: "connected",
-    color: "emerald",
-    lastSync: "15 min atrás",
-    apiKey: "pmgz_prod_****_m9q1",
-  },
-  {
-    id: "geneplus",
-    name: "Geneplus",
-    description: "Programa Embrapa Geneplus",
-    status: "disconnected",
-    color: "rose",
-    lastSync: "Nunca",
-    apiKey: "",
-  },
 ];
 
 export default function SettingsPage() {
@@ -104,7 +71,6 @@ export default function SettingsPage() {
               {activeTab === "profile" && <ProfileTab key="profile" />}
               {activeTab === "security" && <SecurityTab key="security" />}
               {activeTab === "mappings" && <MappingsTab key="mappings" />}
-              {activeTab === "integrations" && <IntegrationsTab key="integrations" />}
               {activeTab === "notifications" && <NotificationsTab key="notifications" />}
             </AnimatePresence>
           </div>
@@ -271,6 +237,14 @@ function MappingsTab() {
   const [filter, setFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    source_system: "",
+    source_column: "",
+    target_column: "",
+    data_type: "string",
+    is_required: false,
+  });
   const [form, setForm] = useState({
     source_system: "ANCP",
     source_column: "",
@@ -323,6 +297,43 @@ function MappingsTab() {
     } catch {
       setError("Erro ao deletar mapeamento");
     }
+  };
+
+  const handleEdit = (m: ColumnMapping) => {
+    setEditingId(m.id);
+    setEditForm({
+      source_system: m.source_system,
+      source_column: m.source_column,
+      target_column: m.target_column,
+      data_type: m.data_type,
+      is_required: m.is_required,
+    });
+    setError("");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.source_column.trim() || !editForm.target_column.trim()) {
+      setError("Colunas são obrigatórias");
+      return;
+    }
+    if (editingId === null) return;
+    setCreating(true);
+    setError("");
+    try {
+      await api.updateMapping(editingId, editForm);
+      setEditingId(null);
+      fetchMappings();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar mapeamento");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setError("");
   };
 
   return (
@@ -435,6 +446,84 @@ function MappingsTab() {
           </div>
         )}
 
+        {/* Edit Form */}
+        {editingId !== null && (
+          <div className="mb-6 p-4 rounded-xl bg-cyan-glow/[0.04] border border-cyan-glow/20">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-cyan-glow-400 font-medium">Editando Mapeamento</span>
+              <button
+                onClick={handleCancelEdit}
+                className="p-1 rounded text-text-muted hover:text-text-primary transition-all"
+              >
+                <XMarkIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+              <div>
+                <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Sistema</label>
+                <select
+                  value={editForm.source_system}
+                  onChange={(e) => setEditForm((p) => ({ ...p, source_system: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary appearance-none"
+                >
+                  <option value="ANCP">ANCP</option>
+                  <option value="PMGZ">PMGZ</option>
+                  <option value="Geneplus">Geneplus</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Coluna Origem</label>
+                <input
+                  type="text"
+                  placeholder="Ex: RGN"
+                  value={editForm.source_column}
+                  onChange={(e) => setEditForm((p) => ({ ...p, source_column: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Coluna Destino</label>
+                <input
+                  type="text"
+                  placeholder="Ex: rgn_animal"
+                  value={editForm.target_column}
+                  onChange={(e) => setEditForm((p) => ({ ...p, target_column: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Tipo</label>
+                <select
+                  value={editForm.data_type}
+                  onChange={(e) => setEditForm((p) => ({ ...p, data_type: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary appearance-none"
+                >
+                  <option value="string">String</option>
+                  <option value="float">Float</option>
+                  <option value="date">Date</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="px-4 py-2 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 text-cyan-glow-400 text-sm font-medium hover:bg-cyan-glow/20 transition-all"
+                >
+                  {creating ? "..." : "Salvar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="p-2 rounded-xl border border-white/[0.06] text-text-muted hover:text-text-primary transition-all"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
+            {error && <p className="text-xs text-rose-neon-400 mt-2">{error}</p>}
+          </div>
+        )}
+
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -478,123 +567,26 @@ function MappingsTab() {
                       {m.is_required && <span className="text-[10px] text-rose-neon-400">Sim</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        className="p-1 rounded text-text-muted hover:text-rose-neon-400 transition-colors"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(m)}
+                          className="p-1 rounded text-text-muted hover:text-cyan-glow-400 transition-colors"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(m.id)}
+                          className="p-1 rounded text-text-muted hover:text-rose-neon-400 transition-colors"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-        </div>
-      </GlassCard>
-    </motion.div>
-  );
-}
-
-// ============================================
-// Integrations Tab
-// ============================================
-function IntegrationsTab() {
-  return (
-    <motion.div
-      key="integrations"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="space-y-6"
-    >
-      <GlassCard glow="cyan" className="p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-              <GlobeAltIcon className="w-6 h-6 text-cyan-glow-400" />
-              Integrações de Plataformas
-            </h2>
-            <p className="text-sm text-text-muted mt-1">
-              Conecte suas chaves de API das plataformas genéticas.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-glow/[0.06] border border-emerald-glow/20">
-            <SignalIcon className="w-4 h-4 text-emerald-glow-400" />
-            <span className="text-xs text-emerald-glow-400 font-mono">2/3 CONECTADOS</span>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {INTEGRATIONS.map((integration) => (
-            <div
-              key={integration.id}
-              className={`relative p-5 rounded-xl border transition-all duration-300 ${
-                integration.status === "connected"
-                  ? "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]"
-                  : "bg-rose-neon/[0.02] border-rose-neon/10 hover:border-rose-neon/20"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      integration.status === "connected"
-                        ? "bg-cyan-glow/[0.08] border border-cyan-glow/20"
-                        : "bg-rose-neon/[0.08] border border-rose-neon/20"
-                    }`}
-                  >
-                    <span className="text-lg font-bold text-white">{integration.name.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-white">{integration.name}</h3>
-                      {integration.status === "connected" ? (
-                        <span className="flex items-center gap-1 text-[10px] text-emerald-glow-400 bg-emerald-glow/[0.06] px-2 py-0.5 rounded-full border border-emerald-glow/20 font-mono">
-                          <CheckCircleIcon className="w-3 h-3" /> ONLINE
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] text-rose-neon-400 bg-rose-neon/[0.06] px-2 py-0.5 rounded-full border border-rose-neon/20 font-mono">
-                          <ExclamationTriangleIcon className="w-3 h-3" /> OFFLINE
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-text-muted">{integration.description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {integration.status === "connected" ? (
-                    <>
-                      <div className="text-right hidden sm:block">
-                        <p className="text-xs text-text-muted">Última sync</p>
-                        <p className="text-xs text-text-secondary font-mono">{integration.lastSync}</p>
-                      </div>
-                      <GlowButton variant="ghost" size="sm">
-                        <KeyIcon className="w-4 h-4 mr-1.5" /> Rotacionar
-                      </GlowButton>
-                    </>
-                  ) : (
-                    <GlowButton size="sm">
-                      <LinkIcon className="w-4 h-4 mr-1.5" /> Conectar
-                    </GlowButton>
-                  )}
-                </div>
-              </div>
-              {integration.status === "connected" && integration.apiKey && (
-                <div className="mt-4 pt-4 border-t border-white/[0.04]">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-text-muted">API Key:</span>
-                      <code className="text-xs text-cyan-glow-400 font-mono bg-white/[0.02] px-2 py-1 rounded">{integration.apiKey}</code>
-                    </div>
-                    <button className="text-xs text-text-muted hover:text-rose-neon-400 transition-colors flex items-center gap-1">
-                      <TrashIcon className="w-3 h-3" /> Desconectar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       </GlassCard>
     </motion.div>

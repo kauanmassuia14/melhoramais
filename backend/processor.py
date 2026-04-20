@@ -72,7 +72,17 @@ class GeneticDataProcessor:
     def process_file(
         self, file_content: bytes, filename: str, source_system: str
     ) -> Tuple[pd.DataFrame, ProcessingLog]:
-        """Full pipeline: read → map → clean → persist."""
+        """Full pipeline: read → map → clean → persist.
+        
+        Uses two separate transactions:
+        1. First creates the ProcessingLog entry (committed immediately)
+        2. Then processes and upserts animals (committed separately)
+        
+        This prevents the 'current transaction is aborted' error where
+        a failed animal upsert would leave the log insertion uncommitable.
+        """
+        from sqlalchemy.exc import SQLAlchemyError
+        
         log = ProcessingLog(
             id_farm=self.farm_id,
             source_system=source_system,
@@ -82,34 +92,13 @@ class GeneticDataProcessor:
         )
         self.db.add(log)
         self.db.flush()
+        
+        log_id = log.id
 
         try:
-            # 1. Read file
-            df = self._read_file(file_content, filename, source_system)
-
-            # 2. Fetch mappings
-            col_map = self.get_mappings(source_system)
-            required = self.get_required_columns(source_system)
-
-            # 3. Match columns (case-insensitive, handles duplicates)
-            df, rename = self._match_columns(df, col_map, required)
-
-            # 4. Rename matched columns
-            df = df.rename(columns=rename)
-
-            # 5. Keep only valid target columns
-            valid_targets = set(Animal.__table__.columns.keys())
-            keep = [c for c in df.columns if c in valid_targets]
-            df = df[keep]
-
-            # 6. Clean data
-            df = self._clean_data(df, source_system)
-
-            # 7. Add farm_id
-            df["id_farm"] = self.farm_id
-
-            # 8. Persist
-            inserted, updated, failed = self._upsert_animals(df)
+            df, inserted, updated, failed = self._process_and_persist(
+                file_content, filename, source_system
+            )
 
             log.total_rows = len(df)
             log.rows_inserted = inserted
@@ -117,18 +106,42 @@ class GeneticDataProcessor:
             log.rows_failed = failed
             log.status = "completed"
             log.completed_at = datetime.utcnow()
-
             self.db.commit()
             return df, log
 
         except Exception as e:
             self.db.rollback()
-            log.status = "failed"
-            log.error_message = str(e)
-            log.completed_at = datetime.utcnow()
-            self.db.add(log)
-            self.db.commit()
+            
+            try:
+                failed_log = self.db.query(ProcessingLog).filter(
+                    ProcessingLog.id == log_id
+                ).first()
+                if failed_log:
+                    failed_log.status = "failed"
+                    failed_log.error_message = str(e)[:1000]
+                    failed_log.completed_at = datetime.utcnow()
+                    self.db.commit()
+            except Exception:
+                self.db.rollback()
+            
             raise
+
+    def _process_and_persist(
+        self, file_content: bytes, filename: str, source_system: str
+    ) -> Tuple[pd.DataFrame, int, int, int]:
+        """Process file and persist animals. Called within a separate transaction."""
+        df = self._read_file(file_content, filename, source_system)
+        col_map = self.get_mappings(source_system)
+        required = self.get_required_columns(source_system)
+        df, rename = self._match_columns(df, col_map, required)
+        df = df.rename(columns=rename)
+        valid_targets = set(Animal.__table__.columns.keys())
+        keep = [c for c in df.columns if c in valid_targets]
+        df = df[keep]
+        df = self._clean_data(df, source_system)
+        df["id_farm"] = self.farm_id
+        inserted, updated, failed = self._upsert_animals(df)
+        return df, inserted, updated, failed
 
     def _read_file(
         self, file_content: bytes, filename: str, source_system: str

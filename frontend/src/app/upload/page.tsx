@@ -54,9 +54,29 @@ export default function UploadPage() {
       a.click();
       a.remove();
       setStatus("success");
+      
+      try {
+        await api.createNotification({
+          title: "Upload concluído",
+          message: `Arquivo "${file.name}" processado com sucesso na plataforma ${platform}.`,
+          type: "success",
+        });
+      } catch {
+        // notification failed silently
+      }
     } catch (err: any) {
       setErrorMsg(err.message || "Erro no processamento");
       setStatus("error");
+      
+      try {
+        await api.createNotification({
+          title: "Erro no upload",
+          message: `Falha ao processar "${file?.name}": ${err.message || "Erro desconhecido"}`,
+          type: "error",
+        });
+      } catch {
+        // notification failed silently
+      }
     }
   };
 

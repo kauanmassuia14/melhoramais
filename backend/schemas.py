@@ -47,6 +47,37 @@ class AnimalResponse(BaseModel):
     im_idade_primeiro_parto: Optional[float]
     fonte_origem: Optional[str]
     data_processamento: Optional[datetime]
+    anc_mg: Optional[float] = None
+    anc_te: Optional[float] = None
+    anc_m: Optional[float] = None
+    anc_p: Optional[float] = None
+    anc_dp: Optional[float] = None
+    anc_sp: Optional[float] = None
+    anc_e: Optional[float] = None
+    anc_sao: Optional[float] = None
+    anc_leg: Optional[float] = None
+    anc_sh: Optional[float] = None
+    anc_pp30: Optional[float] = None
+    gen_iqg: Optional[float] = None
+    gen_pmm: Optional[float] = None
+    gen_p: Optional[float] = None
+    gen_dp: Optional[float] = None
+    gen_sp: Optional[float] = None
+    gen_e: Optional[float] = None
+    gen_sao: Optional[float] = None
+    gen_leg: Optional[float] = None
+    gen_sh: Optional[float] = None
+    gen_pp30: Optional[float] = None
+    pmg_iabc: Optional[float] = None
+    pmg_zpmm: Optional[float] = None
+    pmg_p: Optional[float] = None
+    pmg_dp: Optional[float] = None
+    pmg_sp: Optional[float] = None
+    pmg_e: Optional[float] = None
+    pmg_sao: Optional[float] = None
+    pmg_leg: Optional[float] = None
+    pmg_sh: Optional[float] = None
+    pmg_pp30: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -71,6 +102,14 @@ class ColumnMappingCreate(BaseModel):
     target_column: str = Field(..., min_length=1, max_length=100)
     data_type: str = Field(default="float")
     is_required: bool = False
+
+
+class ColumnMappingUpdate(BaseModel):
+    source_system: Optional[str] = Field(None, min_length=1, max_length=50)
+    source_column: Optional[str] = Field(None, min_length=1, max_length=100)
+    target_column: Optional[str] = Field(None, min_length=1, max_length=100)
+    data_type: Optional[str] = Field(None)
+    is_required: Optional[bool] = None
 
 
 class ColumnMappingResponse(BaseModel):
@@ -187,3 +226,64 @@ class ChangePasswordRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+# ============================================
+# Report Schemas
+# ============================================
+class ReportJobResponse(BaseModel):
+    id: int
+    id_farm: Optional[int]
+    report_type: str
+    status: str
+    file_path: Optional[str]
+    parameters: Optional[dict]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    error_message: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ReportHistoryItem(BaseModel):
+    id: int
+    report_type: str
+    status: str
+    created_at: Optional[datetime]
+    file_name: Optional[str]
+    parameters: Optional[dict]
+
+    class Config:
+        from_attributes = True
+
+
+class UploadDetailResponse(BaseModel):
+    log: ProcessingLogResponse
+    animals_preview: list[AnimalResponse]
+    total_count: int
+
+
+class NotificationCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    message: str = Field(..., min_length=1)
+    type: str = Field(default="info")
+    link: Optional[str] = None
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    id_user: int
+    title: str
+    message: str
+    type: str
+    is_read: bool
+    link: Optional[str]
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationUpdate(BaseModel):
+    is_read: Optional[bool] = None

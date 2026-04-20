@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("access_token", access);
     localStorage.setItem("refresh_token", refresh);
     localStorage.setItem("user", JSON.stringify(userData));
+    document.cookie = `access_token=${access}; path=/; SameSite=Lax`;
+    document.cookie = `refresh_token=${refresh}; path=/; SameSite=Lax`;
   };
 
   const login = useCallback(async (email: string, senha: string) => {
@@ -100,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("user");
+    document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = "refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     window.location.href = "/login";
   }, []);
 

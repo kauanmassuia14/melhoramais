@@ -61,6 +61,43 @@ class Animal(Base):
     eg_espessura_gordura = Column(Float)
     im_idade_primeiro_parto = Column(Float)
 
+    # Benchmarking characteristics - ANCP
+    anc_mg = Column(Float)  # Média Genética
+    anc_te = Column(Float)  # Tamanho
+    anc_m = Column(Float)   # Maternidade
+    anc_p = Column(Float)   # Peso
+    anc_dp = Column(Float)  # Desvio Padrão
+    anc_sp = Column(Float)  # Sobreano
+    anc_e = Column(Float)   # Eficiência
+    anc_sao = Column(Float) # Área Olho Lombo
+    anc_leg = Column(Float) # Legume (gordura)
+    anc_sh = Column(Float)  # Sexo Hack
+    anc_pp30 = Column(Float) # Produção Prioritária 30
+
+    # Benchmarking characteristics - GENEPLUS
+    gen_iqg = Column(Float)  # Índice Qualidade Genética
+    gen_pmm = Column(Float)  # Peso Maternidade
+    gen_p = Column(Float)    # Peso
+    gen_dp = Column(Float)   # Desvio Padrão
+    gen_sp = Column(Float)   # Sobreano
+    gen_e = Column(Float)    # Eficiência
+    gen_sao = Column(Float)  # Área Olho Lombo
+    gen_leg = Column(Float)  # Legume (gordura)
+    gen_sh = Column(Float)   # Sexo Hack
+    gen_pp30 = Column(Float) # Produção Prioritária 30
+
+    # Benchmarking characteristics - PMGZ
+    pmg_iabc = Column(Float)  # Índice ABCZ
+    pmg_zpmm = Column(Float)  # Zootecnia Peso Materno
+    pmg_p = Column(Float)     # Peso
+    pmg_dp = Column(Float)    # Desvio Padrão
+    pmg_sp = Column(Float)    # Sobreano
+    pmg_e = Column(Float)     # Eficiência
+    pmg_sao = Column(Float)   # Área Olho Lombo
+    pmg_leg = Column(Float)   # Legume (gordura)
+    pmg_sh = Column(Float)    # Sexo Hack
+    pmg_pp30 = Column(Float)  # Produção Prioritária 30
+
     fonte_origem = Column(String(50))
     data_processamento = Column(DateTime, default=datetime.utcnow)
 
@@ -119,6 +156,39 @@ class RawAnimalData(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Cliente(Base):
+    __tablename__ = "clientes"
+    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+
+    id = Column(Integer, primary_key=True, index=True)
+    proprietario = Column(String(255), nullable=False, index=True)
+    data_nascimento = Column(String(20))
+    fazenda_empresa = Column(String(255))
+    cnpj_cpf = Column(String(100))
+    contato = Column(String(255))
+    endereco = Column(Text)
+    municipio = Column(String(100))
+    uf = Column(String(20))
+    cep = Column(String(50))
+    endereco_correspondencia = Column(Text)
+    fones = Column(String(255))
+    coordenador = Column(String(100))
+    gado = Column(String(20))
+    rebanho = Column(String(100))
+    software = Column(String(100))
+    programa_melhoramento = Column(String(100))
+    nome_financeiro = Column(String(255))
+    whatsapp_financeiro = Column(String(50))
+    email = Column(String(255))
+    endereco_financeiro = Column(Text)
+    contrato = Column(String(100))
+    nf = Column(String(10))
+    venc_boleto = Column(String(20))
+    observacoes = Column(Text)
+    status = Column(String(50))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "usuarios"
     __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
@@ -134,3 +204,17 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     farm = relationship("Farm", foreign_keys=[id_farm])
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_user = Column(Integer, _fk("silver.usuarios.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    type = Column(String(50), default="info")  # info, success, warning, error
+    is_read = Column(Boolean, default=False)
+    link = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

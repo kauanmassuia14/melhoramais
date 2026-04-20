@@ -45,6 +45,37 @@ export interface Animal {
   im_idade_primeiro_parto: number | null;
   fonte_origem: string | null;
   data_processamento: string | null;
+  anc_mg?: number | null;
+  anc_te?: number | null;
+  anc_m?: number | null;
+  anc_p?: number | null;
+  anc_dp?: number | null;
+  anc_sp?: number | null;
+  anc_e?: number | null;
+  anc_sao?: number | null;
+  anc_leg?: number | null;
+  anc_sh?: number | null;
+  anc_pp30?: number | null;
+  gen_iqg?: number | null;
+  gen_pmm?: number | null;
+  gen_p?: number | null;
+  gen_dp?: number | null;
+  gen_sp?: number | null;
+  gen_e?: number | null;
+  gen_sao?: number | null;
+  gen_leg?: number | null;
+  gen_sh?: number | null;
+  gen_pp30?: number | null;
+  pmg_iabc?: number | null;
+  pmg_zpmm?: number | null;
+  pmg_p?: number | null;
+  pmg_dp?: number | null;
+  pmg_sp?: number | null;
+  pmg_e?: number | null;
+  pmg_sao?: number | null;
+  pmg_leg?: number | null;
+  pmg_sh?: number | null;
+  pmg_pp30?: number | null;
 }
 
 export interface ColumnMapping {
@@ -56,6 +87,17 @@ export interface ColumnMapping {
   is_required: boolean;
 }
 
+export interface Notification {
+  id: number;
+  id_user: number;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  link: string | null;
+  created_at: string | null;
+}
+
 export interface Farm {
   id_farm: number;
   nome_farm: string;
@@ -65,13 +107,30 @@ export interface Farm {
   created_at: string | null;
 }
 
+export interface UploadDetail {
+  log: ProcessingLog;
+  animals_preview: Animal[];
+  total_count: number;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public isNetworkError: boolean = false
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('access_token');
 }
 
 function getRefreshToken(): string | null {
-  if (typeof undefined === 'undefined') return null;
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem('refresh_token');
 }
 
@@ -98,7 +157,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+async function fetchApi<T>(path: string, options?: RequestInit, _retries = 1): Promise<T> {
   const token = getAccessToken();
 
   const makeRequest = async (accessToken: string | null): Promise<Response> => {
@@ -114,37 +173,43 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 
   let res = await makeRequest(token);
 
-  // If 401, try to refresh token and retry once
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       res = await makeRequest(newToken);
     } else {
-      // Refresh failed, redirect to login
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         window.location.href = '/login';
       }
-      throw new Error('Session expired');
+      throw new ApiError('Sessão expirada. Faça login novamente.', 401);
     }
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(err.detail || `API error: ${res.status}`);
+    let errMsg = `Erro ${res.status}`;
+    try {
+      const err = await res.json();
+      errMsg = err.detail || errMsg;
+    } catch {
+      errMsg = res.statusText || errMsg;
+    }
+    throw new ApiError(errMsg, res.status);
+  }
+
+  if (res.status === 204) {
+    return {} as T;
   }
 
   return res.json();
 }
 
 export const api = {
-  // Stats
   getStats: (farmId?: number) =>
     fetchApi<DashboardStats>(`/stats${farmId ? `?farm_id=${farmId}` : ''}`),
 
-  // Logs
   getLogs: (farmId?: number, source?: string, limit = 50) => {
     const params = new URLSearchParams();
     if (farmId) params.set('farm_id', String(farmId));
@@ -153,7 +218,9 @@ export const api = {
     return fetchApi<ProcessingLog[]>(`/logs?${params.toString()}`);
   },
 
-  // Animals
+  getUploadDetail: (logId: number) =>
+    fetchApi<UploadDetail>(`/reports/upload/${logId}`),
+
   getAnimals: (opts?: {
     farmId?: number;
     source?: string;
@@ -176,7 +243,6 @@ export const api = {
 
   getAnimal: (id: number) => fetchApi<Animal>(`/animals/${id}`),
 
-  // Farms
   getFarms: () => fetchApi<Farm[]>('/farms'),
   getFarm: (id: number) => fetchApi<Farm>(`/farms/${id}`),
   createFarm: (data: { nome_farm: string; cnpj?: string; responsavel?: string; email?: string }) =>
@@ -185,7 +251,6 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // Mappings
   getMappings: (sourceSystem?: string) =>
     fetchApi<ColumnMapping[]>(`/mappings${sourceSystem ? `?source_system=${sourceSystem}` : ''}`),
   createMapping: (data: { source_system: string; source_column: string; target_column: string; data_type?: string; is_required?: boolean }) =>
@@ -195,8 +260,12 @@ export const api = {
     }),
   deleteMapping: (id: number) =>
     fetchApi<void>(`/mappings/${id}`, { method: 'DELETE' }),
+  updateMapping: (id: number, data: { source_system?: string; source_column?: string; target_column?: string; data_type?: string; is_required?: boolean }) =>
+    fetchApi<ColumnMapping>(`/mappings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
-  // Upload
   uploadFile: async (file: File, sourceSystem: string, farmId?: number): Promise<Blob> => {
     const token = getAccessToken();
     const formData = new FormData();
@@ -224,14 +293,17 @@ export const api = {
     }
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-      throw new Error(err.detail);
+      let errMsg = 'Upload falhou';
+      try {
+        const err = await res.json();
+        errMsg = err.detail || errMsg;
+      } catch { }
+      throw new ApiError(errMsg, res.status);
     }
 
     return res.blob();
   },
 
-  // Auth helpers
   changePassword: (senha_atual: string, senha_nova: string) =>
     fetchApi<{ message: string }>('/auth/change-password', {
       method: 'POST',
@@ -243,4 +315,157 @@ export const api = {
       id: number; nome: string; email: string;
       id_farm: number | null; role: string; ativo: boolean;
     }>('/auth/me'),
+
+  downloadDashboardReport: async (opts?: { farmId?: number; includeAnimals?: boolean; includeLogs?: boolean }): Promise<Blob> => {
+    const token = getAccessToken();
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', String(opts.farmId));
+    if (opts?.includeAnimals) params.set('include_animals', 'true');
+    if (opts?.includeLogs) params.set('include_logs', 'true');
+
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/report/dashboard?${params.toString()}`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    };
+
+    let res = await doDownload(token);
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+
+    return res.blob();
+  },
+
+  downloadUploadReport: async (logId: number): Promise<Blob> => {
+    const token = getAccessToken();
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/upload/${logId}/pdf`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    };
+
+    let res = await doDownload(token);
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+
+    return res.blob();
+  },
+
+  downloadAnimalReport: async (animalId: number): Promise<Blob> => {
+    const token = getAccessToken();
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/animal/${animalId}/pdf`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    };
+
+    let res = await doDownload(token);
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+
+    return res.blob();
+  },
+
+  downloadBenchmarkReport: async (platformCode: string, characteristic: string, farmId?: number): Promise<Blob> => {
+    const token = getAccessToken();
+    const params = new URLSearchParams({ platform_code: platformCode, characteristic });
+    if (farmId) params.set('farm_id', String(farmId));
+
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/benchmark/pdf?${params.toString()}`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    };
+
+    let res = await doDownload(token);
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+
+    return res.blob();
+  },
+
+  getNotifications: (unreadOnly = false) =>
+    fetchApi<Notification[]>(`/notifications${unreadOnly ? '?unread_only=true' : ''}`),
+  
+  createNotification: (data: { title: string; message: string; type?: string; link?: string }) =>
+    fetchApi<Notification>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  getUnreadCount: () =>
+    fetchApi<{ count: number }>('/notifications/unread-count'),
+  
+  markAsRead: (id: number) =>
+    fetchApi<Notification>(`/notifications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_read: true }),
+    }),
+  
+  markAllAsRead: () =>
+    fetchApi<{ message: string }>('/notifications/read-all', { method: 'PUT' }),
 };

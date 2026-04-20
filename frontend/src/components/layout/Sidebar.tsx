@@ -13,6 +13,7 @@ import {
   CpuChipIcon,
   Squares2X2Icon,
   BuildingOffice2Icon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { Logo } from "@/components/ui/logo";
 import { useAuth } from "@/lib/auth-context";
@@ -23,6 +24,7 @@ const MENU_ITEMS = [
   { id: "animals", label: "Animais", icon: Squares2X2Icon, href: "/animals" },
   { id: "farms", label: "Fazendas", icon: BuildingOffice2Icon, href: "/farms" },
   { id: "history", label: "Histórico", icon: ClockIcon, href: "/history" },
+  { id: "benchmarking", label: "Benchmarking", icon: SparklesIcon, href: "/benchmarking" },
   { id: "analytics", label: "Análises", icon: ChartBarIcon, href: "/analytics" },
   { id: "settings", label: "Configurações", icon: Cog6ToothIcon, href: "/settings" },
 ];

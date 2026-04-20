@@ -12,13 +12,17 @@ from .security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
 )
-from .dependencies import get_current_user
+from .dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(payload: UserCreate, db: Session = Depends(get_db)):
+def register(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
 

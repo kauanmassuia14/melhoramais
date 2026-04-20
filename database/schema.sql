@@ -125,6 +125,44 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_email ON silver.usuarios(email);
 CREATE INDEX IF NOT EXISTS idx_usuarios_farm ON silver.usuarios(id_farm);
 
 -- ============================================
+-- CLIENTS TABLE (from CSV import)
+-- ============================================
+CREATE TABLE IF NOT EXISTS silver.clientes (
+    id SERIAL PRIMARY KEY,
+    proprietario VARCHAR(255) NOT NULL,
+    data_nascimento VARCHAR(20),
+    fazenda_empresa VARCHAR(255),
+    cnpj_cpf VARCHAR(100),
+    contato VARCHAR(255),
+    endereco TEXT,
+    municipio VARCHAR(100),
+    uf VARCHAR(20),
+    cep VARCHAR(50),
+    endereco_correspondencia TEXT,
+    fones VARCHAR(255),
+    coordenador VARCHAR(100),
+    gado VARCHAR(20),
+    rebanho VARCHAR(100),
+    software VARCHAR(100),
+    programa_melhoramento VARCHAR(100),
+    nome_financeiro VARCHAR(255),
+    whatsapp_financeiro VARCHAR(50),
+    email VARCHAR(255),
+    endereco_financeiro TEXT,
+    contrato VARCHAR(100),
+    nf VARCHAR(10),
+    venc_boleto VARCHAR(20),
+    observacoes TEXT,
+    status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_clientes_proprietario ON silver.clientes(proprietario);
+CREATE INDEX IF NOT EXISTS idx_clientes_cnpj_cpf ON silver.clientes(cnpj_cpf);
+CREATE INDEX IF NOT EXISTS idx_clientes_municipio ON silver.clientes(municipio);
+CREATE INDEX IF NOT EXISTS idx_clientes_uf ON silver.clientes(uf);
+
+-- ============================================
 -- INITIAL DATA: Default Farm (for dev)
 -- ============================================
 INSERT INTO silver.fazendas (nome_farm, responsavel)
