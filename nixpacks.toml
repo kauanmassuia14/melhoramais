@@ -1,8 +1,0 @@
-[build]
-command = "cd backend && pip install -r requirements.txt"
-
-[build.environment]
-PYTHON_VERSION = "3.11"
-
-[start]
-command = "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"

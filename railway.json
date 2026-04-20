@@ -1,18 +1,12 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "nixpacksPlan": {
-      "lang": "python",
-      "installPhase": {
-        "cmds": ["cd backend && pip install poetry && poetry config virtualenvs.create false && poetry install --no-dev"]
-      }
-    }
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10,
-    "startCommand": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+    "restartPolicyMaxRetries": 10
   }
 }
