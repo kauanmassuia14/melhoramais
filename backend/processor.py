@@ -82,7 +82,9 @@ class GeneticDataProcessor:
         a failed animal upsert would leave the log insertion uncommitable.
         """
         from sqlalchemy.exc import SQLAlchemyError
+        from backend.database import SessionLocal
         
+        # Transaction 1: Create log entry and commit immediately
         log = ProcessingLog(
             id_farm=self.farm_id,
             source_system=source_system,
@@ -91,11 +93,12 @@ class GeneticDataProcessor:
             started_at=datetime.utcnow(),
         )
         self.db.add(log)
-        self.db.flush()
+        self.db.commit()  # Commit immediately to persist log_id
         
         log_id = log.id
 
         try:
+            # Transaction 2: Process animals (may fail without affecting log)
             df, inserted, updated, failed = self._process_and_persist(
                 file_content, filename, source_system
             )
@@ -110,20 +113,27 @@ class GeneticDataProcessor:
             return df, log
 
         except Exception as e:
+            # Rollback failed animal transaction
             self.db.rollback()
             
+            # Transaction 3: Update log status in a FRESH session
+            # This avoids the 'transaction aborted' state entirely
+            fresh_db = SessionLocal()
             try:
-                failed_log = self.db.query(ProcessingLog).filter(
+                failed_log = fresh_db.query(ProcessingLog).filter(
                     ProcessingLog.id == log_id
                 ).first()
                 if failed_log:
                     failed_log.status = "failed"
                     failed_log.error_message = str(e)[:1000]
                     failed_log.completed_at = datetime.utcnow()
-                    self.db.commit()
+                    fresh_db.commit()
             except Exception:
-                self.db.rollback()
-            
+                fresh_db.rollback()
+                raise
+            finally:
+                fresh_db.close()
+
             raise
 
     def _process_and_persist(
