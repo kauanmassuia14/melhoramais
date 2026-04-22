@@ -1,11 +1,14 @@
 import pandas as pd
 import io
+import logging
 from typing import Dict, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.models import ColumnMapping, Animal, ProcessingLog, IS_SQLITE
+
+logger = logging.getLogger(__name__)
 
 
 class GeneticDataProcessor:
@@ -302,9 +305,12 @@ class GeneticDataProcessor:
                     self.db.execute(stmt)
                     nested.commit()
                     inserted += 1
-                except Exception:
+                except Exception as e:
                     nested.rollback()
                     failed += 1
+                    logger.error(f"Failed to insert/update animal with RGN {values.get('rgn_animal', 'unknown')}: {e}")
+                    if failed <= 5:  # Log first 5 errors only
+                        logger.error(f"Row values: {values}")
         else:
             for _, row in df.iterrows():
                 nested = self.db.begin_nested()
@@ -333,9 +339,12 @@ class GeneticDataProcessor:
                         self.db.add(animal)
                         inserted += 1
                     nested.commit()
-                except Exception:
+                except Exception as e:
                     nested.rollback()
                     failed += 1
+                    logger.error(f"Failed to insert/update animal with RGN {values.get('rgn_animal', 'unknown')}: {e}")
+                    if failed <= 5:
+                        logger.error(f"Row values: {values}")
 
         return inserted, updated, failed
 
