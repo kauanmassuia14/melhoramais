@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS silver.animais (
     data_processamento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     -- Constraint: unique animal per farm (same RGN can exist in different farms)
-    UNIQUE(id_farm, rgn_animal)
+    CONSTRAINT uix_farm_rgn UNIQUE(id_farm, rgn_animal)
 );
 
 -- ============================================
