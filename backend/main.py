@@ -119,6 +119,49 @@ def db_test():
 
 
 # ============================================
+# Environment variables debug (public, temporary)
+# ============================================
+@app.get("/env-debug")
+def env_debug():
+    """Show environment variables (masked)."""
+    import os
+    
+    # List of important environment variables
+    important_vars = ["DATABASE_URL", "JWT_SECRET", "ALLOWED_ORIGINS", "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME"]
+    
+    result = {}
+    for var in important_vars:
+        value = os.getenv(var)
+        if value:
+            # Mask sensitive values
+            if "://" in value and "@" in value:
+                # URL with credentials
+                parts = value.split("://", 1)
+                if len(parts) == 2:
+                    scheme = parts[0]
+                    rest = parts[1]
+                    if "@" in rest:
+                        auth, host = rest.split("@", 1)
+                        if ":" in auth:
+                            user, _ = auth.split(":", 1)
+                            masked_auth = f"{user}:***"
+                        else:
+                            masked_auth = auth
+                        value = f"{scheme}://{masked_auth}@{host}"
+            elif "SECRET" in var or "KEY" in var or "PASSWORD" in var:
+                value = "***" if value else "not set"
+            result[var] = value
+        else:
+            result[var] = "not set"
+    
+    # Also show all Railway environment variables
+    railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY_")}
+    result["railway_vars"] = railway_vars
+    
+    return result
+
+
+# ============================================
 # Farms CRUD (protected)
 # ============================================
 @app.post("/farms", response_model=FarmResponse, status_code=201)
