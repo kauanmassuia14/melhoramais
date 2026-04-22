@@ -44,7 +44,7 @@ export default function LoginPage() {
     setErrors({});
     try {
       await login(email, password);
-      window.location.href = "/animals";
+      window.location.href = "/";
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro ao autenticar";
       setErrors({ password: message });
