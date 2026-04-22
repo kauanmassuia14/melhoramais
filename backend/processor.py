@@ -271,13 +271,19 @@ class GeneticDataProcessor:
     def _upsert_animals(
         self, df: pd.DataFrame
     ) -> Tuple[int, int, int]:
-        """UPSERT animals. Returns (inserted, updated, failed)."""
+        """UPSERT animals. Returns (inserted, updated, failed).
+        
+        Uses nested transactions (SAVEPOINT) per row to prevent
+        transaction abortion when individual rows fail.
+        """
         inserted = 0
         updated = 0
         failed = 0
 
         if not IS_SQLITE:
             for _, row in df.iterrows():
+                # Create a savepoint for this row
+                nested = self.db.begin_nested()
                 try:
                     values = row.to_dict()
                     values = {
@@ -294,12 +300,14 @@ class GeneticDataProcessor:
                         },
                     )
                     self.db.execute(stmt)
+                    nested.commit()
                     inserted += 1
                 except Exception:
+                    nested.rollback()
                     failed += 1
-            self.db.flush()
         else:
             for _, row in df.iterrows():
+                nested = self.db.begin_nested()
                 try:
                     values = row.to_dict()
                     values = {
@@ -324,9 +332,10 @@ class GeneticDataProcessor:
                         animal = Animal(**values)
                         self.db.add(animal)
                         inserted += 1
+                    nested.commit()
                 except Exception:
+                    nested.rollback()
                     failed += 1
-            self.db.flush()
 
         return inserted, updated, failed
 
