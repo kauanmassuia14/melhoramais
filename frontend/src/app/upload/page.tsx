@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
-import { motion } from "framer-motion";
-import { api } from "@/lib/api";
+import { motion, AnimatePresence } from "framer-motion";
+import { api, Farm, Upload } from "@/lib/api";
 import {
   DocumentArrowUpIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ArrowDownTrayIcon,
+  PlusIcon,
+  BuildingOfficeIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "@heroicons/react/24/outline";
 
 const PLATFORMS = [
@@ -34,18 +37,157 @@ const PLATFORMS = [
   },
 ];
 
-export default function UploadPage() {
-  const [platform, setPlatform] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+interface CreateFarmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (farm: Farm) => void;
+}
 
-  const handleUpload = async () => {
-    if (!file || !platform) return;
-    setStatus("processing");
+function CreateFarmModal({ isOpen, onClose, onSuccess }: CreateFarmModalProps) {
+  const [nomeFarm, setNomeFarm] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     try {
-      const blob = await api.uploadFile(file, platform, 1);
+      const farm = await api.createFarm({
+        nome_farm: nomeFarm,
+        cnpj: cnpj || undefined,
+      });
+      onSuccess(farm);
+      setNomeFarm("");
+      setCnpj("");
+    } catch (err: any) {
+      setError(err.message || "Erro ao criar fazenda");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-surface-1 border border-white/[0.08] rounded-2xl p-6 w-full max-w-md"
+      >
+        <h3 className="text-xl font-bold text-white mb-4">Nova Fazenda</h3>
+        
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-rose-neon/[0.08] border border-rose-neon/20 text-rose-neon-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">Nome da Fazenda *</label>
+            <input
+              type="text"
+              value={nomeFarm}
+              onChange={(e) => setNomeFarm(e.target.value)}
+              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-cyan-glow/40"
+              placeholder="Ex: Fazenda São João"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">CNPJ (opcional)</label>
+            <input
+              type="text"
+              value={cnpj}
+              onChange={(e) => setCnpj(e.target.value)}
+              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-cyan-glow/40"
+              placeholder="00.000.000/0000-00"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <GlowButton
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              className="flex-1"
+            >
+              Cancelar
+            </GlowButton>
+            <GlowButton
+              type="submit"
+              disabled={loading || !nomeFarm.trim()}
+              className="flex-1"
+            >
+              {loading ? "Criando..." : "Criar Fazenda"}
+            </GlowButton>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+export default function UploadPage() {
+  const [farms, setFarms] = useState<Farm[]>([]);
+  const [selectedFarm, setSelectedFarm] = useState<Farm | null>(null);
+  const [farmDropdownOpen, setFarmDropdownOpen] = useState(false);
+  const [createFarmModalOpen, setCreateFarmModalOpen] = useState(false);
+  const [platform, setPlatform] = useState("");
+  const [uploadName, setUploadName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<"idle" | "creating-upload" | "processing" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [currentUpload, setCurrentUpload] = useState<Upload | null>(null);
+
+  useEffect(() => {
+    loadFarms();
+  }, []);
+
+  const loadFarms = async () => {
+    try {
+      const farmsData = await api.getFarms();
+      setFarms(farmsData);
+      if (farmsData.length > 0 && !selectedFarm) {
+        setSelectedFarm(farmsData[0]);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar fazendas:", err);
+    }
+  };
+
+  const handleFarmCreated = (farm: Farm) => {
+    setFarms([...farms, farm]);
+    setSelectedFarm(farm);
+    setCreateFarmModalOpen(false);
+  };
+
+  const handleUpload = async () => {
+    if (!file || !platform || !selectedFarm || !uploadName.trim()) return;
+
+    setStatus("creating-upload");
+
+    try {
+      // Step 1: Create upload record
+      const upload = await api.createUpload({
+        nome: uploadName.trim(),
+        id_farm: selectedFarm.id_farm,
+        fonte_origem: platform,
+        arquivo_nome_original: file.name,
+      });
+
+      setCurrentUpload(upload);
+      setStatus("processing");
+
+      // Step 2: Process file with upload_id
+      const blob = await api.uploadFileWithUpload(file, platform, selectedFarm.id_farm, upload.upload_id);
+      
+      // Download the processed file
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -53,12 +195,13 @@ export default function UploadPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      
       setStatus("success");
       
       try {
         await api.createNotification({
           title: "Upload concluído",
-          message: `Arquivo "${file.name}" processado com sucesso na plataforma ${platform}.`,
+          message: `"${uploadName}" - ${file.name} processado com sucesso na fazenda ${selectedFarm.nome_farm}.`,
           type: "success",
         });
       } catch {
@@ -71,7 +214,7 @@ export default function UploadPage() {
       try {
         await api.createNotification({
           title: "Erro no upload",
-          message: `Falha ao processar "${file?.name}": ${err.message || "Erro desconhecido"}`,
+          message: `Falha ao processar "${uploadName}": ${err.message || "Erro desconhecido"}`,
           type: "error",
         });
       } catch {
@@ -84,10 +227,20 @@ export default function UploadPage() {
     setStatus("idle");
     setFile(null);
     setErrorMsg("");
+    setCurrentUpload(null);
+    setUploadName("");
   };
+
+  const canProceed = selectedFarm && platform && file && uploadName.trim();
 
   return (
     <DashboardLayout>
+      <CreateFarmModal
+        isOpen={createFarmModalOpen}
+        onClose={() => setCreateFarmModalOpen(false)}
+        onSuccess={handleFarmCreated}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -98,15 +251,91 @@ export default function UploadPage() {
             Upload de Dados Genéticos
           </h1>
           <p className="text-text-secondary mt-1">
-            Selecione a plataforma, envie o arquivo e processe automaticamente.
+            Selecione a fazenda, dê um nome ao upload, escolha a plataforma e envie o arquivo.
           </p>
         </section>
 
-        {/* Step 1: Platform */}
+        {/* Step 1: Select Farm */}
         <GlassCard glow="cyan" className="p-8 space-y-6">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-cyan-glow/[0.08] border border-cyan-glow/20 flex items-center justify-center">
               <span className="text-cyan-glow-400 font-bold text-sm">01</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">Selecione a Fazenda</h2>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setFarmDropdownOpen(!farmDropdownOpen)}
+              className="w-full bg-black/20 border border-white/[0.08] rounded-xl px-4 py-3.5 text-left flex items-center justify-between hover:border-cyan-glow/30 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <BuildingOfficeIcon className="w-5 h-5 text-text-muted" />
+                <span className="text-white">
+                  {selectedFarm ? selectedFarm.nome_farm : "Selecione uma fazenda..."}
+                </span>
+              </div>
+              {farmDropdownOpen ? (
+                <ChevronUpIcon className="w-5 h-5 text-text-muted" />
+              ) : (
+                <ChevronDownIcon className="w-5 h-5 text-text-muted" />
+              )}
+            </button>
+
+            <AnimatePresence>
+              {farmDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-surface-1 border border-white/[0.08] rounded-xl overflow-hidden z-10"
+                >
+                  <div className="max-h-60 overflow-y-auto">
+                    {farms.map((farm) => (
+                      <button
+                        key={farm.id_farm}
+                        onClick={() => {
+                          setSelectedFarm(farm);
+                          setFarmDropdownOpen(false);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-white/[0.04] transition-colors flex items-center gap-3"
+                      >
+                        <BuildingOfficeIcon className="w-4 h-4 text-text-muted" />
+                        <span className="text-text-primary">{farm.nome_farm}</span>
+                        {farm.cnpj && (
+                          <span className="text-xs text-text-muted">{farm.cnpj}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-white/[0.06] p-2">
+                    <button
+                      onClick={() => {
+                        setFarmDropdownOpen(false);
+                        setCreateFarmModalOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 rounded-lg bg-cyan-glow/[0.08] border border-cyan-glow/20 text-cyan-glow-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-cyan-glow/[0.12] transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      Criar Nova Fazenda
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </GlassCard>
+
+        {/* Step 2: Platform */}
+        <GlassCard 
+          glow="cyan" 
+          className={`p-8 space-y-6 transition-all duration-500 ${
+            !selectedFarm ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/[0.08] border border-emerald-glow/20 flex items-center justify-center">
+              <span className="text-emerald-glow-400 font-bold text-sm">02</span>
             </div>
             <h2 className="text-xl font-bold text-white">Selecione a Plataforma</h2>
           </div>
@@ -139,7 +368,7 @@ export default function UploadPage() {
           </div>
         </GlassCard>
 
-        {/* Step 2: File */}
+        {/* Step 3: Upload Name */}
         <GlassCard
           glow="cyan"
           className={`p-8 space-y-6 transition-all duration-500 ${
@@ -147,8 +376,36 @@ export default function UploadPage() {
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-glow/[0.08] border border-emerald-glow/20 flex items-center justify-center">
-              <span className="text-emerald-glow-400 font-bold text-sm">02</span>
+            <div className="w-10 h-10 rounded-xl bg-violet-glow/[0.08] border border-violet-glow/20 flex items-center justify-center">
+              <span className="text-violet-glow-400 font-bold text-sm">03</span>
+            </div>
+            <h2 className="text-xl font-bold text-white">Nome do Upload</h2>
+          </div>
+
+          <div>
+            <input
+              type="text"
+              value={uploadName}
+              onChange={(e) => setUploadName(e.target.value)}
+              placeholder="Ex: Importação ANCP Janeiro 2026"
+              className="w-full bg-black/20 border border-white/[0.08] rounded-xl px-4 py-3.5 text-white placeholder:text-text-muted focus:outline-none focus:border-violet-glow/40 transition-colors"
+            />
+            <p className="text-xs text-text-muted mt-2">
+              Dê um nome descritivo para identificar este upload no histórico
+            </p>
+          </div>
+        </GlassCard>
+
+        {/* Step 4: File */}
+        <GlassCard
+          glow="cyan"
+          className={`p-8 space-y-6 transition-all duration-500 ${
+            !uploadName.trim() ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-glow/[0.08] border border-amber-glow/20 flex items-center justify-center">
+              <span className="text-amber-glow-400 font-bold text-sm">04</span>
             </div>
             <h2 className="text-xl font-bold text-white">Upload do Arquivo</h2>
           </div>
@@ -191,16 +448,16 @@ export default function UploadPage() {
           </div>
         </GlassCard>
 
-        {/* Step 3: Execute */}
+        {/* Step 5: Execute */}
         <GlassCard
           glow="cyan"
           className={`p-8 space-y-6 transition-all duration-500 ${
-            !file ? "opacity-40 pointer-events-none" : ""
+            !canProceed ? "opacity-40 pointer-events-none" : ""
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-violet-glow/[0.08] border border-violet-glow/20 flex items-center justify-center">
-              <span className="text-violet-glow-400 font-bold text-sm">03</span>
+            <div className="w-10 h-10 rounded-xl bg-rose-glow/[0.08] border border-rose-glow/20 flex items-center justify-center">
+              <span className="text-rose-glow-400 font-bold text-sm">05</span>
             </div>
             <h2 className="text-xl font-bold text-white">Execução</h2>
           </div>
@@ -212,10 +469,29 @@ export default function UploadPage() {
                   Pronto para processar
                 </p>
                 <p className="text-xs text-text-muted">
-                  {platform} · {file?.name}
+                  {selectedFarm?.nome_farm} · {platform} · {uploadName}
                 </p>
               </div>
               <GlowButton onClick={handleUpload}>Processar Dados</GlowButton>
+            </div>
+          )}
+
+          {status === "creating-upload" && (
+            <div className="p-4 rounded-xl bg-violet-glow/[0.04] border border-violet-glow/20">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-5 h-5 border-2 border-violet-glow border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-violet-glow-400 font-medium">
+                  Criando registro do upload...
+                </span>
+              </div>
+              <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: "0%" }}
+                  animate={{ width: "30%" }}
+                  transition={{ duration: 1, ease: "linear" }}
+                  className="h-full bg-gradient-to-r from-violet-glow-deep to-violet-glow rounded-full"
+                />
+              </div>
             </div>
           )}
 
@@ -224,12 +500,12 @@ export default function UploadPage() {
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-5 h-5 border-2 border-cyan-glow border-t-transparent rounded-full animate-spin" />
                 <span className="text-sm text-cyan-glow-400 font-medium">
-                  Processando...
+                  Processando arquivo...
                 </span>
               </div>
               <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
                 <motion.div
-                  initial={{ width: "0%" }}
+                  initial={{ width: "30%" }}
                   animate={{ width: "100%" }}
                   transition={{ duration: 3, ease: "linear" }}
                   className="h-full bg-gradient-to-r from-cyan-glow-deep to-cyan-glow rounded-full"
@@ -246,7 +522,9 @@ export default function UploadPage() {
                   <p className="text-sm text-emerald-glow-400 font-medium">
                     Processamento concluído
                   </p>
-                  <p className="text-xs text-text-muted">Download iniciado automaticamente</p>
+                  <p className="text-xs text-text-muted">
+                    Download iniciado automaticamente
+                  </p>
                 </div>
               </div>
               <GlowButton variant="ghost" size="sm" onClick={handleReset}>

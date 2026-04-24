@@ -107,6 +107,36 @@ export interface Farm {
   created_at: string | null;
 }
 
+export interface Upload {
+  upload_id: string;
+  nome: string;
+  id_farm: number;
+  fonte_origem: string;
+  arquivo_nome_original: string | null;
+  total_registros: number;
+  rows_inserted: number;
+  rows_updated: number;
+  status: string;
+  error_message: string | null;
+  usuario_id: number | null;
+  data_upload: string | null;
+  completed_at: string | null;
+}
+
+export interface UploadWithAnimals {
+  upload: Upload;
+  farm_nome: string;
+  animais_preview: Animal[];
+  total_animais: number;
+}
+
+export interface UploadCreate {
+  nome: string;
+  id_farm: number;
+  fonte_origem: string;
+  arquivo_nome_original?: string;
+}
+
 export interface UploadDetail {
   log: ProcessingLog;
   animals_preview: Animal[];
@@ -468,4 +498,66 @@ export const api = {
   
   markAllAsRead: () =>
     fetchApi<{ message: string }>('/notifications/read-all', { method: 'PUT' }),
+
+  // Uploads API
+  getUploads: (opts?: { farmId?: number; fonteOrigem?: string; status?: string; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', String(opts.farmId));
+    if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
+    if (opts?.status) params.set('status', opts.status);
+    params.set('limit', String(opts?.limit || 50));
+    params.set('offset', String(opts?.offset || 0));
+    return fetchApi<Upload[]>(`/uploads?${params.toString()}`);
+  },
+
+  getUpload: (uploadId: string) =>
+    fetchApi<UploadWithAnimals>(`/uploads/${uploadId}`),
+
+  createUpload: (data: UploadCreate) =>
+    fetchApi<Upload>('/uploads', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteUpload: (uploadId: string) =>
+    fetchApi<void>(`/uploads/${uploadId}`, { method: 'DELETE' }),
+
+  uploadFileWithUpload: async (file: File, sourceSystem: string, farmId: number, uploadId: string): Promise<Blob> => {
+    const token = getAccessToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('source_system', sourceSystem);
+    formData.append('farm_id', String(farmId));
+    formData.append('upload_id', uploadId);
+
+    const doUpload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/process-genetic-data`, {
+        method: 'POST',
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: formData,
+      });
+    };
+
+    let res = await doUpload(token);
+
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doUpload(newToken);
+      }
+    }
+
+    if (!res.ok) {
+      let errMsg = 'Upload falhou';
+      try {
+        const err = await res.json();
+        errMsg = err.detail || errMsg;
+      } catch { }
+      throw new ApiError(errMsg, res.status);
+    }
+
+    return res.blob();
+  },
 };
