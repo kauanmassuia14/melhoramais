@@ -13,6 +13,13 @@ class FarmCreate(BaseModel):
     email: Optional[str] = None
 
 
+class FarmUpdate(BaseModel):
+    nome_farm: Optional[str] = Field(None, min_length=1, max_length=255)
+    cnpj: Optional[str] = None
+    responsavel: Optional[str] = None
+    email: Optional[str] = None
+
+
 class FarmResponse(BaseModel):
     id_farm: int
     nome_farm: str
@@ -31,22 +38,63 @@ class FarmResponse(BaseModel):
 class AnimalResponse(BaseModel):
     id_animal: int
     id_farm: int
+    upload_id: Optional[str] = None
     rgn_animal: str
-    nome_animal: Optional[str]
-    raca: Optional[str]
-    sexo: Optional[str]
-    data_nascimento: Optional[date]
-    mae_rgn: Optional[str]
-    pai_rgn: Optional[str]
-    p210_peso_desmama: Optional[float]
-    p365_peso_ano: Optional[float]
-    p450_peso_sobreano: Optional[float]
-    pe_perimetro_escrotal: Optional[float]
-    a_area_olho_lombo: Optional[float]
-    eg_espessura_gordura: Optional[float]
-    im_idade_primeiro_parto: Optional[float]
-    fonte_origem: Optional[str]
-    data_processamento: Optional[datetime]
+    nome_animal: Optional[str] = None
+    raca: Optional[str] = None
+    sexo: Optional[str] = None
+    data_nascimento: Optional[date] = None
+    
+    # Genealogy - 1ª geração
+    mae_rgn: Optional[str] = None
+    pai_rgn: Optional[str] = None
+    
+    # Genealogy - 2ª geração
+    avo_paterno_rgn: Optional[str] = None
+    avo_paterno_mae_rgn: Optional[str] = None
+    avo_materno_rgn: Optional[str] = None
+    avo_materno_mae_rgn: Optional[str] = None
+    
+    # Genealogy - 3ª geração
+    bisavo_paterno_pai_rgn: Optional[str] = None
+    bisavo_paterno_mae_pai_rgn: Optional[str] = None
+    bisavo_materno_pai_rgn: Optional[str] = None
+    bisavo_materno_mae_pai_rgn: Optional[str] = None
+    bisavo_paterno_mae_rgn: Optional[str] = None
+    bisavo_paterno_mae_mae_rgn: Optional[str] = None
+    bisavo_materno_mae_rgn: Optional[str] = None
+    bisavo_materno_mae_mae_rgn: Optional[str] = None
+    
+    # Genealogy - 4ª geração
+    trisavo_paterno_pai_rgn: Optional[str] = None
+    trisavo_paterno_mae_pai_rgn: Optional[str] = None
+    trisavo_materno_pai_rgn: Optional[str] = None
+    trisavo_materno_mae_pai_rgn: Optional[str] = None
+    trisavo_paterno_mae_rgn: Optional[str] = None
+    trisavo_paterno_mae_mae_rgn: Optional[str] = None
+    trisavo_materno_mae_rgn: Optional[str] = None
+    trisavo_materno_mae_mae_rgn: Optional[str] = None
+    
+    # Pesos
+    peso_nascimento: Optional[float] = None
+    p210_peso_desmama: Optional[float] = None
+    p365_peso_ano: Optional[float] = None
+    p450_peso_sobreano: Optional[float] = None
+    peso_final: Optional[float] = None
+    
+    # Medidas
+    pe_perimetro_escrotal: Optional[float] = None
+    a_area_olho_lombo: Optional[float] = None
+    eg_espessura_gordura: Optional[float] = None
+    altura: Optional[float] = None
+    circumference: Optional[float] = None
+    
+    # Reprodução
+    im_idade_primeiro_parto: Optional[float] = None
+    intervalo_partos: Optional[float] = None
+    dias_gestacao: Optional[float] = None
+    
+    # ANCP - Benchmarking
     anc_mg: Optional[float] = None
     anc_te: Optional[float] = None
     anc_m: Optional[float] = None
@@ -58,6 +106,24 @@ class AnimalResponse(BaseModel):
     anc_leg: Optional[float] = None
     anc_sh: Optional[float] = None
     anc_pp30: Optional[float] = None
+    
+    # ANCP - DEP Individuais
+    anc_dipp: Optional[float] = None
+    anc_d3p: Optional[float] = None
+    anc_dstay: Optional[float] = None
+    anc_dpn: Optional[float] = None
+    anc_dp12: Optional[float] = None
+    anc_dpe: Optional[float] = None
+    anc_daol: Optional[float] = None
+    anc_dacab: Optional[float] = None
+    
+    # ANCP - AC
+    anc_ac_mg: Optional[float] = None
+    anc_ac_te: Optional[float] = None
+    anc_ac_m: Optional[float] = None
+    anc_ac_p: Optional[float] = None
+    
+    # GENEPLUS - Benchmarking
     gen_iqg: Optional[float] = None
     gen_pmm: Optional[float] = None
     gen_p: Optional[float] = None
@@ -68,6 +134,29 @@ class AnimalResponse(BaseModel):
     gen_leg: Optional[float] = None
     gen_sh: Optional[float] = None
     gen_pp30: Optional[float] = None
+    
+    # GENEPLUS - DEP Individuais
+    gen_pn: Optional[float] = None
+    gen_p120: Optional[float] = None
+    gen_tmd: Optional[float] = None
+    gen_pd: Optional[float] = None
+    gen_tm120: Optional[float] = None
+    gen_ps: Optional[float] = None
+    gen_gpd: Optional[float] = None
+    gen_cfd: Optional[float] = None
+    gen_cfs: Optional[float] = None
+    gen_hp_stay: Optional[float] = None
+    gen_rd: Optional[float] = None
+    gen_egs: Optional[float] = None
+    gen_acab: Optional[float] = None
+    gen_mar: Optional[float] = None
+    
+    # GENEPLUS - AC
+    gen_ac_iqg: Optional[float] = None
+    gen_ac_pmm: Optional[float] = None
+    gen_ac_p: Optional[float] = None
+    
+    # PMGZ - Benchmarking
     pmg_iabc: Optional[float] = None
     pmg_zpmm: Optional[float] = None
     pmg_p: Optional[float] = None
@@ -78,7 +167,41 @@ class AnimalResponse(BaseModel):
     pmg_leg: Optional[float] = None
     pmg_sh: Optional[float] = None
     pmg_pp30: Optional[float] = None
-
+    
+    # PMGZ - DEP Individuais
+    pmg_pn: Optional[float] = None
+    pmg_pa: Optional[float] = None
+    pmg_ps: Optional[float] = None
+    pmg_pm: Optional[float] = None
+    pmg_ipp: Optional[float] = None
+    pmg_stay: Optional[float] = None
+    pmg_pe: Optional[float] = None
+    pmg_aol: Optional[float] = None
+    pmg_acab: Optional[float] = None
+    pmg_mar: Optional[float] = None
+    
+    # PMGZ - DECA
+    pmg_deca: Optional[str] = None
+    pmg_deca_pn: Optional[str] = None
+    pmg_deca_p12: Optional[str] = None
+    pmg_deca_ps: Optional[str] = None
+    pmg_deca_stay: Optional[str] = None
+    pmg_deca_pe: Optional[str] = None
+    pmg_deca_aol: Optional[str] = None
+    
+    # PMGZ - Metas
+    pmg_meta_p: Optional[float] = None
+    pmg_meta_m: Optional[float] = None
+    pmg_meta_t: Optional[float] = None
+    
+    # PMGZ - AC
+    pmg_ac_iabc: Optional[float] = None
+    pmg_ac_p: Optional[float] = None
+    pmg_ac_m: Optional[float] = None
+    
+    fonte_origem: Optional[str] = None
+    data_processamento: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 
@@ -287,3 +410,47 @@ class NotificationResponse(BaseModel):
 
 class NotificationUpdate(BaseModel):
     is_read: Optional[bool] = None
+
+
+# ============================================
+# Upload Schemas
+# ============================================
+class UploadCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+    id_farm: int
+    fonte_origem: str = Field(..., pattern="^(ANCP|PMGZ|GENEPLUS|PMG)$")
+    arquivo_nome_original: Optional[str] = None
+
+
+class UploadResponse(BaseModel):
+    upload_id: str
+    nome: str
+    id_farm: int
+    fonte_origem: str
+    arquivo_nome_original: Optional[str]
+    total_registros: int
+    rows_inserted: int
+    rows_updated: int
+    status: str
+    error_message: Optional[str]
+    usuario_id: Optional[int]
+    data_upload: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class UploadWithAnimalsResponse(BaseModel):
+    upload: UploadResponse
+    farm_nome: str
+    animais_preview: list[AnimalResponse]
+    total_animais: int
+
+
+class UploadFilter(BaseModel):
+    farm_id: Optional[int] = None
+    fonte_origem: Optional[str] = None
+    status: Optional[str] = None
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)

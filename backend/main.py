@@ -11,15 +11,16 @@ from datetime import datetime
 import os
 import io
 
-from backend.models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification
+from backend.models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification, Upload
 from backend.database import get_db, engine
 from backend.schemas import (
-    FarmCreate, FarmResponse,
+    FarmCreate, FarmUpdate, FarmResponse,
     AnimalResponse, AnimalFilter,
     ColumnMappingCreate, ColumnMappingUpdate, ColumnMappingResponse,
     ProcessingLogResponse, ProcessingResult,
     DashboardStats, ReportHistoryItem, UploadDetailResponse,
     NotificationCreate, NotificationResponse, NotificationUpdate,
+    UploadCreate, UploadResponse, UploadWithAnimalsResponse, UploadFilter,
 )
 from .processor import GeneticDataProcessor
 from .auth.router import router as auth_router
@@ -158,6 +159,13 @@ def env_debug():
     railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY_")}
     result["railway_vars"] = railway_vars
     
+    # Show CORS configuration
+    result["cors_config"] = {
+        "allowed_origins": ALLOWED_ORIGINS,
+        "allowed_origins_count": len(ALLOWED_ORIGINS),
+        "raw_allowed_origins_env": os.getenv("ALLOWED_ORIGINS", "USING_DEFAULT")
+    }
+    
     return result
 
 
@@ -201,6 +209,27 @@ def get_farm(
     if current_user.role != "admin" and current_user.id_farm != farm_id:
         raise HTTPException(status_code=403, detail="Access denied to this farm")
     return farm
+
+
+@app.put("/farms/{farm_id}", response_model=FarmResponse)
+def update_farm(
+    farm_id: int,
+    farm: FarmUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Update farm - admin only or farm owner can edit their own farm."""
+    db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
+    if not db_farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    
+    update_data = farm.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_farm, key, value)
+    
+    db.commit()
+    db.refresh(db_farm)
+    return db_farm
 
 
 # ============================================
@@ -263,6 +292,7 @@ async def process_genetic_data(
     source_system: str = Form(...),
     file: UploadFile = File(...),
     farm_id: int = Form(default=1),
+    upload_id: str = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "user")),
 ):
@@ -270,12 +300,22 @@ async def process_genetic_data(
     effective_farm_id = farm_id
     if current_user.role != "admin" and current_user.id_farm:
         effective_farm_id = current_user.id_farm
+    
+    # Validate upload_id if provided
+    if upload_id:
+        upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+        if not upload:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        if upload.id_farm != effective_farm_id:
+            raise HTTPException(status_code=403, detail="Upload does not belong to this farm")
+        if upload.status == "completed":
+            raise HTTPException(status_code=400, detail="Upload already processed")
 
     try:
         content = await file.read()
-        processor = GeneticDataProcessor(db, farm_id=effective_farm_id)
+        processor = GeneticDataProcessor(db, farm_id=effective_farm_id, upload_id=upload_id)
 
-        df_cleaned, log = processor.process_file(content, file.filename, source_system)
+        df_cleaned, log, upload = processor.process_file(content, file.filename or f"upload_{source_system}", source_system)
         excel_data = processor.generate_formatted_excel(df_cleaned)
 
         return StreamingResponse(
@@ -369,6 +409,125 @@ def list_logs(
     if source_system:
         query = query.filter(ProcessingLog.source_system == source_system)
     return query.order_by(ProcessingLog.started_at.desc()).limit(limit).all()
+
+
+# ============================================
+# Uploads API — protected
+# ============================================
+@app.post("/uploads", response_model=UploadResponse, status_code=201)
+def create_upload(
+    upload: UploadCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new upload record before processing file."""
+    # Check farm access
+    if current_user.role != "admin" and current_user.id_farm != upload.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied to this farm")
+    
+    # Verify farm exists
+    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    
+    db_upload = Upload(
+        nome=upload.nome,
+        id_farm=upload.id_farm,
+        fonte_origem=upload.fonte_origem,
+        arquivo_nome_original=upload.arquivo_nome_original,
+        usuario_id=current_user.id,
+        status="processing",
+    )
+    db.add(db_upload)
+    db.commit()
+    db.refresh(db_upload)
+    return db_upload
+
+
+@app.get("/uploads", response_model=List[UploadResponse])
+def list_uploads(
+    farm_id: Optional[int] = Query(None),
+    fonte_origem: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List uploads with optional filtering."""
+    query = db.query(Upload)
+    
+    # Scope to user's farm if not admin
+    if current_user.role != "admin" and current_user.id_farm:
+        query = query.filter(Upload.id_farm == current_user.id_farm)
+    elif farm_id:
+        query = query.filter(Upload.id_farm == farm_id)
+    
+    if fonte_origem:
+        query = query.filter(Upload.fonte_origem == fonte_origem)
+    if status:
+        query = query.filter(Upload.status == status)
+    
+    return query.order_by(Upload.data_upload.desc()).offset(offset).limit(limit).all()
+
+
+@app.get("/uploads/{upload_id}", response_model=UploadWithAnimalsResponse)
+def get_upload(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get upload details with animal preview."""
+    upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    
+    # Check access
+    if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get farm name
+    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
+    farm_nome = farm.nome_farm if farm else "Unknown"
+    
+    # Get animal preview (first 100)
+    animais = (
+        db.query(Animal)
+        .filter(Animal.upload_id == upload_id)
+        .order_by(Animal.id_animal.desc())
+        .limit(100)
+        .all()
+    )
+    
+    total_animais = db.query(Animal).filter(Animal.upload_id == upload_id).count()
+    
+    return UploadWithAnimalsResponse(
+        upload=UploadResponse.model_validate(upload),
+        farm_nome=farm_nome,
+        animais_preview=[AnimalResponse.model_validate(a) for a in animais],
+        total_animais=total_animais,
+    )
+
+
+@app.delete("/uploads/{upload_id}", status_code=204)
+def delete_upload(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Delete an upload and all associated animals (admin only)."""
+    upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    
+    # Delete associated animals first
+    db.query(Animal).filter(Animal.upload_id == upload_id).delete()
+    
+    # Delete the upload
+    db.delete(upload)
+    db.commit()
+    
+    return {"message": "Upload deleted successfully"}
 
 
 # ============================================

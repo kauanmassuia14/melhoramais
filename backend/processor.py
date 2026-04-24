@@ -6,15 +6,16 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from backend.models import ColumnMapping, Animal, ProcessingLog, IS_SQLITE
+from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE
 
 logger = logging.getLogger(__name__)
 
 
 class GeneticDataProcessor:
-    def __init__(self, db: Session, farm_id: int = 1):
+    def __init__(self, db: Session, farm_id: int = 1, upload_id: str = None):
         self.db = db
         self.farm_id = farm_id
+        self.upload_id = upload_id
 
     def get_mappings(self, source_system: str) -> Dict[str, str]:
         """Fetch column mappings from DB for a source system."""
@@ -74,12 +75,13 @@ class GeneticDataProcessor:
 
     def process_file(
         self, file_content: bytes, filename: str, source_system: str
-    ) -> Tuple[pd.DataFrame, ProcessingLog]:
+    ) -> Tuple[pd.DataFrame, ProcessingLog, Upload]:
         """Full pipeline: read → map → clean → persist.
         
         Uses two separate transactions:
         1. First creates the ProcessingLog entry (committed immediately)
         2. Then processes and upserts animals (committed separately)
+        3. Updates Upload record with results
         
         This prevents the 'current transaction is aborted' error where
         a failed animal upsert would leave the log insertion uncommitable.
@@ -99,6 +101,7 @@ class GeneticDataProcessor:
         self.db.commit()  # Commit immediately to persist log_id
         
         log_id = log.id
+        upload = None
 
         try:
             # Transaction 2: Process animals (may fail without affecting log)
@@ -112,15 +115,28 @@ class GeneticDataProcessor:
             log.rows_failed = failed
             log.status = "completed"
             log.completed_at = datetime.utcnow()
+            
+            # Update upload record if provided
+            if self.upload_id:
+                upload = self.db.query(Upload).filter(
+                    Upload.upload_id == self.upload_id
+                ).first()
+                if upload:
+                    upload.total_registros = len(df)
+                    upload.rows_inserted = inserted
+                    upload.rows_updated = updated
+                    upload.status = "completed"
+                    upload.completed_at = datetime.utcnow()
+                    upload.arquivo_nome_original = filename
+            
             self.db.commit()
-            return df, log
+            return df, log, upload
 
         except Exception as e:
             # Rollback failed animal transaction
             self.db.rollback()
             
-            # Transaction 3: Update log status in a FRESH session
-            # This avoids the 'transaction aborted' state entirely
+            # Transaction 3: Update log and upload status in a FRESH session
             fresh_db = SessionLocal()
             try:
                 failed_log = fresh_db.query(ProcessingLog).filter(
@@ -131,6 +147,17 @@ class GeneticDataProcessor:
                     failed_log.error_message = str(e)[:1000]
                     failed_log.completed_at = datetime.utcnow()
                     fresh_db.commit()
+                
+                # Update upload status to failed
+                if self.upload_id:
+                    failed_upload = fresh_db.query(Upload).filter(
+                        Upload.upload_id == self.upload_id
+                    ).first()
+                    if failed_upload:
+                        failed_upload.status = "failed"
+                        failed_upload.error_message = str(e)[:1000]
+                        failed_upload.completed_at = datetime.utcnow()
+                        fresh_db.commit()
             except Exception:
                 fresh_db.rollback()
                 raise
@@ -153,6 +180,9 @@ class GeneticDataProcessor:
         df = df[keep]
         df = self._clean_data(df, source_system)
         df["id_farm"] = self.farm_id
+        # Add upload_id if provided
+        if self.upload_id:
+            df["upload_id"] = self.upload_id
         inserted, updated, failed = self._upsert_animals(df)
         return df, inserted, updated, failed
 

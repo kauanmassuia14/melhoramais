@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, UniqueConstraint, Text, JSON
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, UniqueConstraint, Text, JSON, Enum
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 import os
+import uuid
 from datetime import datetime
 
 from sqlalchemy.orm import declarative_base
@@ -34,6 +36,30 @@ class Farm(Base):
 
     animais = relationship("Animal", back_populates="farm")
     processing_logs = relationship("ProcessingLog", back_populates="farm")
+    uploads = relationship("Upload", back_populates="farm")
+
+
+class Upload(Base):
+    __tablename__ = "uploads"
+    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+
+    upload_id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    nome = Column(String(255), nullable=False)
+    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
+    fonte_origem = Column(String(50), nullable=False)
+    arquivo_nome_original = Column(String(255))
+    total_registros = Column(Integer, default=0)
+    rows_inserted = Column(Integer, default=0)
+    rows_updated = Column(Integer, default=0)
+    status = Column(String(20), default="processing")  # processing, completed, failed
+    error_message = Column(Text)
+    usuario_id = Column(Integer, _fk("silver.usuarios.id"), nullable=True)
+    data_upload = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    farm = relationship("Farm", back_populates="uploads")
+    usuario = relationship("User", back_populates="uploads")
+    animais = relationship("Animal", back_populates="upload")
 
 
 class Animal(Base):
@@ -45,63 +71,175 @@ class Animal(Base):
 
     id_animal = Column(Integer, primary_key=True, index=True)
     id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
+    upload_id = Column(String(36), _fk("silver.uploads.upload_id"), nullable=True, index=True)
     rgn_animal = Column(String(50), nullable=False)
     nome_animal = Column(String(255))
     raca = Column(String(50))
     sexo = Column(String(1))
     data_nascimento = Column(Date)
+
+    # Genealogy - 1ª geração
     mae_rgn = Column(String(50))
     pai_rgn = Column(String(50))
 
+    # Genealogy - 2ª geração (avos)
+    avo_paterno_rgn = Column(String(50))  # Avô paterno
+    avo_paterno_mae_rgn = Column(String(50))  # Avó paterna
+    avo_materno_rgn = Column(String(50))  # Avô materno
+    avo_materno_mae_rgn = Column(String(50))  # Avó materna
+
+    # Genealogy - 3ª geração (bisavôs)
+    bisavo_paterno_pai_rgn = Column(String(50))  # Bisavô paterno do pai
+    bisavo_paterno_mae_pai_rgn = Column(String(50))  # Bisavó paterna do pai
+    bisavo_materno_pai_rgn = Column(String(50))  # Bisavô materno do pai
+    bisavo_materno_mae_pai_rgn = Column(String(50))  # Bisavó materna do pai
+    bisavo_paterno_mae_rgn = Column(String(50))  # Bisavô paterno da mãe
+    bisavo_paterno_mae_mae_rgn = Column(String(50))  # Bisavó paterna da mãe
+    bisavo_materno_mae_rgn = Column(String(50))  # Bisavô materno da mãe
+    bisavo_materno_mae_mae_rgn = Column(String(50))  # Bisavó materna da mãe
+
+    # Genealogy - 4ª geração (trisavôs)
+    trisavo_paterno_pai_rgn = Column(String(50))
+    trisavo_paterno_mae_pai_rgn = Column(String(50))
+    trisavo_materno_pai_rgn = Column(String(50))
+    trisavo_materno_mae_pai_rgn = Column(String(50))
+    trisavo_paterno_mae_rgn = Column(String(50))
+    trisavo_paterno_mae_mae_rgn = Column(String(50))
+    trisavo_materno_mae_rgn = Column(String(50))
+    trisavo_materno_mae_mae_rgn = Column(String(50))
+
+    # Pesos
     p210_peso_desmama = Column(Float)
     p365_peso_ano = Column(Float)
     p450_peso_sobreano = Column(Float)
+    peso_nascimento = Column(Float)
+    peso_final = Column(Float)
+
+    # Medidas
     pe_perimetro_escrotal = Column(Float)
     a_area_olho_lombo = Column(Float)
     eg_espessura_gordura = Column(Float)
-    im_idade_primeiro_parto = Column(Float)
+    altura = Column(Float)
+    circumference = Column(Float)
 
-    # Benchmarking characteristics - ANCP
-    anc_mg = Column(Float)  # Média Genética
-    anc_te = Column(Float)  # Tamanho
-    anc_m = Column(Float)   # Maternidade
-    anc_p = Column(Float)   # Peso
-    anc_dp = Column(Float)  # Desvio Padrão
-    anc_sp = Column(Float)  # Sobreano
-    anc_e = Column(Float)   # Eficiência
-    anc_sao = Column(Float) # Área Olho Lombo
-    anc_leg = Column(Float) # Legume (gordura)
-    anc_sh = Column(Float)  # Sexo Hack
+    # Reprodução
+    im_idade_primeiro_parto = Column(Float)
+    intervalo_partos = Column(Float)
+    dias_gestacao = Column(Float)
+
+    # ==================== ANCP ====================
+    # Benchmarking - ANCP ( DEP )
+    anc_mg = Column(Float)   # Média Genética
+    anc_te = Column(Float)   # Tamanho
+    anc_m = Column(Float)    # Maternidade
+    anc_p = Column(Float)    # Peso
+    anc_dp = Column(Float)   # Desvio Padrão
+    anc_sp = Column(Float)   # Sobreano
+    anc_e = Column(Float)    # Eficiência
+    anc_sao = Column(Float)  # Área Olho Lombo
+    anc_leg = Column(Float)  # Legume (gordura)
+    anc_sh = Column(Float)   # Sexo Hack
     anc_pp30 = Column(Float) # Produção Prioritária 30
 
-    # Benchmarking characteristics - GENEPLUS
-    gen_iqg = Column(Float)  # Índice Qualidade Genética
-    gen_pmm = Column(Float)  # Peso Maternidade
-    gen_p = Column(Float)    # Peso
-    gen_dp = Column(Float)   # Desvio Padrão
-    gen_sp = Column(Float)   # Sobreano
-    gen_e = Column(Float)    # Eficiência
-    gen_sao = Column(Float)  # Área Olho Lombo
-    gen_leg = Column(Float)  # Legume (gordura)
-    gen_sh = Column(Float)   # Sexo Hack
-    gen_pp30 = Column(Float) # Produção Prioritária 30
+    # Direct Predicted (DEP) - ANCP
+    anc_dipp = Column(Float)   # DEP IPP
+    anc_d3p = Column(Float)    # DEP 3P
+    anc_dstay = Column(Float)   # DEP Stayability
+    anc_dpn = Column(Float)    # DEP Peso Nascimento
+    anc_dp12 = Column(Float)   # DEP Peso 12 meses
+    anc_dpe = Column(Float)   # DEP PE
+    anc_daol = Column(Float)  # DEP AOL
+    anc_dacab = Column(Float)  # DEP ACAB
 
-    # Benchmarking characteristics - PMGZ
-    pmg_iabc = Column(Float)  # Índice ABCZ
+    # AC (Accuracy) - ANCP
+    anc_ac_mg = Column(Float)
+    anc_ac_te = Column(Float)
+    anc_ac_m = Column(Float)
+    anc_ac_p = Column(Float)
+
+    # ==================== GENEPLUS ====================
+    # Benchmarking - Geneplus
+    gen_iqg = Column(Float)    # Índice Qualidade Genética
+    gen_pmm = Column(Float)  # Peso Maternidade
+    gen_p = Column(Float)     # Peso
+    gen_dp = Column(Float)    # Desvio Padrão
+    gen_sp = Column(Float)    # Sobreano
+    gen_e = Column(Float)     # Eficiência
+    gen_sao = Column(Float)   # Área Olho Lombo
+    gen_leg = Column(Float)   # Legume (gordura)
+    gen_sh = Column(Float)    # Sexo Hack
+    gen_pp30 = Column(Float)  # Produção Prioritária 30
+
+    # Direct Predicted - Geneplus
+    gen_pn = Column(Float)     # PN (Peso Nascimento)
+    gen_p120 = Column(Float)   # P120 (Peso 120 dias)
+    gen_tmd = Column(Float)    # TMD (Total Maternal)
+    gen_pd = Column(Float)     # PD (Peso Desmama)
+    gen_tm120 = Column(Float) # TM120 (Total Maternal 120)
+    gen_ps = Column(Float)     # PS (Peso Sobreano)
+    gen_gpd = Column(Float)    # GPD (Ganho Pós-Desmama)
+    gen_cfd = Column(Float)   # CFD (Confecção)
+    gen_cfs = Column(Float)   # CFS (Confecção Sobreano)
+    gen_hp_stay = Column(Float) # Stayability
+    gen_rd = Column(Float)    # RD (Resposta Digestão)
+    gen_egs = Column(Float)   # EGS (Espessura Gordura Sub cutânea)
+    gen_acab = Column(Float)  # ACAB (Área de Olho de Lobo Adjusted)
+    gen_mar = Column(Float)   # MAR (Musculatura)
+
+    # AC - Geneplus
+    gen_ac_iqg = Column(Float)
+    gen_ac_pmm = Column(Float)
+    gen_ac_p = Column(Float)
+
+    # ==================== PMGZ ====================
+    # Benchmarking - PMGZ
+    pmg_iabc = Column(Float)    # Índice ABCZ
     pmg_zpmm = Column(Float)  # Zootecnia Peso Materno
-    pmg_p = Column(Float)     # Peso
-    pmg_dp = Column(Float)    # Desvio Padrão
+    pmg_p = Column(Float)    # Peso
+    pmg_dp = Column(Float)   # Desvio Padrão
     pmg_sp = Column(Float)    # Sobreano
     pmg_e = Column(Float)     # Eficiência
     pmg_sao = Column(Float)   # Área Olho Lombo
     pmg_leg = Column(Float)   # Legume (gordura)
     pmg_sh = Column(Float)    # Sexo Hack
-    pmg_pp30 = Column(Float)  # Produção Prioritária 30
+    pmg_pp30 = Column(Float)   # Produção Prioritária 30
+
+    # Direct Predicted - PMGZ
+    pmg_pn = Column(Float)     # PN-EDg (Peso Nascimento)
+    pmg_pa = Column(Float)     # PA-EDg (Peso Ao Nascer)
+    pmg_ps = Column(Float)     # PS-EDg (Peso Sobreano)
+    pmg_pm = Column(Float)    # PM-EMg (Peso Maternal)
+    pmg_ipp = Column(Float)   # IPPg (Idade Primeiro Parto)
+    pmg_stay = Column(Float)   # Stay (Stayability)
+    pmg_pe = Column(Float)    # PE-365g (PE)
+    pmg_aol = Column(Float)   # AOLg (Área Olho Lobo)
+    pmg_acab = Column(Float)  # ACABg (Acabamento)
+    pmg_mar = Column(Float)   # MARg (Maciez)
+
+    # DECA - PMGZ
+    pmg_deca = Column(String(10))
+    pmg_deca_pn = Column(String(10))
+    pmg_deca_p12 = Column(String(10))
+    pmg_deca_ps = Column(String(10))
+    pmg_deca_stay = Column(String(10))
+    pmg_deca_pe = Column(String(10))
+    pmg_deca_aol = Column(String(10))
+
+    # Meta genes - PMGZ
+    pmg_meta_p = Column(Float)
+    pmg_meta_m = Column(Float)
+    pmg_meta_t = Column(Float)
+
+    # AC - PMGZ
+    pmg_ac_iabc = Column(Float)
+    pmg_ac_p = Column(Float)
+    pmg_ac_m = Column(Float)
 
     fonte_origem = Column(String(50))
     data_processamento = Column(DateTime, default=datetime.utcnow)
 
     farm = relationship("Farm", back_populates="animais")
+    upload = relationship("Upload", back_populates="animais")
 
 
 class ColumnMapping(Base):
@@ -204,6 +342,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     farm = relationship("Farm", foreign_keys=[id_farm])
+    uploads = relationship("Upload", back_populates="usuario")
 
 
 class Notification(Base):
