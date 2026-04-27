@@ -389,9 +389,12 @@ def update_farm(
     farm_id: int,
     farm: FarmUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ):
     """Update farm - admin only or farm owner can edit their own farm."""
+    if current_user.role != "admin" and current_user.id_farm != farm_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
     if not db_farm:
         raise HTTPException(status_code=404, detail="Farm not found")
@@ -615,6 +618,32 @@ def list_logs(
     return query.order_by(ProcessingLog.started_at.desc()).limit(limit).all()
 
 
+@app.delete("/logs/{log_id}", status_code=204)
+def delete_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a processing log and its legacy associated animals."""
+    log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    
+    if current_user.role != "admin" and log.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Exclui os animais vinculados a esse log através da farm e source system que não estejam marcados no novo sistema
+    db.query(Animal).filter(
+        Animal.id_farm == log.id_farm,
+        Animal.fonte_origem == log.source_system,
+        Animal.upload_id.is_(None)
+    ).delete(synchronize_session=False)
+
+    db.delete(log)
+    db.commit()
+    return {"message": "Log and associated data deleted successfully"}
+
+
 # ============================================
 # Uploads API — protected
 # ============================================
@@ -718,21 +747,31 @@ def get_upload(
 def delete_upload(
     upload_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete an upload and all associated animals (admin only)."""
+    """Delete an upload and all associated data."""
     upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
     
-    # Delete associated animals first
-    db.query(Animal).filter(Animal.upload_id == upload_id).delete()
+    if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
     
-    # Delete the upload
+    # 1. Obter os IDs de animais vinculados a esse upload
+    animais_ids = [a.id_animal for a in db.query(Animal.id_animal).filter(Animal.upload_id == upload_id).all()]
+    
+    # 2. Deletar os dados raw correspondentes, caso existam na base (importante para não sobrar lixo)
+    if animais_ids:
+        db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
+
+    # 3. Deletar os Animais da tabela principal
+    db.query(Animal).filter(Animal.upload_id == upload_id).delete(synchronize_session=False)
+    
+    # 4. Deletar a entrada de upload
     db.delete(upload)
     db.commit()
     
-    return {"message": "Upload deleted successfully"}
+    return {"message": "Upload and associated data deleted successfully"}
 
 
 # ============================================

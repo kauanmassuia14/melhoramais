@@ -11,6 +11,7 @@ import {
   TagIcon,
   ArrowRightIcon,
   ArrowPathIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 export default function HistoryPage() {
@@ -30,6 +31,16 @@ export default function HistoryPage() {
   useEffect(() => {
     loadLogs();
   }, []);
+
+  const handleDeleteLog = async (logId: number) => {
+    if (!confirm('Tem certeza que deseja excluir esse processo e todos os seus dados?')) return;
+    try {
+      await api.deleteLog(logId);
+      setLogs((prev) => prev.filter((l) => l.id !== logId));
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir log');
+    }
+  };
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
@@ -124,7 +135,7 @@ export default function HistoryPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-6 py-5 flex items-center gap-2">
                       <Link
                         href={`/history/${log.id}`}
                         className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-medium border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
@@ -132,6 +143,13 @@ export default function HistoryPage() {
                         Ver detalhes
                         <ArrowRightIcon className="w-3 h-3" />
                       </Link>
+                      <button
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="p-1 rounded-full text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                        title="Excluir"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}

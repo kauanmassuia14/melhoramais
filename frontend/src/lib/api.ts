@@ -250,6 +250,9 @@ export const api = {
     return fetchApi<ProcessingLog[]>(`/logs?${params.toString()}`);
   },
 
+  deleteLog: (logId: number) =>
+    fetchApi<void>(`/logs/${logId}`, { method: 'DELETE' }),
+
   getUploadDetail: (logId: number) =>
     fetchApi<UploadDetail>(`/reports/upload/${logId}`),
 

@@ -331,7 +331,7 @@ export default function FarmsPage() {
                       <span className="text-[10px] text-text-muted font-mono">
                         #{farm.id_farm}
                       </span>
-                      {isAdmin && (
+                      {(isAdmin || user?.id_farm === farm.id_farm) && (
                         <>
                           <button
                             onClick={(e) => {
@@ -342,16 +342,18 @@ export default function FarmsPage() {
                           >
                             <PencilIcon className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(farm.id_farm);
-                            }}
-                            disabled={deletingId === farm.id_farm}
-                            className="p-1 rounded-lg text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-                          >
-                            <TrashIcon className="w-3.5 h-3.5" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(farm.id_farm);
+                              }}
+                              disabled={deletingId === farm.id_farm}
+                              className="p-1 rounded-lg text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                            >
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

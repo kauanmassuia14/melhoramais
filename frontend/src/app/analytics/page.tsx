@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
           )}
         </section>
 
-        {!selectedFarm && farms.length > 0 && (
+        {farms.length > 0 && (
           <Card variant="bento" className="p-4">
             <div className="flex items-center gap-4">
               <span className="text-sm text-slate-400">Filtrar por fazenda:</span>
