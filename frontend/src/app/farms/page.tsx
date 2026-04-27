@@ -23,11 +23,12 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
-import { api, Farm, DashboardStats } from "@/lib/api";
+import { api, Farm, DashboardStats, Upload } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 interface FarmWithStats extends Farm {
   stats?: DashboardStats;
+  lastUpload?: Upload;
 }
 
 export default function FarmsPage() {
@@ -59,10 +60,17 @@ export default function FarmsPage() {
       const farmsWithStats = await Promise.all(
         data.map(async (farm) => {
           try {
-            const stats = await api.getStats(farm.id_farm);
-            return { ...farm, stats };
+            const [stats, uploads] = await Promise.all([
+              api.getStats(farm.id_farm),
+              api.getUploads({ farmId: farm.id_farm, limit: 1 })
+            ]);
+            return { 
+              ...farm, 
+              stats, 
+              lastUpload: uploads.length > 0 ? uploads[0] : undefined 
+            };
           } catch {
-            return { ...farm, stats: undefined };
+            return { ...farm, stats: undefined, lastUpload: undefined };
           }
         })
       );
@@ -408,18 +416,23 @@ export default function FarmsPage() {
                             {formatNumber(farm.stats.total_animals)} animais
                           </span>
                         </div>
-                        {farm.stats.recent_uploads > 0 && (
+                        {farm.lastUpload ? (
                           <div className="flex items-center gap-1.5 text-xs">
-                            <ArrowTrendingUpIcon className="w-3.5 h-3.5 text-emerald-glow-400" />
-                            <span className="text-emerald-glow-400">
-                              {farm.stats.recent_uploads} upload{farm.stats.recent_uploads > 1 ? 's' : ''} recent{farm.stats.recent_uploads > 1 ? 'es' : 'e'}
+                            <ClockIcon className="w-3.5 h-3.5 text-emerald-glow-400" />
+                            <span className="text-text-muted">
+                              Upload: {new Date(farm.lastUpload.data_upload!).toLocaleDateString("pt-BR")}
                             </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <ClockIcon className="w-3.5 h-3.5 text-text-muted" />
+                            <span className="text-text-muted">Sem uploads</span>
                           </div>
                         )}
                         {farm.stats.avg_p210 && (
                           <div className="flex items-center gap-1.5 text-xs">
                             <span className="text-text-muted">P210:</span>
-                            <span className="text-text-primary font-mono">
+                            <span className="text-text-primary font-mono font-medium">
                               {farm.stats.avg_p210.toFixed(1)}
                             </span>
                           </div>
@@ -427,27 +440,12 @@ export default function FarmsPage() {
                         {farm.stats.avg_p365 && (
                           <div className="flex items-center gap-1.5 text-xs">
                             <span className="text-text-muted">P365:</span>
-                            <span className="text-text-primary font-mono">
+                            <span className="text-text-primary font-mono font-medium">
                               {farm.stats.avg_p365.toFixed(1)}
                             </span>
                           </div>
                         )}
                       </div>
-                      {farm.stats.animals_by_source && Object.keys(farm.stats.animals_by_source).length > 0 && (
-                        <div className="flex items-center gap-1.5 mt-2 text-xs">
-                          <span className="text-text-muted">Fontes:</span>
-                          <div className="flex gap-1">
-                            {Object.entries(farm.stats.animals_by_source).map(([source, count]) => (
-                              <span
-                                key={source}
-                                className="px-1.5 py-0.5 rounded bg-white/[0.05] text-text-secondary"
-                              >
-                                {source}: {formatNumber(count)}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 

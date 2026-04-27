@@ -25,23 +25,27 @@ export default function AnalyticsPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
 
   useEffect(() => {
-    const farmId = farmIdParam ? Number(farmIdParam) : undefined;
-    api.getStats(farmId)
-      .then(setStats)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
+      const farmId = farmIdParam ? Number(farmIdParam) : undefined;
+      api.getStats(farmId)
+        .then(setStats)
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    }
   }, [farmIdParam]);
 
   useEffect(() => {
-    api.getFarms()
-      .then((data) => {
-        setFarms(data);
-        if (farmIdParam) {
-          const farm = data.find((f) => String(f.id_farm) === farmIdParam);
-          if (farm) setSelectedFarm(farm);
-        }
-      })
-      .catch(console.error);
+    if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
+      api.getFarms()
+        .then((data) => {
+          setFarms(data);
+          if (farmIdParam) {
+            const farm = data.find((f) => String(f.id_farm) === farmIdParam);
+            if (farm) setSelectedFarm(farm);
+          }
+        })
+        .catch(console.error);
+    }
   }, [farmIdParam]);
 
   const sourceTotal = stats

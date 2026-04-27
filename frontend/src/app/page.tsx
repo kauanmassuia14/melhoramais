@@ -11,23 +11,30 @@ import {
   SparklesIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+import { GlowButton } from "@/components/ui/glow-button";
 import { motion } from "framer-motion";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStats();
+    if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
+      loadStats();
+    }
   }, []);
 
   const loadStats = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await api.getStats();
       setStats(data);
-    } catch {
-      // error loading stats
+    } catch (err: any) {
+      setError(err.message || "Erro ao carregar estatísticas");
     } finally {
       setLoading(false);
     }
@@ -160,10 +167,20 @@ export default function DashboardPage() {
               </div>
             </GlassCard>
           </>
+        ) : error ? (
+          <GlassCard className="p-8 text-center border-rose-neon/20">
+            <ExclamationTriangleIcon className="w-12 h-12 text-rose-neon-400 mx-auto mb-4" />
+            <p className="text-text-primary font-medium mb-2">Erro ao carregar dados</p>
+            <p className="text-text-secondary text-sm mb-6">{error}</p>
+            <GlowButton onClick={loadStats} variant="ghost" size="sm">
+              Tentar Novamente
+            </GlowButton>
+          </GlassCard>
         ) : (
-          <GlassCard className="p-8 text-center">
+          <GlassCard className="p-12 text-center">
+            <Squares2X2Icon className="w-12 h-12 text-text-muted mx-auto mb-4 animate-pulse" />
             <p className="text-text-muted">
-              Carregando dados do dashboard...
+              Nenhum dado disponível no momento.
             </p>
           </GlassCard>
         )}

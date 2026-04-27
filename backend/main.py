@@ -31,17 +31,42 @@ from .benchmark import router as benchmark_router
 app = FastAPI(title="Melhora+ Genetic Data Unifier API", version="2.0.0")
 
 # ============================================
-# CORS — restricted to frontend origin
+# CORS — robust configuration
 # ============================================
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://melhoramais-edfn.vercel.app,https://melhoramais-production.up.railway.app").split(",")
-ALLOWED_ORIGINS = [o.strip() for o in ALLOWED_ORIGINS if o.strip()]
+def get_origins():
+    raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+    if not raw_origins or raw_origins.strip() == "*":
+        return ["*"]
+    
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    
+    # Adicionar defaults se não estiverem presentes
+    defaults = [
+        "http://localhost:3000", 
+        "http://localhost:3001", 
+        "http://127.0.0.1:3000", 
+        "http://127.0.0.1:3001",
+        "https://melhoramais-edfn.vercel.app"
+    ]
+    for d in defaults:
+        if d not in origins:
+            origins.append(d)
+    return origins
+
+ALLOWED_ORIGINS = get_origins()
+
+# Se permitir tudo (*), não precisamos de allow_credentials=True para Bearer tokens
+# allow_credentials=True é necessário apenas para Cookies ou HTTP Basic
+# Como usamos Bearer token no Header, podemos usar allow_origins=["*"] com allow_credentials=False
+ALLOW_ALL = "*" in ALLOWED_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_origins=ALLOWED_ORIGINS if not ALLOW_ALL else ["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ============================================
@@ -328,17 +353,32 @@ async def process_genetic_data(
             raise HTTPException(status_code=400, detail="Upload already processed")
 
     try:
+        import asyncio
         content = await file.read()
         processor = GeneticDataProcessor(db, farm_id=effective_farm_id, upload_id=upload_id)
 
-        df_cleaned, log, upload = processor.process_file(content, file.filename or f"upload_{source_system}", source_system)
-        excel_data = processor.generate_formatted_excel(df_cleaned)
+        # Rodar processamento pesado em thread para não bloquear o event loop
+        loop = asyncio.get_event_loop()
+        df_cleaned, log, upload = await loop.run_in_executor(
+            None, 
+            processor.process_file, 
+            content, 
+            file.filename or f"upload_{source_system}", 
+            source_system
+        )
+        
+        excel_data = await loop.run_in_executor(
+            None,
+            processor.generate_formatted_excel,
+            df_cleaned
+        )
 
         return StreamingResponse(
             io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename=output_tratado_{source_system}.xlsx"
+                "Content-Disposition": f"attachment; filename=output_tratado_{source_system}.xlsx",
+                "Access-Control-Expose-Headers": "Content-Disposition"
             },
         )
     except Exception as e:

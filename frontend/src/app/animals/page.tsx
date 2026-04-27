@@ -50,8 +50,10 @@ export default function AnimalsPage() {
   }, [search, source, sexo, raca, page]);
 
   useEffect(() => {
-    fetchAnimals();
-  }, [fetchAnimals]);
+    if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
+      fetchAnimals();
+    }
+  }, [page, source, sexo, raca]); // Busca automática quando filtros rápidos ou página mudam
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
