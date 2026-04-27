@@ -118,19 +118,34 @@ def startup_event():
                     # Verificar o que falta
                     for column in model.__table__.columns:
                         if column.name not in existing_cols:
-                            # Tentar inferir o tipo para o SQL
-                            col_type = str(column.type).split("(")[0]
-                            if "VARCHAR" in str(column.type).upper() and hasattr(column.type, 'length'):
-                                col_type = f"VARCHAR({column.type.length})"
-                            elif "FLOAT" in str(column.type).upper():
-                                col_type = "DOUBLE PRECISION"
-                            
-                            print(f"Buscando sincronizar: {table_name}.{column.name} ({col_type})")
-                            table_full = f"{schema}.{table_name}" if schema else table_name
-                            conn.execute(text(f"ALTER TABLE {table_full} ADD COLUMN IF NOT EXISTS {column.name} {col_type}"))
+                            try:
+                                # Mapeamento de tipos simplificado para Postgres
+                                col_type = "TEXT"
+                                if "VARCHAR" in str(column.type).upper():
+                                    length = getattr(column.type, 'length', 255) or 255
+                                    col_type = f"VARCHAR({length})"
+                                elif "FLOAT" in str(column.type).upper() or "DECIMAL" in str(column.type).upper():
+                                    col_type = "DOUBLE PRECISION"
+                                elif "INT" in str(column.type).upper():
+                                    col_type = "INTEGER"
+                                elif "BOOLEAN" in str(column.type).upper():
+                                    col_type = "BOOLEAN"
+                                elif "DATETIME" in str(column.type).upper():
+                                    col_type = "TIMESTAMP"
+                                elif "DATE" in str(column.type).upper():
+                                    col_type = "DATE"
+                                elif "JSON" in str(column.type).upper():
+                                    col_type = "JSONB"
+                                
+                                table_full = f"{schema}.{table_name}" if schema else table_name
+                                print(f"Sincronizando: {table_full}.{column.name} ({col_type})")
+                                with engine.connect() as conn_migration:
+                                    conn_migration.execute(text(f"ALTER TABLE {table_full} ADD COLUMN IF NOT EXISTS {column.name} {col_type}"))
+                                    conn_migration.commit()
+                            except Exception as col_err:
+                                print(f"Erro ao criar coluna {column.name}: {col_err}")
                 
-                conn.commit()
-                print("Database fully synchronized.")
+                print("Database synchronization finished.")
         except Exception as e:
             print(f"Auto-migration error: {e}")
     
