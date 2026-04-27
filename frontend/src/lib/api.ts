@@ -113,6 +113,7 @@ export interface Upload {
   id_farm: number;
   fonte_origem: string;
   arquivo_nome_original: string | null;
+  arquivo_hash: string | null;
   total_registros: number;
   rows_inserted: number;
   rows_updated: number;
@@ -135,6 +136,7 @@ export interface UploadCreate {
   id_farm: number;
   fonte_origem: string;
   arquivo_nome_original?: string;
+  arquivo_hash?: string;
 }
 
 export interface UploadDetail {
@@ -275,6 +277,13 @@ export const api = {
 
   getFarms: () => fetchApi<Farm[]>('/farms'),
   getFarm: (id: number) => fetchApi<Farm>(`/farms/${id}`),
+  updateFarm: (id: number, data: { nome_farm?: string; cnpj?: string; responsavel?: string; email?: string }) =>
+    fetchApi<Farm>(`/farms/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteFarm: (id: number) =>
+    fetchApi<{ message: string }>(`/farms/${id}`, { method: 'DELETE' }),
   createFarm: (data: { nome_farm: string; cnpj?: string; responsavel?: string; email?: string }) =>
     fetchApi<Farm>('/farms', {
       method: 'POST',

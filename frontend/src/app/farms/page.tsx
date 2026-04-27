@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   PlusIcon,
@@ -10,21 +11,38 @@ import {
   IdentificationIcon,
   ExclamationTriangleIcon,
   XMarkIcon,
+  PencilIcon,
+  MagnifyingGlassIcon,
+  CheckIcon,
+  Squares2X2Icon,
+  ArrowTrendingUpIcon,
+  ClockIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
-import { api, Farm } from "@/lib/api";
+import { api, Farm, DashboardStats } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
+interface FarmWithStats extends Farm {
+  stats?: DashboardStats;
+}
+
 export default function FarmsPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const [farms, setFarms] = useState<FarmWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     nome_farm: "",
     cnpj: "",
@@ -38,7 +56,17 @@ export default function FarmsPage() {
     setError(null);
     try {
       const data = await api.getFarms();
-      setFarms(data);
+      const farmsWithStats = await Promise.all(
+        data.map(async (farm) => {
+          try {
+            const stats = await api.getStats(farm.id_farm);
+            return { ...farm, stats };
+          } catch {
+            return { ...farm, stats: undefined };
+          }
+        })
+      );
+      setFarms(farmsWithStats);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar fazendas");
     } finally {
@@ -49,6 +77,17 @@ export default function FarmsPage() {
   useEffect(() => {
     fetchFarms();
   }, []);
+
+  const filteredFarms = farms.filter((farm) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (
+      farm.nome_farm.toLowerCase().includes(s) ||
+      farm.responsavel?.toLowerCase().includes(s) ||
+      farm.email?.toLowerCase().includes(s) ||
+      farm.cnpj?.toLowerCase().includes(s)
+    );
+  });
 
   const validateForm = () => {
     const e: Record<string, string> = {};
@@ -79,12 +118,60 @@ export default function FarmsPage() {
     }
   };
 
+  const startEdit = (farm: Farm) => {
+    setEditingId(farm.id_farm);
+    setEditName(farm.nome_farm);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const saveEdit = async () => {
+    if (!editName.trim() || editingId === null) return;
+    setSavingEdit(true);
+    try {
+      await api.updateFarm(editingId, { nome_farm: editName.trim() });
+      setEditingId(null);
+      setEditName("");
+      fetchFarms();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao editar fazenda";
+      setError(msg);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async (farmId: number) => {
+    if (!confirm("Tem certeza que deseja excluir esta fazenda? Esta ação não pode ser desfeita.")) return;
+    setDeletingId(farmId);
+    try {
+      await api.deleteFarm(farmId);
+      fetchFarms();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao excluir fazenda";
+      setError(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleFarmClick = (farmId: number) => {
+    router.push(`/analytics?farm_id=${farmId}`);
+  };
+
   const isAdmin = user?.role === "admin";
+
+  const formatNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return "—";
+    return num.toLocaleString();
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">
@@ -105,7 +192,19 @@ export default function FarmsPage() {
           )}
         </div>
 
-        {/* Create Modal */}
+        <GlassCard className="p-4">
+          <div className="relative max-w-md">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar fazendas..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary placeholder:text-text-muted focus:border-cyan-glow/30 focus:outline-none transition-colors"
+            />
+          </div>
+        </GlassCard>
+
         {showCreate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
@@ -178,7 +277,6 @@ export default function FarmsPage() {
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-neon/[0.06] border border-rose-neon/20">
             <ExclamationTriangleIcon className="w-5 h-5 text-rose-neon-400 flex-shrink-0" />
@@ -186,49 +284,101 @@ export default function FarmsPage() {
           </div>
         )}
 
-        {/* Farms Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-40 bg-white/[0.02] rounded-2xl animate-pulse" />
+              <div key={i} className="h-56 bg-white/[0.02] rounded-2xl animate-pulse" />
             ))}
           </div>
-        ) : farms.length === 0 ? (
+        ) : filteredFarms.length === 0 ? (
           <GlassCard className="p-12 text-center">
             <BuildingOffice2Icon className="w-12 h-12 text-text-muted mx-auto mb-4" />
             <p className="text-text-secondary text-sm">
-              Nenhuma fazenda cadastrada
+              {search ? "Nenhuma fazenda encontrada" : "Nenhuma fazenda cadastrada"}
             </p>
-            {isAdmin && (
+            {isAdmin && !search && (
               <p className="text-text-muted text-xs mt-2">
-                Clique em &quot;Nova Fazenda&quot; para começar
+                Clique em "Nova Fazenda" para começar
               </p>
             )}
           </GlassCard>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {farms.map((farm, i) => (
+            {filteredFarms.map((farm, i) => (
               <motion.div
                 key={farm.id_farm}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
-                <GlassCard className="p-6 hover:border-cyan-glow/20 transition-colors">
-                  <div className="flex items-start justify-between mb-4">
+                <GlassCard
+                  className="p-6 hover:border-cyan-glow/20 transition-colors cursor-pointer group"
+                  onClick={() => handleFarmClick(farm.id_farm)}
+                >
+                  <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 flex items-center justify-center">
                       <BuildingOffice2Icon className="w-5 h-5 text-cyan-glow-400" />
                     </div>
-                    <span className="text-[10px] text-text-muted font-mono">
-                      #{farm.id_farm}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-text-muted font-mono">
+                        #{farm.id_farm}
+                      </span>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEdit(farm);
+                            }}
+                            className="p-1 rounded-lg text-text-muted hover:text-cyan-glow-400 hover:bg-cyan-glow/10 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <PencilIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(farm.id_farm);
+                            }}
+                            disabled={deletingId === farm.id_farm}
+                            className="p-1 rounded-lg text-text-muted hover:text-rose-neon-400 hover:bg-rose-neon/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-white mb-2">
-                    {farm.nome_farm}
-                  </h3>
+                  {editingId === farm.id_farm ? (
+                    <div className="flex items-center gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-xl bg-white/[0.05] border border-cyan-glow/30 text-white text-lg font-bold focus:outline-none focus:border-cyan-glow/50"
+                        autoFocus
+                      />
+                      <button
+                        onClick={saveEdit}
+                        disabled={savingEdit || !editName.trim()}
+                        className="p-2 rounded-xl bg-emerald-glow/20 text-emerald-glow-400 hover:bg-emerald-glow/30 disabled:opacity-50"
+                      >
+                        <CheckIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="p-2 rounded-xl bg-rose-neon/10 text-rose-neon-400 hover:bg-rose-neon/20"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <h3 className="text-lg font-bold text-white mb-2">
+                      {farm.nome_farm}
+                    </h3>
+                  )}
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1 mb-3">
                     {farm.responsavel && (
                       <div className="flex items-center gap-2 text-sm text-text-secondary">
                         <UserIcon className="w-3.5 h-3.5 text-text-muted" />
@@ -249,8 +399,69 @@ export default function FarmsPage() {
                     )}
                   </div>
 
+                  {farm.stats && (
+                    <div className="pt-3 mt-3 border-t border-white/[0.06]">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Squares2X2Icon className="w-3.5 h-3.5 text-cyan-glow-400" />
+                          <span className="text-text-secondary">
+                            {formatNumber(farm.stats.total_animals)} animais
+                          </span>
+                        </div>
+                        {farm.stats.recent_uploads > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <ArrowTrendingUpIcon className="w-3.5 h-3.5 text-emerald-glow-400" />
+                            <span className="text-emerald-glow-400">
+                              {farm.stats.recent_uploads} upload{farm.stats.recent_uploads > 1 ? 's' : ''} recent{farm.stats.recent_uploads > 1 ? 'es' : 'e'}
+                            </span>
+                          </div>
+                        )}
+                        {farm.stats.avg_p210 && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-text-muted">P210:</span>
+                            <span className="text-text-primary font-mono">
+                              {farm.stats.avg_p210.toFixed(1)}
+                            </span>
+                          </div>
+                        )}
+                        {farm.stats.avg_p365 && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-text-muted">P365:</span>
+                            <span className="text-text-primary font-mono">
+                              {farm.stats.avg_p365.toFixed(1)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {farm.stats.animals_by_source && Object.keys(farm.stats.animals_by_source).length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-2 text-xs">
+                          <span className="text-text-muted">Fontes:</span>
+                          <div className="flex gap-1">
+                            {Object.entries(farm.stats.animals_by_source).map(([source, count]) => (
+                              <span
+                                key={source}
+                                className="px-1.5 py-0.5 rounded bg-white/[0.05] text-text-secondary"
+                              >
+                                {source}: {formatNumber(count)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!farm.stats && (
+                    <div className="pt-3 mt-3 border-t border-white/[0.06]">
+                      <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                        <ClockIcon className="w-3.5 h-3.5" />
+                        <span>Sem dados carregados</span>
+                      </div>
+                    </div>
+                  )}
+
                   {farm.created_at && (
-                    <p className="text-[10px] text-text-muted mt-4">
+                    <p className="text-[10px] text-text-muted mt-3">
                       Criada em{" "}
                       {new Date(farm.created_at).toLocaleDateString("pt-BR")}
                     </p>

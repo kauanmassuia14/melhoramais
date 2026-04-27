@@ -116,31 +116,41 @@ export default function AnimalsPage() {
               <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Fonte
               </label>
-              <select
-                value={source}
-                onChange={(e) => { setSource(e.target.value); setPage(0); }}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none"
-              >
-                <option value="">Todas</option>
-                <option value="ANCP">ANCP</option>
-                <option value="PMGZ">PMGZ</option>
-                <option value="Geneplus">Geneplus</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={source}
+                  onChange={(e) => { setSource(e.target.value); setPage(0); }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-sm focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-deep-dark text-white">Todas</option>
+                  <option value="ANCP" className="bg-deep-dark text-white">ANCP</option>
+                  <option value="PMGZ" className="bg-deep-dark text-white">PMGZ</option>
+                  <option value="Geneplus" className="bg-deep-dark text-white">Geneplus</option>
+                </select>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
 
             <div className="w-28">
               <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Sexo
               </label>
-              <select
-                value={sexo}
-                onChange={(e) => { setSexo(e.target.value); setPage(0); }}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none"
-              >
-                <option value="">Todos</option>
-                <option value="M">Macho</option>
-                <option value="F">Fêmea</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={sexo}
+                  onChange={(e) => { setSexo(e.target.value); setPage(0); }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-sm focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-deep-dark text-white">Todos</option>
+                  <option value="M" className="bg-deep-dark text-white">Macho</option>
+                  <option value="F" className="bg-deep-dark text-white">Fêmea</option>
+                </select>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
 
             <div className="w-32">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { api } from '@/lib/api';
@@ -90,6 +91,9 @@ interface Farm {
 }
 
 export default function BenchmarkingPage() {
+  const searchParams = useSearchParams();
+  const initialFarmId = searchParams.get('farm_id') || '';
+  
   // State
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
@@ -103,7 +107,7 @@ export default function BenchmarkingPage() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [sexo, setSexo] = useState<string>('');
-  const [farmId, setFarmId] = useState<string>('');
+  const [farmId, setFarmId] = useState<string>(initialFarmId);
   
   // UI state
   const [loading, setLoading] = useState(false);

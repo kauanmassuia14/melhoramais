@@ -48,6 +48,7 @@ class Upload(Base):
     id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
     fonte_origem = Column(String(50), nullable=False)
     arquivo_nome_original = Column(String(255))
+    arquivo_hash = Column(String(64))
     total_registros = Column(Integer, default=0)
     rows_inserted = Column(Integer, default=0)
     rows_updated = Column(Integer, default=0)

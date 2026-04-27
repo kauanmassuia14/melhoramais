@@ -420,6 +420,7 @@ class UploadCreate(BaseModel):
     id_farm: int
     fonte_origem: str = Field(..., pattern="^(ANCP|PMGZ|GENEPLUS|PMG)$")
     arquivo_nome_original: Optional[str] = None
+    arquivo_hash: Optional[str] = None
 
 
 class UploadResponse(BaseModel):
@@ -428,6 +429,7 @@ class UploadResponse(BaseModel):
     id_farm: int
     fonte_origem: str
     arquivo_nome_original: Optional[str]
+    arquivo_hash: Optional[str]
     total_registros: int
     rows_inserted: int
     rows_updated: int

@@ -28,14 +28,9 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
       />
 
       {showText && (
-        <div>
-          <span className={`${s.text} font-bold text-white tracking-tight`}>
-            Melhora<span className="text-cyan-glow-400">+</span>
-          </span>
-          <p className="text-[10px] text-text-muted tracking-[0.15em] uppercase">
-            Genética Platform
-          </p>
-        </div>
+        <span className={`${s.text} font-bold text-white tracking-tight`}>
+          Melhora<span className="text-cyan-glow-400">+</span>
+        </span>
       )}
     </div>
   );

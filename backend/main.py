@@ -33,7 +33,7 @@ app = FastAPI(title="Melhora+ Genetic Data Unifier API", version="2.0.0")
 # ============================================
 # CORS — restricted to frontend origin
 # ============================================
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://melhoramais-edfn.vercel.app").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://melhoramais-edfn.vercel.app,https://melhoramais-production.up.railway.app").split(",")
 ALLOWED_ORIGINS = [o.strip() for o in ALLOWED_ORIGINS if o.strip()]
 
 app.add_middleware(
@@ -230,6 +230,22 @@ def update_farm(
     db.commit()
     db.refresh(db_farm)
     return db_farm
+
+
+@app.delete("/farms/{farm_id}")
+def delete_farm(
+    farm_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Delete farm - admin only."""
+    db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
+    if not db_farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+    
+    db.delete(db_farm)
+    db.commit()
+    return {"message": "Farm deleted successfully"}
 
 
 # ============================================
@@ -435,6 +451,7 @@ def create_upload(
         id_farm=upload.id_farm,
         fonte_origem=upload.fonte_origem,
         arquivo_nome_original=upload.arquivo_nome_original,
+        arquivo_hash=upload.arquivo_hash,
         usuario_id=current_user.id,
         status="processing",
     )

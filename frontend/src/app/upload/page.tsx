@@ -141,12 +141,15 @@ export default function UploadPage() {
   const [platform, setPlatform] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileHash, setFileHash] = useState<string>("");
+  const [existingUploads, setExistingUploads] = useState<{ arquivo_hash: string; arquivo_nome_original: string }[]>([]);
   const [status, setStatus] = useState<"idle" | "creating-upload" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [currentUpload, setCurrentUpload] = useState<Upload | null>(null);
 
   useEffect(() => {
     loadFarms();
+    loadExistingUploads();
   }, []);
 
   const loadFarms = async () => {
@@ -159,6 +162,36 @@ export default function UploadPage() {
     } catch (err) {
       console.error("Erro ao carregar fazendas:", err);
     }
+  };
+
+  const loadExistingUploads = async () => {
+    try {
+      const uploads = await api.getUploads({ limit: 100 });
+      setExistingUploads(uploads.map(u => ({ arquivo_hash: u.arquivo_hash || "", arquivo_nome_original: u.arquivo_nome_original || "" })));
+    } catch (err) {
+      console.error("Erro ao carregar uploads:", err);
+    }
+  };
+
+  const calculateFileHash = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleFileChange = async (newFile: File | null) => {
+    setFile(newFile);
+    if (newFile) {
+      const hash = await calculateFileHash(newFile);
+      setFileHash(hash);
+    } else {
+      setFileHash("");
+    }
+  };
+
+  const checkDuplicate = (): boolean => {
+    return existingUploads.some(u => u.arquivo_hash === fileHash);
   };
 
   const handleFarmCreated = (farm: Farm) => {
@@ -179,6 +212,7 @@ export default function UploadPage() {
         id_farm: selectedFarm.id_farm,
         fonte_origem: platform,
         arquivo_nome_original: file.name,
+        arquivo_hash: fileHash,
       });
 
       setCurrentUpload(upload);
@@ -417,7 +451,7 @@ export default function UploadPage() {
             onDrop={(e) => {
               e.preventDefault();
               const dropped = e.dataTransfer.files[0];
-              if (dropped) setFile(dropped);
+              if (dropped) handleFileChange(dropped);
             }}
           >
             <input
@@ -425,7 +459,7 @@ export default function UploadPage() {
               type="file"
               accept=".xlsx,.xls,.csv,.PAG"
               className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
             />
             <DocumentArrowUpIcon className="w-12 h-12 text-text-muted mx-auto mb-4" />
             {file ? (
@@ -434,6 +468,12 @@ export default function UploadPage() {
                 <p className="text-xs text-text-muted mt-1">
                   {(file.size / 1024).toFixed(1)} KB
                 </p>
+                {checkDuplicate() && (
+                  <p className="text-xs text-amber-glow-400 mt-2 flex items-center justify-center gap-1">
+                    <ExclamationTriangleIcon className="w-3 h-3" />
+                    Este arquivo já foi processado anteriormente
+                  </p>
+                )}
               </div>
             ) : (
               <div>
