@@ -209,7 +209,7 @@ export default function UploadDetailPage() {
 
         {/* Processing Details */}
         {upload.status === "completed" && (
-          <GlassCard glow="emerald" className="p-6">
+          <GlassCard glow="cyan" className="p-6">
             <h2 className="text-lg font-bold text-white mb-4">Detalhes do Processamento</h2>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-4 bg-white/[0.02] rounded-xl border border-white/[0.04]">
