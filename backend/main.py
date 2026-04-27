@@ -175,31 +175,24 @@ def health_check():
 def db_test():
     """Test database connection and return info."""
     import os
-    from sqlalchemy import text
-    
     db_url = os.getenv("DATABASE_URL", "not set")
     # Mask password in URL
+    db_url_masked = db_url
     if "://" in db_url and "@" in db_url:
-        parts = db_url.split("://", 1)
-        if len(parts) == 2:
+        try:
+            parts = db_url.split("://", 1)
             scheme = parts[0]
             rest = parts[1]
-            if "@" in rest:
-                auth, host = rest.split("@", 1)
-                if ":" in auth:
-                    user, _ = auth.split(":", 1)
-                    masked_auth = f"{user}:***"
-                else:
-                    masked_auth = auth
-                db_url_masked = f"{scheme}://{masked_auth}@{host}"
-            else:
-                db_url_masked = db_url
-        else:
-            db_url_masked = db_url
-    else:
-        db_url_masked = db_url
-    
+            auth, host = rest.split("@", 1)
+            if ":" in auth:
+                user, _ = auth.split(":", 1)
+                db_url_masked = f"{scheme}://{user}:***@{host}"
+        except:
+            pass
+            
     try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(engine)
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1"))
             db_status = "connected"
@@ -214,7 +207,6 @@ def db_test():
                 """))
                 tables = [f"{r[0]}.{r[1]}" for r in res]
             except:
-                # Fallback for SQLite or if query fails
                 pass
 
             # Try to count users
@@ -223,17 +215,25 @@ def db_test():
                 user_count = result.scalar()
             except Exception as e:
                 user_count = f"error: {str(e)}"
+                
+            # Get columns for animals
+            animal_columns = []
+            try:
+                animal_columns = [c["name"] for c in inspector.get_columns("animais", schema="silver")]
+            except:
+                pass
     except Exception as e:
         db_status = f"error: {str(e)}"
         user_count = "unknown"
         tables = []
+        animal_columns = []
     
     return {
         "database_url_masked": db_url_masked,
         "database_status": db_status,
         "user_count": user_count,
         "tables": tables,
-        "animal_columns": [c["name"] for c in inspector.get_columns("animais", schema="silver")] if not IS_SQLITE else [],
+        "animal_columns": animal_columns,
         "is_sqlite": db_url.startswith("sqlite")
     }
 
