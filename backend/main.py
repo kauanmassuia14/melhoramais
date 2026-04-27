@@ -144,7 +144,7 @@ async def global_exception_handler(request, exc):
     import traceback
     content = {
         "detail": str(exc),
-        "traceback": traceback.format_exc() if os.getenv("DEBUG") == "true" else None,
+        "traceback": traceback.format_exc(),  # Forçado para vermos o erro real agora
         "type": type(exc).__name__
     }
     response = JSONResponse(status_code=500, content=content)
@@ -233,6 +233,7 @@ def db_test():
         "database_status": db_status,
         "user_count": user_count,
         "tables": tables,
+        "animal_columns": [c["name"] for c in inspector.get_columns("animais", schema="silver")] if not IS_SQLITE else [],
         "is_sqlite": db_url.startswith("sqlite")
     }
 
