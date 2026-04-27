@@ -188,6 +188,13 @@ def startup_event():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     import traceback
+    import sys
+    
+    # FORÇAR PRINT NO CONSOLE DO RAILWAY:
+    print(f"\n[GLOBAL ERROR MIDDLEWARE] Erro capturado em {request.url}:", file=sys.stderr)
+    traceback.print_exc()
+    print("[GLOBAL ERROR MIDDLEWARE] Fim do traceback.\n", file=sys.stderr)
+    
     content = {
         "detail": str(exc),
         "traceback": traceback.format_exc(),  # Forçado para vermos o erro real agora
