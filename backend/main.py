@@ -11,7 +11,7 @@ from datetime import datetime
 import os
 import io
 
-from backend.models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification, Upload
+from backend.models import Base, Farm, Animal, ColumnMapping, ProcessingLog, User, Notification, Upload, RawAnimalData, Cliente
 from backend.database import get_db, engine
 from backend.schemas import (
     FarmCreate, FarmUpdate, FarmResponse,
@@ -145,22 +145,29 @@ def startup_event():
                             except Exception as col_err:
                                 print(f"Erro ao criar coluna {column.name}: {col_err}")
                 
-                # 3. Força Bruta: Colunas de Genealogia (que o auto-sync pulou)
+                # 3. Força Bruta: Colunas de Genealogia e DEPs (que o auto-sync pode ter pulado)
                 genealogy_cols = [
                     "avo_paterno_rgn", "avo_paterno_mae_rgn", "avo_materno_rgn", "avo_materno_mae_rgn",
                     "bisavo_paterno_pai_rgn", "bisavo_paterno_mae_pai_rgn", "bisavo_materno_pai_rgn", "bisavo_materno_mae_pai_rgn",
                     "bisavo_paterno_mae_rgn", "bisavo_paterno_mae_mae_rgn", "bisavo_materno_mae_rgn", "bisavo_materno_mae_mae_rgn",
                     "trisavo_paterno_pai_rgn", "trisavo_paterno_mae_pai_rgn", "trisavo_materno_pai_rgn", "trisavo_materno_mae_pai_rgn",
                     "trisavo_paterno_mae_rgn", "trisavo_paterno_mae_mae_rgn", "trisavo_materno_mae_rgn", "trisavo_materno_mae_mae_rgn",
-                    "peso_nascimento", "peso_final", "altura", "circumference", "intervalo_partos", "dias_gestacao"
+                    "peso_nascimento", "peso_final", "altura", "circumference", "intervalo_partos", "dias_gestacao",
+                    "anc_dipp", "anc_d3p", "anc_dstay", "anc_dpn", "anc_dp12", "anc_dpe", "anc_daol", "anc_dacab",
+                    "anc_ac_mg", "anc_ac_te", "anc_ac_m", "anc_ac_p",
+                    "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs", 
+                    "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar", "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
+                    "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol", "pmg_acab", "pmg_mar",
+                    "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay", "pmg_deca_pe", "pmg_deca_aol",
+                    "pmg_meta_p", "pmg_meta_m", "pmg_meta_t", "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m"
                 ]
                 with engine.connect() as conn_force:
                     for col in genealogy_cols:
                         try:
-                            type_sql = "VARCHAR(50)" if "rgn" in col else "DOUBLE PRECISION"
+                            type_sql = "VARCHAR(50)" if ("rgn" in col or "deca" in col) else "DOUBLE PRECISION"
                             conn_force.execute(text(f"ALTER TABLE silver.animais ADD COLUMN IF NOT EXISTS {col} {type_sql}"))
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"Erro ao criar coluna força bruta {col}: {e}")
                     conn_force.commit()
                 
                 print("Database synchronization finished.")
