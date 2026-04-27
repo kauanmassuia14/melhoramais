@@ -145,6 +145,24 @@ def startup_event():
                             except Exception as col_err:
                                 print(f"Erro ao criar coluna {column.name}: {col_err}")
                 
+                # 3. Força Bruta: Colunas de Genealogia (que o auto-sync pulou)
+                genealogy_cols = [
+                    "avo_paterno_rgn", "avo_paterno_mae_rgn", "avo_materno_rgn", "avo_materno_mae_rgn",
+                    "bisavo_paterno_pai_rgn", "bisavo_paterno_mae_pai_rgn", "bisavo_materno_pai_rgn", "bisavo_materno_mae_pai_rgn",
+                    "bisavo_paterno_mae_rgn", "bisavo_paterno_mae_mae_rgn", "bisavo_materno_mae_rgn", "bisavo_materno_mae_mae_rgn",
+                    "trisavo_paterno_pai_rgn", "trisavo_paterno_mae_pai_rgn", "trisavo_materno_pai_rgn", "trisavo_materno_mae_pai_rgn",
+                    "trisavo_paterno_mae_rgn", "trisavo_paterno_mae_mae_rgn", "trisavo_materno_mae_rgn", "trisavo_materno_mae_mae_rgn",
+                    "peso_nascimento", "peso_final", "altura", "circumference", "intervalo_partos", "dias_gestacao"
+                ]
+                with engine.connect() as conn_force:
+                    for col in genealogy_cols:
+                        try:
+                            type_sql = "VARCHAR(50)" if "rgn" in col else "DOUBLE PRECISION"
+                            conn_force.execute(text(f"ALTER TABLE silver.animais ADD COLUMN IF NOT EXISTS {col} {type_sql}"))
+                        except:
+                            pass
+                    conn_force.commit()
+                
                 print("Database synchronization finished.")
         except Exception as e:
             print(f"Auto-migration error: {e}")
