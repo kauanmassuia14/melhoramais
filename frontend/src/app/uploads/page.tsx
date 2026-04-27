@@ -245,7 +245,7 @@ export default function UploadsPage() {
 
                           {upload.arquivo_nome_original && (
                             <p className="text-xs text-text-muted mt-2">
-                              Arquivo: {upload.arquivo_original}
+                              Arquivo: {upload.arquivo_nome_original}
                             </p>
                           )}
 

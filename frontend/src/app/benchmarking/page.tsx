@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
@@ -90,7 +90,7 @@ interface Farm {
   nome_farm: string;
 }
 
-export default function BenchmarkingPage() {
+function BenchmarkingContent() {
   const searchParams = useSearchParams();
   const initialFarmId = searchParams.get('farm_id') || '';
   
@@ -914,5 +914,13 @@ export default function BenchmarkingPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function BenchmarkingPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-slate-400">Carregando benchmarking...</div>}>
+      <BenchmarkingContent />
+    </Suspense>
   );
 }

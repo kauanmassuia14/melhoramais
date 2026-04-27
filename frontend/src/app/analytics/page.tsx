@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -15,7 +15,7 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 
-export default function AnalyticsPage() {
+function AnalyticsContent() {
   const searchParams = useSearchParams();
   const farmIdParam = searchParams.get('farm_id');
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -190,6 +190,14 @@ export default function AnalyticsPage() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<p className="text-slate-400 p-8">Carregando análises...</p>}>
+      <AnalyticsContent />
+    </Suspense>
   );
 }
 
