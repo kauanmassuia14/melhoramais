@@ -165,6 +165,20 @@ def db_test():
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1"))
             db_status = "connected"
+            
+            # List tables in silver and audit
+            tables = []
+            try:
+                res = conn.execute(text("""
+                    SELECT schemaname, tablename 
+                    FROM pg_catalog.pg_tables 
+                    WHERE schemaname IN ('silver', 'audit')
+                """))
+                tables = [f"{r[0]}.{r[1]}" for r in res]
+            except:
+                # Fallback for SQLite or if query fails
+                pass
+
             # Try to count users
             try:
                 result = conn.execute(text("SELECT COUNT(*) FROM silver.usuarios"))
@@ -174,11 +188,13 @@ def db_test():
     except Exception as e:
         db_status = f"error: {str(e)}"
         user_count = "unknown"
+        tables = []
     
     return {
         "database_url_masked": db_url_masked,
         "database_status": db_status,
         "user_count": user_count,
+        "tables": tables,
         "is_sqlite": db_url.startswith("sqlite")
     }
 
