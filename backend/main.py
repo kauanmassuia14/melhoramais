@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -76,11 +76,46 @@ app.include_router(auth_router)
 app.include_router(benchmark_router)
 
 # ============================================
-# Create tables on SQLite (dev only)
+# Database Schema & Initialization
 # ============================================
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
-if DATABASE_URL.startswith("sqlite"):
+@app.on_event("startup")
+def startup_event():
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+    if not DATABASE_URL.startswith("sqlite"):
+        from sqlalchemy import text
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
+                conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
+                conn.commit()
+                print("Schemas ensured.")
+        except Exception as e:
+            print(f"Schema creation error: {e}")
+    
+    # Create all tables
     Base.metadata.create_all(bind=engine)
+    print("Database tables ensured.")
+
+# Global Exception Handler to ensure CORS headers and reveal errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import traceback
+    content = {
+        "detail": str(exc),
+        "traceback": traceback.format_exc() if os.getenv("DEBUG") == "true" else None,
+        "type": type(exc).__name__
+    }
+    response = JSONResponse(status_code=500, content=content)
+    
+    # Manually add CORS if needed (Middleware might be bypassed on some crashes)
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "false"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
 
 # ============================================
