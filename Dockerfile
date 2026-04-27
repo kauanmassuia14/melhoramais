@@ -11,5 +11,5 @@ COPY backend/requirements.txt ./backend_requirements.txt
 RUN pip install --no-cache-dir -r backend_requirements.txt
 COPY . .
 
-# In Railway, the app must listen on the port provided by the environment variable
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Explicitly use the port environment variable with fallback to 8000
+CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
