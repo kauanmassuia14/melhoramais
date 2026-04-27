@@ -82,21 +82,59 @@ app.include_router(benchmark_router)
 def startup_event():
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
     if not DATABASE_URL.startswith("sqlite"):
-        from sqlalchemy import text
+        from sqlalchemy import text, inspect
         try:
             with engine.connect() as conn:
+                # 1. Garantir esquemas existam
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
+                conn.commit()
                 
-                # Auto-migration: Garantir que a coluna upload_id existe (erro reportado)
-                conn.execute(text("ALTER TABLE silver.animais ADD COLUMN IF NOT EXISTS upload_id VARCHAR(36)"))
+                # 2. Sincronizar colunas (Auto-Migration)
+                inspector = inspect(engine)
+                # Lista de modelos para verificar
+                models_to_sync = [
+                    Farm, Upload, Animal, User, 
+                    Notification, ProcessingLog, 
+                    ColumnMapping, RawAnimalData, Cliente
+                ]
+                
+                for model in models_to_sync:
+                    # Obter schema e nome da tabela
+                    table_name = model.__tablename__
+                    schema = None
+                    if hasattr(model, "__table_args__"):
+                        args = model.__table_args__
+                        if isinstance(args, dict):
+                            schema = args.get("schema")
+                        elif isinstance(args, tuple):
+                            for arg in args:
+                                if isinstance(arg, dict) and "schema" in arg:
+                                    schema = arg["schema"]
+                    
+                    # Colunas atuais no DB
+                    existing_cols = [c["name"] for c in inspector.get_columns(table_name, schema=schema)]
+                    
+                    # Verificar o que falta
+                    for column in model.__table__.columns:
+                        if column.name not in existing_cols:
+                            # Tentar inferir o tipo para o SQL
+                            col_type = str(column.type).split("(")[0]
+                            if "VARCHAR" in str(column.type).upper() and hasattr(column.type, 'length'):
+                                col_type = f"VARCHAR({column.type.length})"
+                            elif "FLOAT" in str(column.type).upper():
+                                col_type = "DOUBLE PRECISION"
+                            
+                            print(f"Buscando sincronizar: {table_name}.{column.name} ({col_type})")
+                            table_full = f"{schema}.{table_name}" if schema else table_name
+                            conn.execute(text(f"ALTER TABLE {table_full} ADD COLUMN IF NOT EXISTS {column.name} {col_type}"))
                 
                 conn.commit()
-                print("Schemas and migrations ensured.")
+                print("Database fully synchronized.")
         except Exception as e:
-            print(f"Schema creation error: {e}")
+            print(f"Auto-migration error: {e}")
     
-    # Create all tables
+    # Create all tables (standard)
     Base.metadata.create_all(bind=engine)
     print("Database tables ensured.")
 
