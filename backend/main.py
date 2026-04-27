@@ -174,9 +174,15 @@ def startup_event():
         except Exception as e:
             print(f"Auto-migration error: {e}")
     
-    # Create all tables (standard)
-    Base.metadata.create_all(bind=engine)
-    print("Database tables ensured.")
+    # 4. Create all tables (standard) - Wrapped to prevent startup crash
+    try:
+        print("Ensuring database tables exist...")
+        Base.metadata.create_all(bind=engine)
+        print("Database tables ensured.")
+    except Exception as e:
+        print(f"Error during metadata.create_all: {e}")
+        # We don't re-raise to allow the server to start even if it fails
+
 
 # Global Exception Handler to ensure CORS headers and reveal errors
 @app.exception_handler(Exception)
