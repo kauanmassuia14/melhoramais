@@ -87,8 +87,12 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
+                
+                # Auto-migration: Garantir que a coluna upload_id existe (erro reportado)
+                conn.execute(text("ALTER TABLE silver.animais ADD COLUMN IF NOT EXISTS upload_id VARCHAR(36)"))
+                
                 conn.commit()
-                print("Schemas ensured.")
+                print("Schemas and migrations ensured.")
         except Exception as e:
             print(f"Schema creation error: {e}")
     
