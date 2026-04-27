@@ -34,36 +34,36 @@ app = FastAPI(title="Melhora+ Genetic Data Unifier API", version="2.0.0")
 # CORS — robust configuration
 # ============================================
 def get_origins():
-    raw_origins = os.getenv("ALLOWED_ORIGINS", "")
-    if not raw_origins or raw_origins.strip() == "*":
+    try:
+        raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+        if not raw_origins or raw_origins.strip() == "*":
+            return ["*"]
+        
+        origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+        
+        if not origins:
+            return ["*"]
+            
+        defaults = [
+            "http://localhost:3000", 
+            "http://localhost:3001", 
+            "http://127.0.0.1:3000", 
+            "http://127.0.0.1:3001",
+            "https://melhoramais-edfn.vercel.app"
+        ]
+        for d in defaults:
+            if d not in origins:
+                origins.append(d)
+        return origins
+    except Exception:
         return ["*"]
-    
-    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-    
-    # Adicionar defaults se não estiverem presentes
-    defaults = [
-        "http://localhost:3000", 
-        "http://localhost:3001", 
-        "http://127.0.0.1:3000", 
-        "http://127.0.0.1:3001",
-        "https://melhoramais-edfn.vercel.app"
-    ]
-    for d in defaults:
-        if d not in origins:
-            origins.append(d)
-    return origins
 
 ALLOWED_ORIGINS = get_origins()
 
-# Se permitir tudo (*), não precisamos de allow_credentials=True para Bearer tokens
-# allow_credentials=True é necessário apenas para Cookies ou HTTP Basic
-# Como usamos Bearer token no Header, podemos usar allow_origins=["*"] com allow_credentials=False
-ALLOW_ALL = "*" in ALLOWED_ORIGINS
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False if "*" in ALLOWED_ORIGINS else True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -1168,4 +1168,6 @@ def mark_all_read(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
