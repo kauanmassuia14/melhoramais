@@ -823,9 +823,9 @@ def get_dashboard_stats(
         log_query = log_query.filter(ProcessingLog.id_farm == current_user.id_farm)
     recent_uploads = log_query.count()
 
-    avg_p210 = db.query(func.avg(Animal.p210_peso_desmama)).scalar()
-    avg_p365 = db.query(func.avg(Animal.p365_peso_ano)).scalar()
-    avg_p450 = db.query(func.avg(Animal.p450_peso_sobreano)).scalar()
+    avg_p210 = query.with_entities(func.avg(Animal.p210_peso_desmama)).scalar()
+    avg_p365 = query.with_entities(func.avg(Animal.p365_peso_ano)).scalar()
+    avg_p450 = query.with_entities(func.avg(Animal.p450_peso_sobreano)).scalar()
 
     return DashboardStats(
         total_animals=total_animals,
@@ -885,9 +885,9 @@ def generate_dashboard_report(
         log_query = log_query.filter(ProcessingLog.id_farm == current_user.id_farm)
     recent_uploads = log_query.count()
 
-    avg_p210 = db.query(func.avg(Animal.p210_peso_desmama)).scalar()
-    avg_p365 = db.query(func.avg(Animal.p365_peso_ano)).scalar()
-    avg_p450 = db.query(func.avg(Animal.p450_peso_sobreano)).scalar()
+    avg_p210 = animal_query.with_entities(func.avg(Animal.p210_peso_desmama)).scalar()
+    avg_p365 = animal_query.with_entities(func.avg(Animal.p365_peso_ano)).scalar()
+    avg_p450 = animal_query.with_entities(func.avg(Animal.p450_peso_sobreano)).scalar()
 
     stats = {
         "total_animals": total_animals,

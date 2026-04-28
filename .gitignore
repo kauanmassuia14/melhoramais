@@ -34,3 +34,5 @@ test_report.pdf
 
 # Docker
 .dockerignore
+.vercel
+.env*.local
