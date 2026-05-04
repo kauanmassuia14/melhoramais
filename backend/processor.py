@@ -17,6 +17,19 @@ class GeneticDataProcessor:
         self.farm_id = farm_id
         self.upload_id = upload_id
 
+    def _bulk_upsert(self, batch: List[Dict]):
+        """Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE"""
+        if not batch:
+            return
+        stmt = pg_insert(Animal.__table__).values(batch)
+        excluded = {c: stmt.excluded[c] for c in batch[0] if c not in ("id_animal", "id_farm", "rgn_animal")}
+        stmt = stmt.on_conflict_do_update(
+            constraint="uix_farm_rgn",
+            set_=excluded,
+        )
+        self.db.execute(stmt)
+        self.db.commit()
+
     def get_mappings(self, source_system: str) -> Dict[str, str]:
         """Fetch column mappings from DB for a source system."""
         mappings = self.db.query(ColumnMapping).filter(
@@ -380,36 +393,30 @@ class GeneticDataProcessor:
         inserted = 0
         updated = 0
         failed = 0
+        BATCH_SIZE = 100
 
         if not IS_SQLITE:
+            batch = []
             for _, row in df.iterrows():
-                # Create a savepoint for this row
-                nested = self.db.begin_nested()
                 try:
                     values = row.to_dict()
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
                     values["processing_log_id"] = self.upload_log_id
-
-                    stmt = pg_insert(Animal.__table__).values(**values)
-                    stmt = stmt.on_conflict_do_update(
-                        constraint="uix_farm_rgn",
-                        set_={
-                            k: stmt.excluded[k]
-                            for k in values
-                            if k not in ("id_animal", "id_farm", "rgn_animal")
-                        },
-                    )
-                    self.db.execute(stmt)
-                    nested.commit()
-                    inserted += 1
+                    batch.append(values)
+                    
+                    if len(batch) >= BATCH_SIZE:
+                        self._bulk_upsert(batch)
+                        inserted += len(batch)
+                        batch = []
                 except Exception as e:
-                    nested.rollback()
                     failed += 1
-                    logger.error(f"Failed to insert/update animal with RGN {values.get('rgn_animal', 'unknown')}: {e}")
-                    if failed <= 5:  # Log first 5 errors only
-                        logger.error(f"Row values: {values}")
+                    logger.error(f"Error processing row: {e}")
+            
+            if batch:
+                self._bulk_upsert(batch)
+                inserted += len(batch)
         else:
             for _, row in df.iterrows():
                 nested = self.db.begin_nested()
