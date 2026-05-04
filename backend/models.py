@@ -239,9 +239,9 @@ class Animal(Base):
     # ==================== PMGZ EXPANDIDO (Cavafunda) ====================
     
     # ANIMAL - dados básicos
-    pmg_serie_rgd = Column(String(50))  # SERIE / RGD
-    pmg_p_percent = Column(Float)     # P %
-    pmg_f_percent = Column(Float)     # F %
+    pmg_serie_rgd = Column(String(50))
+    pmg_p_percent = Column(Float)
+    pmg_f_percent = Column(Float)
     
     # Genealogia expandida
     # PAI
