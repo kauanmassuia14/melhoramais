@@ -28,11 +28,17 @@ pool_settings = {
 }
 
 if not IS_SQLITE:
-    connect_args = {
-        "connect_timeout": 5,
-        "options": "-c statement_timeout=30000",
-        "sslmode": "require"
-    }
+    # Check if sslmode=disable is in the URL (for local dev)
+    if "sslmode=disable" in DATABASE_URL or "sslmode=disable" in os.getenv("DATABASE_URL", ""):
+        connect_args = {
+            "connect_timeout": 5,
+        }
+    else:
+        connect_args = {
+            "connect_timeout": 5,
+            "options": "-c statement_timeout=30000",
+            "sslmode": "require",
+        }
     pool_settings["poolclass"] = QueuePool
     pool_settings["pool_size"] = 5
     pool_settings["max_overflow"] = 10

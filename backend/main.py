@@ -87,7 +87,7 @@ app.include_router(reports_router)
 @app.on_event("startup")
 def startup_event():
     """Inicializa banco - cria tabelas se não existirem."""
-    from backend.models.v2 import AnimalBase, AnimalPlatformData, AnimalSnapshot, AnimalAudit
+    #from backend.models.v2 import AnimalBase, AnimalPlatformData, AnimalSnapshot, AnimalAudit
     
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
     if not DATABASE_URL.startswith("sqlite"):
@@ -107,8 +107,8 @@ def startup_event():
     ]
     
     try:
-        from backend.models.v2 import Base as BaseV2
-        BaseV2.metadata.create_all(bind=engine)
+        #from backend.models.v2 import Base as BaseV2
+        #BaseV2.metadata.create_all(bind=engine)
         print("Tabelas v2 criadas com sucesso.")
     except Exception as e:
         print(f"Erro ao criar tabelas v2: {e}")
