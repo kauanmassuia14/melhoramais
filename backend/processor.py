@@ -402,6 +402,11 @@ class GeneticDataProcessor:
 
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
+        
+        # Convert comma to dot for numeric columns
+        for col in df.columns:
+            if df[col].dtype == object:
+                df[col] = df[col].astype(str).str.replace(",", ".", regex=False)
 
         return df
 
