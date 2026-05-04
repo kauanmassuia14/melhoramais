@@ -417,16 +417,46 @@ class GeneticDataProcessor:
             df[col] = df[col].replace(["-", "", "nan", "None", "NaN", "nat"], None)
 
         # Now try to convert each column to appropriate type
+        # Only convert columns that should be numeric (weights, DEP scores, etc.)
+        float_columns = {"p210_peso_desmama", "p365_peso_ano", "p450_peso_sobreano", "peso_nascimento", "peso_final",
+                      "pe_perimetro_escrotal", "a_area_olho_lombo", "eg_espessura_gordura", "altura", "circumference",
+                      "im_idade_primeiro_parto", "intervalo_partos", "dias_gestacao",
+                      "anc_mg", "anc_te", "anc_m", "anc_p", "anc_dp", "anc_sp", "anc_e", "anc_sao", "anc_leg", "anc_sh", "anc_pp30",
+                      "anc_dipp", "anc_d3p", "anc_dstay", "anc_dpn", "anc_dp12", "anc_dpe", "anc_daol", "anc_dacab",
+                      "anc_ac_mg", "anc_ac_te", "anc_ac_m", "anc_ac_p",
+                      "gen_iqg", "gen_pmm", "gen_p", "gen_dp", "gen_sp", "gen_e", "gen_sao", "gen_leg", "gen_sh", "gen_pp30",
+                      "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs",
+                      "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar",
+                      "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
+                      "pmg_iabc", "pmg_zpmm", "pmg_p", "pmg_dp", "pmg_sp", "pmg_e", "pmg_sao", "pmg_leg", "pmg_sh",
+                      "pmg_pp30", "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol",
+                      "pmg_acab", "pmg_mar", "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay",
+                      "pmg_deca_pe", "pmg_deca_aol", "pmg_meta_p", "pmg_meta_m", "pmg_meta_t",
+                      "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m",
+                      "pmg_serie_rgd", "pmg_p_percent", "pmg_f_percent",
+                      "pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent",
+                      "pmg_pd_dep", "pmg_pd_ac", "pmg_pd_deca", "pmg_pd_p_percent",
+                      "pmg_pa_dep", "pmg_pa_ac", "pmg_pa_deca", "pmg_pa_p_percent",
+                      "pmg_ps_dep", "pmg_ps_ac", "pmg_ps_deca", "pmg_ps_p_percent",
+                      "pmg_pm_dep", "pmg_pm_ac", "pmg_pm_deca", "pmg_pm_p_percent",
+                      "pmg_ipp_dep", "pmg_ipp_ac", "pmg_ipp_deca", "pmg_ipp_p_percent",
+                      "pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent",
+                      "pmg_pe365_dep", "pmg_pe365_ac", "pmg_pe365_deca", "pmg_pe365_p_percent",
+                      "pmg_psn_dep", "pmg_psn_ac", "pmg_psn_deca", "pmg_psn_p_percent",
+                      "pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent",
+                      "pmg_acab_dep", "pmg_acab_ac", "pmg_acab_deca", "pmg_acab_p_percent",
+                      "pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent",
+                      "pmg_eg_dep", "pmg_eg_ac", "pmg_eg_deca", "pmg_eg_p_percent",
+                      "pmg_p_dep", "pmg_p_ac", "pmg_p_deca", "pmg_p_p_percent",
+                      "pmg_m_dep", "pmg_m_ac", "pmg_m_deca", "pmg_m_p_percent",
+                      "p120_peso_120"}
+        
         for col in df.columns:
-            if col == "sexo":
-                continue
-            if col == "data_nascimento":
-                continue
-            
-            try:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-            except:
-                pass
+            if col in float_columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                except:
+                    pass
         
         # DEBUG: Sample after conversion
         for col in df.columns:
