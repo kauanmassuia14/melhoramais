@@ -449,7 +449,7 @@ class GeneticDataProcessor:
                 failed += 1
                 logger.error(f"Failed animal {values.get('rgn_animal')}: {e}")
         
-logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
+        logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
 
     def generate_formatted_excel(self, df: pd.DataFrame) -> bytes:
