@@ -82,6 +82,12 @@ from backend.routers.reports import router as reports_router
 app.include_router(reports_router)
 
 # ============================================
+# Migration Router (admin)
+# ============================================
+from backend.routers.migrate import router as migrate_router
+app.include_router(migrate_router)
+
+# ============================================
 # Database Schema & Initialization (LIMPO)
 # ============================================
 @app.on_event("startup")
