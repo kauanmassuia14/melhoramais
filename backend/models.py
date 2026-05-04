@@ -73,6 +73,7 @@ class Animal(Base):
     id_animal = Column(Integer, primary_key=True, index=True)
     id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
     upload_id = Column(String(36), _fk("silver.uploads.upload_id"), nullable=True, index=True)
+    processing_log_id = Column(Integer, _fk("audit.processing_log.id"), nullable=True, index=True)
     rgn_animal = Column(String(50), nullable=False)
     nome_animal = Column(String(255))
     raca = Column(String(50))

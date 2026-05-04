@@ -390,7 +390,6 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
-                    values["processing_log_id"] = self.upload_log_id
 
                     stmt = pg_insert(Animal.__table__).values(**values)
                     stmt = stmt.on_conflict_do_update(
@@ -398,7 +397,7 @@ class GeneticDataProcessor:
                         set_={
                             k: stmt.excluded[k]
                             for k in values
-                            if k not in ("id_animal", "id_farm", "rgn_animal", "processing_log_id")
+                            if k not in ("id_animal", "id_farm", "rgn_animal")
                         },
                     )
                     self.db.execute(stmt)
@@ -418,7 +417,6 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
-                    values["processing_log_id"] = self.upload_log_id
 
                     existing = (
                         self.db.query(Animal)
@@ -433,7 +431,6 @@ class GeneticDataProcessor:
                         for k, v in values.items():
                             if k not in ("id_animal", "id_farm", "rgn_animal"):
                                 setattr(existing, k, v)
-                        existing.processing_log_id = self.upload_log_id
                         updated += 1
                     else:
                         animal = Animal(**values)

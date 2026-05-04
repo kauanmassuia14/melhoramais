@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS silver.fazendas (
 CREATE TABLE IF NOT EXISTS silver.animais (
     id_animal SERIAL PRIMARY KEY,
     id_farm INTEGER NOT NULL REFERENCES silver.fazendas(id_farm),
+    upload_id VARCHAR(36) REFERENCES silver.uploads(upload_id),
+    processing_log_id INTEGER REFERENCES audit.processing_log(id),
     rgn_animal VARCHAR(50) NOT NULL,
     nome_animal VARCHAR(255),
     raca VARCHAR(50),
