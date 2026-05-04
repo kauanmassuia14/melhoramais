@@ -403,10 +403,12 @@ class GeneticDataProcessor:
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
         
-        # Convert comma to dot for numeric columns
+        # Convert comma to dot for numeric columns, handle hyphens
         for col in df.columns:
             if df[col].dtype == object:
                 df[col] = df[col].astype(str).str.replace(",", ".", regex=False)
+                df[col] = df[col].replace("-", None)
+                df[col] = df[col].replace("", None)
 
         return df
 
