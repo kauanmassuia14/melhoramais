@@ -585,12 +585,7 @@ def delete_log(
     if current_user.role != "admin" and log.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Exclui apenas os animais associados a este log específico via upload_id
-    db.query(Animal).filter(
-        Animal.id_farm == log.id_farm,
-        Animal.upload_id == log.upload_id
-    ).delete(synchronize_session=False)
-
+    # Exclui o log (animais ficam intactos)
     db.delete(log)
     db.commit()
     return {"message": "Log and associated data deleted successfully"}
