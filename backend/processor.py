@@ -192,15 +192,20 @@ class GeneticDataProcessor:
             )
 
             # Save ALL raw data to raw_animal_data table
+            from datetime import date as date_type
             raw_batch = []
             for _, row in df.iterrows():
                 raw_values = row.to_dict()
                 raw_values = {k: (None if pd.isna(v) else v) for k, v in raw_values.items()}
+                # Convert dates to ISO strings for JSON serialization
+                for k, v in raw_values.items():
+                    if isinstance(v, date_type):
+                        raw_values[k] = v.isoformat()
                 raw_batch.append({
                     "id_animal": None,
                     "id_farm": self.farm_id,
                     "source_system": source_system,
-                    "processing_log_id": log_id,
+                    "processing_log_id": self.upload_log_id,
                     "raw_data": raw_values,
                 })
             
