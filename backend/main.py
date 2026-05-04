@@ -49,7 +49,8 @@ def get_origins():
             "http://localhost:3001", 
             "http://127.0.0.1:3000", 
             "http://127.0.0.1:3001",
-            "https://melhoramais-edfn.vercel.app"
+            "https://melhoramais-edfn.vercel.app",
+            "https://melhoramais-production.up.railway.app"
         ]
         for d in defaults:
             if d not in origins:
