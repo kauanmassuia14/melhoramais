@@ -409,6 +409,11 @@ class GeneticDataProcessor:
                 df[col] = df[col].astype(str).str.replace(",", ".", regex=False)
                 df[col] = df[col].replace("-", None)
                 df[col] = df[col].replace("", None)
+                # Try to convert to float
+                try:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                except:
+                    pass
 
         return df
 
