@@ -403,17 +403,27 @@ class GeneticDataProcessor:
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
         
-        # Convert comma to dot for numeric columns, handle hyphens
+        # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
+        # This ensures we catch columns that pandas may have already parsed as float
         for col in df.columns:
-            if df[col].dtype == object:
-                df[col] = df[col].astype(str).str.replace(",", ".", regex=False)
-                df[col] = df[col].replace("-", None)
-                df[col] = df[col].replace("", None)
-                # Try to convert to float
-                try:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-                except:
-                    pass
+            df[col] = df[col].astype(str).str.strip()
+            # Replace Brazilian comma decimal with dot
+            df[col] = df[col].str.replace(",", ".", regex=False)
+            # Handle empty/hyphen/null values
+            df[col] = df[col].replace(["-", "", "nan", "None", "NaN", "nat"], None)
+
+        # Now try to convert each column to appropriate type
+        for col in df.columns:
+            if col == "sexo":
+                continue  # Already handled above
+            if col == "data_nascimento":
+                continue  # Already handled above
+            
+            # Try converting to numeric (float)
+            try:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            except:
+                pass
 
         return df
 
