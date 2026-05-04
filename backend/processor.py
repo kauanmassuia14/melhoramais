@@ -120,6 +120,16 @@ class GeneticDataProcessor:
 
             if actual is not None:
                 rename[actual] = target_col
+            else:
+                # Try fuzzy match: if source is a suffix of any file column
+                source_lower = source_col.lower()
+                for file_col in df.columns:
+                    if file_col.lower().endswith(source_lower) or source_lower in file_col.lower():
+                        actual = file_col
+                        break
+            
+            if actual is not None:
+                rename[actual] = target_col
             elif source_col in required:
                 missing.append(source_col)
 
