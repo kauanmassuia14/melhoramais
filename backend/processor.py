@@ -4,7 +4,6 @@ import logging
 from typing import Dict, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, RawAnimalData
 
@@ -17,25 +16,6 @@ class GeneticDataProcessor:
         self.farm_id = farm_id
         self.upload_id = upload_id
         self.upload_log_id = None  # Will be set during processing
-
-    def _bulk_upsert(self, batch: List[Dict]):
-        """Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE"""
-        if not batch:
-            return
-        logger.info(f"Bulk upserting {len(batch)} animals...")
-        try:
-            stmt = pg_insert(Animal.__table__).values(batch)
-            excluded = {c: stmt.excluded[c] for c in batch[0] if c not in ("id_animal", "id_farm", "rgn_animal")}
-            stmt = stmt.on_conflict_do_update(
-                constraint="uix_farm_rgn",
-                set_=excluded,
-            )
-            self.db.execute(stmt)
-            self.db.commit()
-            logger.info(f"Successfully upserted {len(batch)} animals")
-        except Exception as e:
-            logger.error(f"Bulk upsert failed: {e}")
-            self.db.rollback()
 
     def get_mappings(self, source_system: str) -> Dict[str, str]:
         """Fetch column mappings from DB for a source system."""
@@ -428,75 +408,48 @@ class GeneticDataProcessor:
     def _upsert_animals(
         self, df: pd.DataFrame
     ) -> Tuple[int, int, int]:
-        """UPSERT animals. Returns (inserted, updated, failed).
-        
-        Uses nested transactions (SAVEPOINT) per row to prevent
-        transaction abortion when individual rows fail.
-        """
+        """UPSERT animals using individual inserts."""
         inserted = 0
         updated = 0
         failed = 0
-        BATCH_SIZE = 100
+        
+        logger.info(f"Processing {len(df)} animals...")
+        
+        for _, row in df.iterrows():
+            nested = self.db.begin_nested()
+            try:
+                values = row.to_dict()
+                values = {
+                    k: (None if pd.isna(v) else v) for k, v in values.items()
+                }
+                values["processing_log_id"] = self.upload_log_id
 
-        if not IS_SQLITE:
-            batch = []
-            for _, row in df.iterrows():
-                try:
-                    values = row.to_dict()
-                    values = {
-                        k: (None if pd.isna(v) else v) for k, v in values.items()
-                    }
-                    values["processing_log_id"] = self.db.query(ProcessingLog).order_by(ProcessingLog.id.desc()).first().id
-                    batch.append(values)
-                    
-                    if len(batch) >= BATCH_SIZE:
-                        self._bulk_upsert(batch)
-                        inserted += len(batch)
-                        batch = []
-                except Exception as e:
-                    failed += 1
-                    logger.error(f"Error processing row: {e}")
-            
-            if batch:
-                self._bulk_upsert(batch)
-                inserted += len(batch)
-        else:
-            for _, row in df.iterrows():
-                nested = self.db.begin_nested()
-                try:
-                    values = row.to_dict()
-                    values = {
-                        k: (None if pd.isna(v) else v) for k, v in values.items()
-                    }
-                    values["processing_log_id"] = self.db.query(ProcessingLog).order_by(ProcessingLog.id.desc()).first().id
-
-                    existing = (
-                        self.db.query(Animal)
-                        .filter(
-                            Animal.id_farm == self.farm_id,
-                            Animal.rgn_animal == values.get("rgn_animal"),
-                        )
-                        .first()
+                existing = (
+                    self.db.query(Animal)
+                    .filter(
+                        Animal.id_farm == self.farm_id,
+                        Animal.rgn_animal == values.get("rgn_animal"),
                     )
+                    .first()
+                )
 
-                    if existing:
-                        for k, v in values.items():
-                            if k not in ("id_animal", "id_farm", "rgn_animal"):
-                                setattr(existing, k, v)
-                        existing.processing_log_id = self.upload_log_id
-                        updated += 1
-                    else:
-                        animal = Animal(**values)
-                        self.db.add(animal)
-                        inserted += 1
-                    nested.commit()
-                except Exception as e:
-                    nested.rollback()
-                    failed += 1
-                    logger.error(f"Failed to insert/update animal with RGN {values.get('rgn_animal', 'unknown')}: {e}")
-                    if failed <= 5:
-                        logger.error(f"Row values: {values}")
-
+                if existing:
+                    for k, v in values.items():
+                        if k not in ("id_animal", "id_farm", "rgn_animal"):
+                            setattr(existing, k, v)
+                    existing.processing_log_id = self.upload_log_id
+                    updated += 1
+                else:
+                    animal = Animal(**values)
+                    self.db.add(animal)
+                    inserted += 1
+                nested.commit()
+            except Exception as e:
+                nested.rollback()
+                failed += 1
+                logger.error(f"Failed animal {values.get('rgn_animal')}: {e}")
+        
+logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
 
     def generate_formatted_excel(self, df: pd.DataFrame) -> bytes:
