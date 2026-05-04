@@ -403,28 +403,36 @@ class GeneticDataProcessor:
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
         
+        logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")
+        
+        # DEBUG: Sample of raw values before conversion
+        for col in df.columns:
+            sample_vals = df[col].head(2).tolist()
+            logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
+        
         # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
-        # This ensures we catch columns that pandas may have already parsed as float
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip()
-            # Replace Brazilian comma decimal with dot
             df[col] = df[col].str.replace(",", ".", regex=False)
-            # Handle empty/hyphen/null values
             df[col] = df[col].replace(["-", "", "nan", "None", "NaN", "nat"], None)
 
         # Now try to convert each column to appropriate type
         for col in df.columns:
             if col == "sexo":
-                continue  # Already handled above
+                continue
             if col == "data_nascimento":
-                continue  # Already handled above
+                continue
             
-            # Try converting to numeric (float)
             try:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
             except:
                 pass
-
+        
+        # DEBUG: Sample after conversion
+        for col in df.columns:
+            sample_vals = df[col].head(2).tolist()
+            logger.info(f"_clean_data: {col} sample AFTER: {sample_vals} (type: {df[col].dtype})")
+        
         return df
 
     def _upsert_animals(
