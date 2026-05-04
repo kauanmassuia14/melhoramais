@@ -84,8 +84,14 @@ app.include_router(reports_router)
 # ============================================
 # Migration Router (admin)
 # ============================================
-from backend.routers.migrate import router as migrate_router
+from backend.routers.migrate import router as migrate_router, run_migration_on_startup
 app.include_router(migrate_router)
+
+# Run PMGZ migration on startup (auto-add columns if missing)
+try:
+    run_migration_on_startup()
+except Exception as e:
+    logger.warning(f"Startup migration skipped: {e}")
 
 # ============================================
 # Database Schema & Initialization (LIMPO)

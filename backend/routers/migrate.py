@@ -128,3 +128,32 @@ def run_pmgz_migration():
         conn.commit()
     
     return {"status": "success", "columns_added": len(new_columns)}
+
+
+def run_migration_on_startup():
+    """Run migration automatically on startup"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        with engine.connect() as conn:
+            for col_name, col_type in new_columns:
+                try:
+                    result = conn.execute(text(f"""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'animais' AND column_name = '{col_name}'
+                    """))
+                    if not result.fetchone():
+                        conn.execute(text(f"""
+                            ALTER TABLE silver.animais ADD COLUMN {col_name} {col_type}
+                        """))
+                        logger.info(f"[MIGRATION] Added column: {col_name}")
+                    else:
+                        logger.info(f"[MIGRATION] Exists: {col_name}")
+                except Exception as e:
+                    logger.error(f"[MIGRATION] Error {col_name}: {e}")
+            conn.commit()
+        logger.info("[MIGRATION] PMGZ columns migration completed!")
+    except Exception as e:
+        logger.warning(f"[MIGRATION] Could not run: {e}")
