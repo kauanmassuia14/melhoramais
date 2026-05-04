@@ -414,6 +414,7 @@ class GeneticDataProcessor:
         failed = 0
         
         logger.info(f"Processing {len(df)} animals...")
+        logger.info(f"Columns in df: {list(df.columns)[:15]}")
         
         for _, row in df.iterrows():
             nested = self.db.begin_nested()
@@ -423,6 +424,13 @@ class GeneticDataProcessor:
                     k: (None if pd.isna(v) else v) for k, v in values.items()
                 }
                 values["processing_log_id"] = self.upload_log_id
+                
+                # Debug: check if values has rgn_animal
+                if not values.get("rgn_animal"):
+                    logger.warning(f"Skipping row - no rgn_animal: {values}")
+                    continue
+                
+                logger.info(f"Inserting animal: {values.get('rgn_animal')}")
 
                 existing = (
                     self.db.query(Animal)
