@@ -16,19 +16,26 @@ class GeneticDataProcessor:
         self.db = db
         self.farm_id = farm_id
         self.upload_id = upload_id
+        self.upload_log_id = None  # Will be set during processing
 
     def _bulk_upsert(self, batch: List[Dict]):
         """Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE"""
         if not batch:
             return
-        stmt = pg_insert(Animal.__table__).values(batch)
-        excluded = {c: stmt.excluded[c] for c in batch[0] if c not in ("id_animal", "id_farm", "rgn_animal")}
-        stmt = stmt.on_conflict_do_update(
-            constraint="uix_farm_rgn",
-            set_=excluded,
-        )
-        self.db.execute(stmt)
-        self.db.commit()
+        logger.info(f"Bulk upserting {len(batch)} animals...")
+        try:
+            stmt = pg_insert(Animal.__table__).values(batch)
+            excluded = {c: stmt.excluded[c] for c in batch[0] if c not in ("id_animal", "id_farm", "rgn_animal")}
+            stmt = stmt.on_conflict_do_update(
+                constraint="uix_farm_rgn",
+                set_=excluded,
+            )
+            self.db.execute(stmt)
+            self.db.commit()
+            logger.info(f"Successfully upserted {len(batch)} animals")
+        except Exception as e:
+            logger.error(f"Bulk upsert failed: {e}")
+            self.db.rollback()
 
     def get_mappings(self, source_system: str) -> Dict[str, str]:
         """Fetch column mappings from DB for a source system."""
@@ -172,6 +179,10 @@ class GeneticDataProcessor:
         self.db.commit()  # Commit immediately to persist log_id
         
         log_id = log.id
+        
+        # Set the log_id for use in processing
+        self.upload_log_id = log_id
+        
         upload = None
 
         try:
@@ -430,7 +441,7 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
-                    values["processing_log_id"] = self.upload_log_id
+                    values["processing_log_id"] = self.db.query(ProcessingLog).order_by(ProcessingLog.id.desc()).first().id
                     batch.append(values)
                     
                     if len(batch) >= BATCH_SIZE:
@@ -452,7 +463,7 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
-                    values["processing_log_id"] = self.upload_log_id
+                    values["processing_log_id"] = self.db.query(ProcessingLog).order_by(ProcessingLog.id.desc()).first().id
 
                     existing = (
                         self.db.query(Animal)
