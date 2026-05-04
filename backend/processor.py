@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE
+from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, RawAnimalData
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +179,23 @@ class GeneticDataProcessor:
             df, inserted, updated, failed = self._process_and_persist(
                 file_content, filename, source_system
             )
+
+            # Save ALL raw data to raw_animal_data table
+            raw_batch = []
+            for _, row in df.iterrows():
+                raw_values = row.to_dict()
+                raw_values = {k: (None if pd.isna(v) else v) for k, v in raw_values.items()}
+                raw_batch.append({
+                    "id_animal": None,
+                    "id_farm": self.farm_id,
+                    "source_system": source_system,
+                    "processing_log_id": log_id,
+                    "raw_data": raw_values,
+                })
+            
+            if raw_batch:
+                self.db.bulk_insert_mappings(RawAnimalData, raw_batch)
+            self.db.commit()
 
             log.total_rows = len(df)
             log.rows_inserted = inserted
