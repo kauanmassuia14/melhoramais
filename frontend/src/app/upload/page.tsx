@@ -93,7 +93,7 @@ function CreateFarmModal({ isOpen, onClose, onSuccess }: CreateFarmModalProps) {
               type="text"
               value={nomeFarm}
               onChange={(e) => setNomeFarm(e.target.value)}
-              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-cyan-glow/40"
+              className="w-full bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-emerald-glow/40"
               placeholder="Ex: Fazenda São João"
               required
             />
@@ -105,7 +105,7 @@ function CreateFarmModal({ isOpen, onClose, onSuccess }: CreateFarmModalProps) {
               type="text"
               value={cnpj}
               onChange={(e) => setCnpj(e.target.value)}
-              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-cyan-glow/40"
+              className="w-full bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder:text-text-muted focus:outline-none focus:border-emerald-glow/40"
               placeholder="00.000.000/0000-00"
             />
           </div>
@@ -290,10 +290,10 @@ export default function UploadPage() {
         </section>
 
         {/* Step 1: Select Farm */}
-        <GlassCard glow="cyan" className="p-8 space-y-6">
+        <GlassCard glow="green" className="p-8 space-y-6">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-cyan-glow/[0.08] border border-cyan-glow/20 flex items-center justify-center">
-              <span className="text-cyan-glow-400 font-bold text-sm">01</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
+              <span className="text-emerald-glow-400 font-bold text-sm">01</span>
             </div>
             <h2 className="text-xl font-bold text-white">Selecione a Fazenda</h2>
           </div>
@@ -301,7 +301,7 @@ export default function UploadPage() {
           <div className="relative">
             <button
               onClick={() => setFarmDropdownOpen(!farmDropdownOpen)}
-              className="w-full bg-black/20 border border-white/[0.08] rounded-xl px-4 py-3.5 text-left flex items-center justify-between hover:border-cyan-glow/30 transition-colors"
+              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3.5 text-left flex items-center justify-between hover:bg-white/15 hover:border-white/20 transition-colors focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10"
             >
               <div className="flex items-center gap-3">
                 <BuildingOfficeIcon className="w-5 h-5 text-text-muted" />
@@ -322,9 +322,9 @@ export default function UploadPage() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-surface-1 border border-white/[0.08] rounded-xl overflow-hidden z-10"
+                  className="absolute top-full left-0 right-0 mt-2 bg-deep-dark border border-white/10 rounded-xl overflow-hidden z-10 shadow-xl"
                 >
-                  <div className="max-h-60 overflow-y-auto">
+                  <div className="max-h-60 overflow-y-auto py-1">
                     {farms.map((farm) => (
                       <button
                         key={farm.id_farm}
@@ -332,23 +332,23 @@ export default function UploadPage() {
                           setSelectedFarm(farm);
                           setFarmDropdownOpen(false);
                         }}
-                        className="w-full px-4 py-3 text-left hover:bg-white/[0.04] transition-colors flex items-center gap-3"
+                        className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3"
                       >
                         <BuildingOfficeIcon className="w-4 h-4 text-text-muted" />
-                        <span className="text-text-primary">{farm.nome_farm}</span>
+                        <span className="text-white">{farm.nome_farm}</span>
                         {farm.cnpj && (
                           <span className="text-xs text-text-muted">{farm.cnpj}</span>
                         )}
                       </button>
                     ))}
                   </div>
-                  <div className="border-t border-white/[0.06] p-2">
+                  <div className="border-t border-white/10 p-2">
                     <button
                       onClick={() => {
                         setFarmDropdownOpen(false);
                         setCreateFarmModalOpen(true);
                       }}
-                      className="w-full px-4 py-2.5 rounded-lg bg-cyan-glow/[0.08] border border-cyan-glow/20 text-cyan-glow-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-cyan-glow/[0.12] transition-colors"
+                      className="w-full px-4 py-2.5 rounded-lg bg-emerald-glow/10 border border-emerald-glow/20 text-emerald-glow-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-emerald-glow/15 transition-colors"
                     >
                       <PlusIcon className="w-4 h-4" />
                       Criar Nova Fazenda
@@ -362,13 +362,13 @@ export default function UploadPage() {
 
         {/* Step 2: Platform */}
         <GlassCard 
-          glow="cyan" 
+          glow="green" 
           className={`p-8 space-y-6 transition-all duration-500 ${
             !selectedFarm ? "opacity-40 pointer-events-none" : ""
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-glow/[0.08] border border-emerald-glow/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
               <span className="text-emerald-glow-400 font-bold text-sm">02</span>
             </div>
             <h2 className="text-xl font-bold text-white">Selecione a Plataforma</h2>
@@ -404,14 +404,14 @@ export default function UploadPage() {
 
         {/* Step 3: Upload Name */}
         <GlassCard
-          glow="cyan"
+          glow="green"
           className={`p-8 space-y-6 transition-all duration-500 ${
             !platform ? "opacity-40 pointer-events-none" : ""
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-violet-glow/[0.08] border border-violet-glow/20 flex items-center justify-center">
-              <span className="text-violet-glow-400 font-bold text-sm">03</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
+              <span className="text-emerald-glow-400 font-bold text-sm">03</span>
             </div>
             <h2 className="text-xl font-bold text-white">Nome do Upload</h2>
           </div>
@@ -422,7 +422,7 @@ export default function UploadPage() {
               value={uploadName}
               onChange={(e) => setUploadName(e.target.value)}
               placeholder="Ex: Importação ANCP Janeiro 2026"
-              className="w-full bg-black/20 border border-white/[0.08] rounded-xl px-4 py-3.5 text-white placeholder:text-text-muted focus:outline-none focus:border-violet-glow/40 transition-colors"
+              className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-text-muted focus:outline-none focus:border-emerald-glow/40 transition-colors"
             />
             <p className="text-xs text-text-muted mt-2">
               Dê um nome descritivo para identificar este upload no histórico
@@ -432,20 +432,20 @@ export default function UploadPage() {
 
         {/* Step 4: File */}
         <GlassCard
-          glow="cyan"
+          glow="green"
           className={`p-8 space-y-6 transition-all duration-500 ${
             !uploadName.trim() ? "opacity-40 pointer-events-none" : ""
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-glow/[0.08] border border-amber-glow/20 flex items-center justify-center">
-              <span className="text-amber-glow-400 font-bold text-sm">04</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
+              <span className="text-emerald-glow-400 font-bold text-sm">04</span>
             </div>
             <h2 className="text-xl font-bold text-white">Upload do Arquivo</h2>
           </div>
 
           <div
-            className="border-2 border-dashed border-white/[0.08] rounded-xl p-12 text-center hover:border-cyan-glow/30 transition-all cursor-pointer"
+            className="border-2 border-dashed border-white/10 rounded-xl p-12 text-center hover:border-emerald-glow/30 transition-all cursor-pointer"
             onClick={() => document.getElementById("file-input")?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -490,14 +490,14 @@ export default function UploadPage() {
 
         {/* Step 5: Execute */}
         <GlassCard
-          glow="cyan"
+          glow="green"
           className={`p-8 space-y-6 transition-all duration-500 ${
             !canProceed ? "opacity-40 pointer-events-none" : ""
           }`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-rose-glow/[0.08] border border-rose-glow/20 flex items-center justify-center">
-              <span className="text-rose-glow-400 font-bold text-sm">05</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
+              <span className="text-emerald-glow-400 font-bold text-sm">05</span>
             </div>
             <h2 className="text-xl font-bold text-white">Execução</h2>
           </div>
@@ -517,38 +517,38 @@ export default function UploadPage() {
           )}
 
           {status === "creating-upload" && (
-            <div className="p-4 rounded-xl bg-violet-glow/[0.04] border border-violet-glow/20">
+            <div className="p-4 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-5 h-5 border-2 border-violet-glow border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-violet-glow-400 font-medium">
+                <div className="w-5 h-5 border-2 border-emerald-glow border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-emerald-glow-400 font-medium">
                   Criando registro do upload...
                 </span>
               </div>
-              <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: "0%" }}
                   animate={{ width: "30%" }}
                   transition={{ duration: 1, ease: "linear" }}
-                  className="h-full bg-gradient-to-r from-violet-glow-deep to-violet-glow rounded-full"
+                  className="h-full bg-gradient-to-r from-emerald-glow-deep to-emerald-glow rounded-full"
                 />
               </div>
             </div>
           )}
 
           {status === "processing" && (
-            <div className="p-4 rounded-xl bg-cyan-glow/[0.04] border border-cyan-glow/20">
+            <div className="p-4 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-5 h-5 border-2 border-cyan-glow border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-cyan-glow-400 font-medium">
+                <div className="w-5 h-5 border-2 border-emerald-glow border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-emerald-glow-400 font-medium">
                   Processando arquivo...
                 </span>
               </div>
-              <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: "30%" }}
                   animate={{ width: "100%" }}
                   transition={{ duration: 3, ease: "linear" }}
-                  className="h-full bg-gradient-to-r from-cyan-glow-deep to-cyan-glow rounded-full"
+                  className="h-full bg-gradient-to-r from-emerald-glow-deep to-emerald-glow rounded-full"
                 />
               </div>
             </div>

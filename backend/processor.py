@@ -41,22 +41,69 @@ class GeneticDataProcessor:
         - Whitespace: ' Registro ' vs 'Registro'
         - Pandas duplicate suffixes: RGN.1, NOME.2, etc.
         - Underscore/space: 'SERIE / RGD' vs 'serie__rgd'
+        - Parenthesis: 'Peso ao nascimento - efeito direto (PN-EDg) - kg' 
+        - Partial match: match part of name inside parenthesis
+        - PMGZ composite: 'kg DEP' can match 'kg' (DEP is implicit in seed.py)
         """
-        # Build lookup: normalized_name -> actual column name in file
+        import re
         file_lookup: Dict[str, str] = {}
+        
         for col in df.columns:
-            # normalize: lowercase, strip, replace spaces with _
             norm = str(col).strip().lower().replace(" ", "_")
-            # Also keep the pandas-suffixed version as-is (e.g. "rgn.1")
             file_lookup[norm] = col
+            
+            parenthetical = re.search(r'\(([^)]+)\)', str(col))
+            if parenthetical:
+                file_lookup[parenthetical.group(1).lower().strip()] = col
+                short_code = parenthetical.group(1).lower().strip().replace("-", "")
+                if short_code not in file_lookup:
+                    file_lookup[short_code] = col
+            file_lookup[norm] = col
+            
+            col_lower = str(col).lower()
+            dep_suffixes = [" dep", " ac %", " deca", " p %"]
+            for suffix in dep_suffixes:
+                if col_lower.endswith(suffix):
+                    base = col_lower[:-len(suffix)].strip()
+                    base_underscored = base.replace(" ", "_")
+                    if base not in file_lookup:
+                        file_lookup[base] = col
+                    if base_underscored not in file_lookup:
+                        file_lookup[base_underscored] = col
+                    # Also add version with underscore before suffix (e.g., "kg_ac_%")
+                    base_with_underscore = base.replace(" ", "_")
+                    if base_with_underscore not in file_lookup:
+                        file_lookup[base_with_underscore] = col
 
-        # Build rename dict: actual_file_col -> target_db_col
         rename: Dict[str, str] = {}
         missing: List[str] = []
 
         for source_col, target_col in col_map.items():
             norm_source = source_col.strip().lower().replace(" ", "_")
-            actual = file_lookup.get(norm_source)
+            
+            # Check if source has explicit suffix
+            explicit_suffix = None
+            for suff in ["_dep", "_ac%", "_deca", "_p_%"]:
+                if norm_source.endswith(suff):
+                    explicit_suffix = suff
+                    break
+            
+            actual = None
+            
+            if explicit_suffix:
+                # Source has explicit suffix - look up exact match or with underscore variant
+                actual = file_lookup.get(norm_source)
+                if not actual:
+                    # Try: _ac% -> _ac_% (underscore before suffix)
+                    alt = norm_source.replace("_ac%", "_ac_%").replace("_p%", "_p_%").replace("_deca", "_deca")
+                    actual = file_lookup.get(alt)
+            else:
+                # Source has NO suffix (implicit DEP) - use base lookup
+                actual = file_lookup.get(norm_source)
+                if not actual:
+                    # Try lowercase with spaces
+                    alt = norm_source.replace("_", "-")
+                    actual = file_lookup.get(alt)
 
             if actual is not None:
                 rename[actual] = target_col
@@ -67,7 +114,8 @@ class GeneticDataProcessor:
             available = list(df.columns)
             raise ValueError(
                 f"Required columns missing for mapping: {missing}\n"
-                f"Columns found in file: {available}\n"
+                f"Columns found in file ({len(available)} total):\n"
+                f"{available[:50]}...\n"  # Show first 50
                 f"Tip: check the column names in your Excel file match the mapping."
             )
 
@@ -214,21 +262,24 @@ class GeneticDataProcessor:
 
     def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
         """
-        PMGZ Excel files have multiple header rows before the real column names.
-        Auto-detects header row by finding the row that contains the most
-        known column names (RGN, NOME, SEXO, NASC, etc.).
+        PMGZ Excel files have MULTI-ROW headers due to merged cells.
+        
+        Line 5: Group names like "Peso ao nascimento - efeito direto (PN-EDg) - kg"
+        Line 6: Sub-columns like "DEP", "AC%", "DECA", "P%"
+        
+        We use ffill() to propagate group names, then combine with sub-columns.
         """
-        # Read raw first 20 rows (no header)
         raw = pd.read_excel(
             io.BytesIO(file_content), header=None, nrows=20
         )
 
-        # Known header indicators for PMGZ files
-        header_keywords = {"RGN", "NOME", "SEXO", "NASC", "SERIE", "DECA", "iABCZg", "DEP", "FILHOS"}
-
-        # Score each row: how many header keywords does it contain?
         best_row = None
         best_score = 0
+        header_keywords = {
+            "RGN", "NOME", "SEXO", "NASC", "SERIE", "DECA", "iABCZg", "DEP", "FILHOS",
+            "ANIMAL", "PAI", "MÃE", "PESO", "IPP", "STAY", "PE-365", "AOL", "ACAB", "MAR",
+            "Estrutura", "Precocidade", "Musculosidade", "GENOTIPADO", "CSG"
+        }
 
         for i, row in raw.iterrows():
             score = 0
@@ -241,32 +292,49 @@ class GeneticDataProcessor:
                 best_row = i
 
         if best_row is None or best_score < 2:
+            rows_info = []
+            for i, row in raw.iterrows():
+                row_str = ", ".join([str(v)[:20] for v in row.values if pd.notna(v)])
+                rows_info.append(f"Row {i}: {row_str[:100]}")
+            
             raise ValueError(
-                "Could not find header row in PMGZ file. "
+                f"Could not find header row in PMGZ file. "
                 f"Scanned {len(raw)} rows, best score was {best_score}. "
-                "Expected row with column names like RGN, NOME, SEXO, NASC."
+                f"First few rows:\n" + "\n".join(rows_info[:5])
             )
 
-        # Read using the detected header row
-        # Use header=None + skiprows to get exact control
+        group_row = best_row - 1
+        subcol_row = best_row
+
+        group_names_raw = raw.loc[group_row].values
+        subcol_names_raw = raw.loc[subcol_row].values
+
+        group_names_filled = pd.Series(group_names_raw).ffill().values
+        subcol_names = [str(s).strip() if pd.notna(s) else "Unknown" for s in subcol_names_raw]
+
+        composite_names = []
+        for g, s in zip(group_names_filled, subcol_names):
+            g_str = str(g).strip() if pd.notna(g) else ""
+            if g_str and g_str != "nan":
+                composite_names.append(f"{g_str} {s}")
+            else:
+                composite_names.append(s)
+
+        seen = {}
+        unique_names = []
+        for name in composite_names:
+            if name in seen:
+                seen[name] += 1
+                unique_names.append(f"{name}.{seen[name] - 1}")
+            else:
+                seen[name] = 0
+                unique_names.append(name)
+
         df = pd.read_excel(
             io.BytesIO(file_content),
             header=None,
-            skiprows=best_row + 1,  # skip everything up to and including header_row
+            skiprows=best_row + 1,
         )
-        # Set the skipped row as column names
-        header_names = raw.loc[best_row].values
-        # Ensure unique column names (handle duplicates from pandas)
-        seen = {}
-        unique_names = []
-        for name in header_names:
-            name_str = str(name).strip() if pd.notna(name) else "Unnamed"
-            if name_str in seen:
-                seen[name_str] += 1
-                unique_names.append(f"{name_str}.{seen[name_str] - 1}")
-            else:
-                seen[name_str] = 0
-                unique_names.append(name_str)
         df.columns = unique_names
 
         return df
@@ -322,6 +390,7 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
+                    values["processing_log_id"] = self.upload_log_id
 
                     stmt = pg_insert(Animal.__table__).values(**values)
                     stmt = stmt.on_conflict_do_update(
@@ -329,7 +398,7 @@ class GeneticDataProcessor:
                         set_={
                             k: stmt.excluded[k]
                             for k in values
-                            if k not in ("id_animal", "id_farm", "rgn_animal")
+                            if k not in ("id_animal", "id_farm", "rgn_animal", "processing_log_id")
                         },
                     )
                     self.db.execute(stmt)
@@ -349,6 +418,7 @@ class GeneticDataProcessor:
                     values = {
                         k: (None if pd.isna(v) else v) for k, v in values.items()
                     }
+                    values["processing_log_id"] = self.upload_log_id
 
                     existing = (
                         self.db.query(Animal)
@@ -363,6 +433,7 @@ class GeneticDataProcessor:
                         for k, v in values.items():
                             if k not in ("id_animal", "id_farm", "rgn_animal"):
                                 setattr(existing, k, v)
+                        existing.processing_log_id = self.upload_log_id
                         updated += 1
                     else:
                         animal = Animal(**values)

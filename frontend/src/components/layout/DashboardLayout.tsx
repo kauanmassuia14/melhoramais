@@ -16,12 +16,12 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <main className="flex-1 p-8 overflow-y-auto">
             <div className="max-w-7xl mx-auto w-full">{children}</div>
           </main>
-          <footer className="py-6 text-center text-text-muted text-xs border-t border-white/[0.04]">
+          <footer className="py-6 text-center text-text-muted text-xs border-t border-white/5">
             <span className="font-mono">
               &copy; 2026 Melhora+ Biotecnologia & Genética
             </span>
             {" · "}
-            <span className="text-cyan-glow/50">GENOME_ENGINE v2.0</span>
+            <span className="text-emerald-glow/50">GENOME_ENGINE v2.0</span>
           </footer>
         </div>
       </div>

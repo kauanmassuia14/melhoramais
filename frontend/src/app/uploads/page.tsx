@@ -20,17 +20,17 @@ import Link from "next/link";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: any }> = {
   completed: {
-    bg: "bg-emerald-glow/[0.08]",
+    bg: "bg-emerald-glow/10",
     text: "text-emerald-glow-400",
     icon: CheckCircleIcon,
   },
   processing: {
-    bg: "bg-cyan-glow/[0.08]",
-    text: "text-cyan-glow-400",
+    bg: "bg-emerald-glow/10",
+    text: "text-emerald-glow-400",
     icon: ClockIcon,
   },
   failed: {
-    bg: "bg-rose-neon/[0.08]",
+    bg: "bg-rose-neon/10",
     text: "text-rose-neon-400",
     icon: XCircleIcon,
   },
@@ -131,14 +131,14 @@ export default function UploadsPage() {
         </section>
 
         {/* Filters */}
-        <GlassCard glow="cyan" className="p-6">
+        <GlassCard glow="green" className="p-6">
           <div className="flex flex-wrap gap-4">
             <div>
               <label className="block text-sm text-text-secondary mb-2">Fazenda</label>
               <select
                 value={filterFarm || ""}
                 onChange={(e) => setFilterFarm(e.target.value ? Number(e.target.value) : null)}
-                className="bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-glow/40"
+                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
               >
                 <option value="">Todas as fazendas</option>
                 {Object.values(farms).map((farm) => (
@@ -154,7 +154,7 @@ export default function UploadsPage() {
               <select
                 value={filterStatus || ""}
                 onChange={(e) => setFilterStatus(e.target.value || null)}
-                className="bg-black/20 border border-white/[0.08] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-glow/40"
+                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
               >
                 <option value="">Todos os status</option>
                 <option value="completed">Concluído</option>

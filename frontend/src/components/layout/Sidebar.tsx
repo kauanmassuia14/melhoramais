@@ -40,7 +40,7 @@ export const Sidebar = () => {
       initial={false}
       animate={{ width: isHovered ? 260 : 72 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className="border-r border-white/[0.04] bg-deep-dark-900/60 backdrop-blur-2xl hidden lg:flex flex-col sticky top-0 h-screen overflow-hidden"
+      className="border-r border-white/5 bg-deep-dark-900 flex flex-col sticky top-0 h-screen overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -72,18 +72,18 @@ export const Sidebar = () => {
               (item.href !== "/" && pathname.startsWith(item.href));
             return (
               <Link key={item.id} href={item.href} className="block relative">
-                <motion.div
+<motion.div
                   whileHover={{ x: 2 }}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 relative ${
                     isActive
-                      ? "text-cyan-glow-400"
+                      ? "text-emerald-glow-400"
                       : "text-text-secondary hover:text-text-primary hover:bg-white/[0.03]"
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="sidebar-active"
-                      className="absolute inset-0 rounded-xl bg-cyan-glow/[0.06] border border-cyan-glow/20"
+                      className="absolute inset-0 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20"
                       transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                     />
                   )}
@@ -94,7 +94,7 @@ export const Sidebar = () => {
                     </span>
                   )}
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-cyan-glow rounded-r-full glow-cyan-strong" />
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-1 h-5 bg-emerald-glow rounded-r-full glow-green-strong" />
                   )}
                 </motion.div>
               </Link>
@@ -109,7 +109,7 @@ export const Sidebar = () => {
               <p className="text-[10px] text-text-muted truncate">{user.email}</p>
               <span className={`inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-full ${
                 user.role === "admin"
-                  ? "bg-cyan-glow/10 text-cyan-glow-400"
+                  ? "bg-emerald-glow/10 text-emerald-glow-400"
                   : "bg-violet-glow/10 text-violet-glow-400"
               }`}>
                 {user.role.toUpperCase()}

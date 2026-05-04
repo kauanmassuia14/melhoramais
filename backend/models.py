@@ -236,6 +236,162 @@ class Animal(Base):
     pmg_ac_p = Column(Float)
     pmg_ac_m = Column(Float)
 
+    # ==================== PMGZ EXPANDIDO (Cavafunda) ====================
+    
+    # ANIMAL - dados básicos
+    pmg_serie_rgd = Column(String(50))  # SERIE / RGD
+    pmg_p_percent = Column(Float)     # P %
+    pmg_f_percent = Column(Float)     # F %
+    
+    # Genealogia expandida
+    # PAI
+    pai_nome = Column(String(255))
+    pai_serie_rgd = Column(String(50))
+    # avô paterno (já existe)
+    # avó paterna (já existe)
+    # MÃE
+    mae_nome = Column(String(255))
+    mae_serie_rgd = Column(String(50))
+    # avô materno (já existe)
+    # avó materna (já existe)
+    
+    # CARACTERÍSTICAS DE CRESCIMENTO - cada um com DEP, AC%, DECA, P%
+    # PN-EDg (Peso Nascimento)
+    pmg_pn_dep = Column(Float)
+    pmg_pn_ac = Column(Float)
+    pmg_pn_deca = Column(String(10))
+    pmg_pn_p_percent = Column(Float)
+    
+    # PD-EDg (Peso Desmama)
+    pmg_pd_dep = Column(Float)
+    pmg_pd_ac = Column(Float)
+    pmg_pd_deca = Column(String(10))
+    pmg_pd_p_percent = Column(Float)
+    
+    # PA-EDg (Peso Ano)
+    pmg_pa_dep = Column(Float)
+    pmg_pa_ac = Column(Float)
+    pmg_pa_deca = Column(String(10))
+    pmg_pa_p_percent = Column(Float)
+    
+    # PS-EDg (Peso Sobreano)
+    pmg_ps_dep = Column(Float)
+    pmg_ps_ac = Column(Float)
+    pmg_ps_deca = Column(String(10))
+    pmg_ps_p_percent = Column(Float)
+    
+    # CARACTERÍSTICAS MATERNAS
+    # PM-EMg (Peso Fase Materna)
+    pmg_pm_dep = Column(Float)
+    pmg_pm_ac = Column(Float)
+    pmg_pm_deca = Column(String(10))
+    pmg_pm_p_percent = Column(Float)
+    
+    # CARACTERÍSTICAS REPRODUTIVAS
+    # IPPg
+    pmg_ipp_dep = Column(Float)
+    pmg_ipp_ac = Column(Float)
+    pmg_ipp_deca = Column(String(10))
+    pmg_ipp_p_percent = Column(Float)
+    
+    # STAYg
+    pmg_stay_dep = Column(Float)
+    pmg_stay_ac = Column(Float)
+    pmg_stay_deca = Column(String(10))
+    pmg_stay_p_percent = Column(Float)
+    
+    # PE-365g
+    pmg_pe365_dep = Column(Float)
+    pmg_pe365_ac = Column(Float)
+    pmg_pe365_deca = Column(String(10))
+    pmg_pe365_p_percent = Column(Float)
+    
+    # PSNg (Precocidade Sexual)
+    pmg_psn_dep = Column(Float)
+    pmg_psn_ac = Column(Float)
+    pmg_psn_deca = Column(String(10))
+    pmg_psn_p_percent = Column(Float)
+    
+    # CARACTERÍSTICAS DE CARCAÇA
+    # AOLg
+    pmg_aol_dep = Column(Float)
+    pmg_aol_ac = Column(Float)
+    pmg_aol_deca = Column(String(10))
+    pmg_aol_p_percent = Column(Float)
+    
+    # ACABg
+    pmg_acab_dep = Column(Float)
+    pmg_acab_ac = Column(Float)
+    pmg_acab_deca = Column(String(10))
+    pmg_acab_p_percent = Column(Float)
+    
+    # MARg
+    pmg_mar_dep = Column(Float)
+    pmg_mar_ac = Column(Float)
+    pmg_mar_deca = Column(String(10))
+    pmg_mar_p_percent = Column(Float)
+    
+    # CARACTERÍSTICAS MORFOLÓGICAS
+    # Eg (Estrutura)
+    pmg_eg_dep = Column(Float)
+    pmg_eg_ac = Column(Float)
+    pmg_eg_deca = Column(String(10))
+    pmg_eg_p_percent = Column(Float)
+    
+    # Pg (Precocidade)
+    pmg_p_dep = Column(Float)
+    pmg_p_ac = Column(Float)
+    pmg_p_deca = Column(String(10))
+    pmg_p_p_percent = Column(Float)
+    
+    # Mg (Musculosidade)
+    pmg_m_dep = Column(Float)
+    pmg_m_ac = Column(Float)
+    pmg_m_deca = Column(String(10))
+    pmg_m_p_percent = Column(Float)
+    
+    # PESOS (colunas simples)
+    p120_peso_120 = Column(Float)
+    
+    # INFORMAÇÕES DE DESCENDENTES
+    # P120
+    desc_p120_filhos = Column(Integer)
+    desc_p120_rebanhos = Column(Integer)
+    # P210
+    desc_p210_filhos = Column(Integer)
+    desc_p210_rebanhos = Column(Integer)
+    # P365
+    desc_p365_filhos = Column(Integer)
+    desc_p365_rebanhos = Column(Integer)
+    # P450
+    desc_p450_filhos = Column(Integer)
+    desc_p450_rebanhos = Column(Integer)
+    # P120 NETOS
+    desc_p120_netosc = Column(Integer)
+    desc_p120_netosc_rebanhos = Column(Integer)
+    # P210 NETOS
+    desc_p210_netosc = Column(Integer)
+    desc_p210_netosc_rebanhos = Column(Integer)
+    # PE365
+    desc_pe365_filhos = Column(Integer)
+    desc_pe365_rebanhos = Column(Integer)
+    # STAY
+    desc_stay_filhos = Column(Integer)
+    desc_stay_rebanhos = Column(Integer)
+    # IPP
+    desc_ipp_filhos = Column(Integer)
+    desc_ipp_rebanhos = Column(Integer)
+    # AOL
+    desc_aol_filhos = Column(Integer)
+    desc_aol_rebanhos = Column(Integer)
+    # ACAB
+    desc_acab_filhos = Column(Integer)
+    desc_acab_rebanhos = Column(Integer)
+    
+    # INFORMAÇÕES EXTRAS
+    genotipado = Column(Boolean)
+    csg = Column(Boolean)
+
     fonte_origem = Column(String(50))
     data_processamento = Column(DateTime, default=datetime.utcnow)
 

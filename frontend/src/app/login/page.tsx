@@ -55,8 +55,8 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-deep-dark overflow-hidden">
-      <div className="absolute top-[-20%] left-[-10%] w-[700px] h-[700px] bg-cyan-glow/[0.06] rounded-full blur-[150px] animate-pulse" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-violet-glow/[0.04] rounded-full blur-[150px] animate-pulse" />
+      <div className="absolute top-[-20%] left-[-10%] w-[700px] h-[700px] bg-emerald-glow/[0.06] rounded-full blur-[150px] animate-pulse" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-cyan-glow/[0.04] rounded-full blur-[150px] animate-pulse" />
       <div className="absolute inset-0 bg-grid opacity-30" />
 
       <motion.div
@@ -74,12 +74,12 @@ export default function LoginPage() {
         </div>
 
         <div className="relative">
-          <GlassCard glow="cyan" className="p-10">
+          <GlassCard glow="green" className="p-10">
             <BorderBeam
               size={150}
               duration={12}
-              colorFrom="#06b6d4"
-              colorTo="#8b5cf6"
+              colorFrom="#10b981"
+              colorTo="#06b6d4"
             />
 
             <div className="relative z-10 space-y-8">

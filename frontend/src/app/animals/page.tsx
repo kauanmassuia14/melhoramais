@@ -88,7 +88,7 @@ export default function AnimalsPage() {
           </div>
           <button
             onClick={fetchAnimals}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.06] bg-white/[0.02] text-sm text-text-secondary hover:bg-white/[0.04] transition-all"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-text-secondary hover:bg-white/10 transition-all"
           >
             <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Atualizar
@@ -109,7 +109,7 @@ export default function AnimalsPage() {
                   placeholder="RGN ou nome do animal..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary placeholder:text-text-muted focus:border-cyan-glow/30 focus:outline-none transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
                 />
               </div>
             </div>
@@ -122,7 +122,7 @@ export default function AnimalsPage() {
                 <select
                   value={source}
                   onChange={(e) => { setSource(e.target.value); setPage(0); }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-sm focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
                 >
                   <option value="" className="bg-deep-dark text-white">Todas</option>
                   <option value="ANCP" className="bg-deep-dark text-white">ANCP</option>
@@ -143,7 +143,7 @@ export default function AnimalsPage() {
                 <select
                   value={sexo}
                   onChange={(e) => { setSexo(e.target.value); setPage(0); }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white text-sm focus:border-cyan-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
                 >
                   <option value="" className="bg-deep-dark text-white">Todos</option>
                   <option value="M" className="bg-deep-dark text-white">Macho</option>
@@ -164,13 +164,13 @@ export default function AnimalsPage() {
                 placeholder="Ex: NEL"
                 value={raca}
                 onChange={(e) => { setRaca(e.target.value); setPage(0); }}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-sm text-text-primary placeholder:text-text-muted focus:border-cyan-glow/30 focus:outline-none transition-colors"
+                className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
               />
             </div>
 
             <button
               type="submit"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 text-cyan-glow-400 text-sm font-medium hover:bg-cyan-glow/20 transition-all"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-glow/10 border border-emerald-glow/20 text-emerald-glow-400 text-sm font-medium hover:bg-emerald-glow/20 transition-all"
             >
               <FunnelIcon className="w-4 h-4" />
               Filtrar
@@ -248,7 +248,7 @@ export default function AnimalsPage() {
                       className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors"
                     >
                       <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-cyan-glow-400">
+                        <span className="font-mono text-sm text-emerald-glow-400">
                           {animal.rgn_animal}
                         </span>
                       </td>
@@ -284,7 +284,7 @@ export default function AnimalsPage() {
                       <td className="px-4 py-3">
                         <Link
                           href={`/animals/${animal.id_animal}`}
-                          className="text-xs text-cyan-glow-400 hover:text-cyan-glow-300 transition-colors"
+                          className="text-xs text-emerald-glow-400 hover:text-emerald-glow-300 transition-colors"
                         >
                           Detalhes
                         </Link>

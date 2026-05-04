@@ -4,12 +4,14 @@ import { motion, type HTMLMotionProps } from "framer-motion";
 import { forwardRef } from "react";
 
 interface GlassCardProps extends HTMLMotionProps<"div"> {
-  glow?: "cyan" | "rose" | "violet" | "none";
+  glow?: "green" | "cyan" | "rose" | "violet" | "none";
   beam?: boolean;
   children: React.ReactNode;
 }
 
 const glowStyles = {
+  green:
+    "hover:shadow-[0_0_30px_rgba(16,185,129,0.1),0_20px_60px_rgba(0,0,0,0.3)]",
   cyan:
     "hover:shadow-[0_0_30px_rgba(6,182,212,0.08),0_20px_60px_rgba(0,0,0,0.3)]",
   rose:

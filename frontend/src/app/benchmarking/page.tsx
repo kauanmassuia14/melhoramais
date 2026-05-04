@@ -324,7 +324,7 @@ function BenchmarkingContent() {
             <button
               onClick={handleDownloadReport}
               disabled={downloading}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-glow/10 border border-cyan-glow/30 text-cyan-glow-400 text-sm font-semibold hover:bg-cyan-glow/20 transition-all disabled:opacity-50 shadow-lg shadow-cyan-glow/10"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-glow/10 border border-emerald-glow/30 text-emerald-glow-400 text-sm font-semibold hover:bg-emerald-glow/20 transition-all disabled:opacity-50 shadow-lg shadow-emerald-glow/10"
             >
               <DocumentArrowDownIcon className={`w-5 h-5 ${downloading ? 'animate-spin' : ''}`} />
               {downloading ? 'Gerando PDF...' : 'Exportar PDF'}

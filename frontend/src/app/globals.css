@@ -2,26 +2,36 @@
 
 /* ============================================
    MELHORA+ DESIGN SYSTEM 2030
-   Deep Dark + Glassmorphism + Cyan Glow
+   Deep Dark + Glassmorphism + Green Theme
    ============================================ */
 
 @theme {
   --font-sans: var(--font-sans), "Inter", sans-serif;
   --font-mono: var(--font-mono), monospace;
 
-  /* Core Palette */
+  /* Sidebar - Dark Background (existing) */
   --color-deep-dark: #020617;
   --color-deep-dark-900: #0a0f1e;
   --color-deep-dark-800: #0f172a;
   --color-deep-dark-700: #1e293b;
 
-  /* Cyan Glow - Positive / Data */
-  --color-cyan-glow: #06b6d4;
-  --color-cyan-glow-400: #22d3ee;
-  --color-cyan-glow-300: #67e8f9;
-  --color-cyan-glow-200: #a5f3fc;
-  --color-cyan-glow-100: #cffafe;
-  --color-cyan-glow-deep: #0e7490;
+  /* Main Area - Light Surface (Apple minimal) */
+  --color-light-surface: #f8fafc;
+  --color-light-surface-alt: #f1f5f9;
+  --color-light-surface-hover: #e2e8f0;
+  --color-light-border: #e2e8f0;
+  --color-light-muted: #94a3b8;
+  --color-light-accent: #2563eb;
+  --color-light-text: #1e293b;
+  --color-light-text-secondary: #475569;
+
+  /* Green Glow - Primary Brand Color */
+  --color-emerald-glow: #10b981;
+  --color-emerald-glow-400: #34d399;
+  --color-emerald-glow-300: #6ee7b7;
+  --color-emerald-glow-200: #a7f3d0;
+  --color-emerald-glow-100: #d1fae5;
+  --color-emerald-glow-deep: #047857;
 
   /* Rose Neon - Alerts / Errors */
   --color-rose-neon: #f43f5e;
@@ -30,14 +40,20 @@
   --color-rose-neon-200: #fecdd3;
   --color-rose-neon-deep: #9f1239;
 
-  /* Accent: Violet for secondary */
+  /* Accent: Cyan for secondary actions */
+  --color-cyan-glow: #06b6d4;
+  --color-cyan-glow-400: #22d3ee;
+  --color-cyan-glow-deep: #0e7490;
+
+  /* Accent: Violet for tertiary */
   --color-violet-glow: #8b5cf6;
   --color-violet-glow-400: #a78bfa;
   --color-violet-glow-deep: #6d28d9;
 
-  /* Accent: Emerald for success */
-  --color-emerald-glow: #10b981;
-  --color-emerald-glow-400: #34d399;
+  /* Surface Colors */
+  --color-surface-1: rgba(15, 23, 42, 0.95);
+  --color-surface-2: rgba(30, 41, 59, 0.8);
+  --color-surface-3: rgba(51, 65, 85, 0.6);
 
   /* Glass Surfaces */
   --color-glass: rgba(255, 255, 255, 0.03);
@@ -49,19 +65,19 @@
   --color-text-primary: #f1f5f9;
   --color-text-secondary: #94a3b8;
   --color-text-muted: #475569;
-  --color-text-accent: #22d3ee;
+  --color-text-accent: #34d399;
 }
 
 /* ============================================
    BASE RESET
    ============================================ */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  background: var(--color-deep-dark);
-  color: var(--color-text-primary);
+  background: var(--color-light-surface);
+  color: var(--color-light-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -71,18 +87,18 @@ body {
    GLOW EFFECTS
    ============================================ */
 
-/* Cyan Glow Box Shadow */
-.glow-cyan {
+/* Green Glow Box Shadow */
+.glow-green {
   box-shadow:
-    0 0 20px rgba(6, 182, 212, 0.15),
-    0 0 60px rgba(6, 182, 212, 0.05);
+    0 0 20px rgba(16, 185, 129, 0.15),
+    0 0 60px rgba(16, 185, 129, 0.05);
 }
 
-.glow-cyan-strong {
+.glow-green-strong {
   box-shadow:
-    0 0 20px rgba(6, 182, 212, 0.3),
-    0 0 60px rgba(6, 182, 212, 0.15),
-    0 0 100px rgba(6, 182, 212, 0.05);
+    0 0 20px rgba(16, 185, 129, 0.3),
+    0 0 60px rgba(16, 185, 129, 0.15),
+    0 0 100px rgba(16, 185, 129, 0.05);
 }
 
 /* Rose Neon Glow */
@@ -96,6 +112,20 @@ body {
   box-shadow:
     0 0 20px rgba(244, 63, 94, 0.3),
     0 0 60px rgba(244, 63, 94, 0.15);
+}
+
+/* Cyan Glow */
+.glow-cyan {
+  box-shadow:
+    0 0 20px rgba(6, 182, 212, 0.15),
+    0 0 60px rgba(6, 182, 212, 0.05);
+}
+
+.glow-cyan-strong {
+  box-shadow:
+    0 0 20px rgba(6, 182, 212, 0.3),
+    0 0 60px rgba(6, 182, 212, 0.15),
+    0 0 100px rgba(6, 182, 212, 0.05);
 }
 
 /* Violet Glow */
@@ -128,7 +158,7 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow:
-    0 0 30px rgba(6, 182, 212, 0.08),
+    0 0 30px rgba(16, 185, 129, 0.08),
     0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
@@ -143,10 +173,10 @@ body {
 
 .glass-input:focus {
   outline: none;
-  border-color: var(--color-cyan-glow);
+  border-color: var(--color-emerald-glow);
   box-shadow:
-    0 0 0 3px rgba(6, 182, 212, 0.1),
-    0 0 20px rgba(6, 182, 212, 0.1);
+    0 0 0 3px rgba(16, 185, 129, 0.1),
+    0 0 20px rgba(16, 185, 129, 0.1);
 }
 
 .glass-input::placeholder {
@@ -383,6 +413,58 @@ body {
   .bento-grid-4 {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================
+   SELECTION
+   ============================================ */
+
+.main-content {
+  color-scheme: light;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+.main-content .text-white,
+.main-content .text-text-primary {
+  color: #1e293b !important;
+}
+
+.main-content .text-text-secondary,
+.main-content .text-text-muted {
+  color: #64748b !important;
+}
+
+.main-content .bg-white\/5,
+.main-content .bg-white\/10,
+.main-content .bg-deep-dark,
+.main-content .bg-slate-800 {
+  background: #f8fafc !important;
+}
+
+.main-content .glass,
+.main-content .glass-card {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+
+.main-content th {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.main-content td {
+  border-color: #e2e8f0;
+}
+
+/* Input override for main content */
+.main-content input,
+.main-content select,
+.main-content textarea {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 /* ============================================

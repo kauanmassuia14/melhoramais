@@ -76,103 +76,44 @@ app.include_router(auth_router)
 app.include_router(benchmark_router)
 
 # ============================================
-# Database Schema & Initialization
+# Reports Router (NOVO - PDF Customizável)
+# ============================================
+from backend.routers.reports import router as reports_router
+app.include_router(reports_router)
+
+# ============================================
+# Database Schema & Initialization (LIMPO)
 # ============================================
 @app.on_event("startup")
 def startup_event():
+    """Inicializa banco - cria tabelas se não existirem."""
+    from backend.models.v2 import AnimalBase, AnimalPlatformData, AnimalSnapshot, AnimalAudit
+    
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
     if not DATABASE_URL.startswith("sqlite"):
-        from sqlalchemy import text, inspect
+        from sqlalchemy import text
         try:
             with engine.connect() as conn:
-                # 1. Garantir esquemas existam
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
                 conn.commit()
-                
-                # 2. Sincronizar colunas (Auto-Migration)
-                inspector = inspect(engine)
-                # Lista de modelos para verificar
-                models_to_sync = [
-                    Farm, Upload, Animal, User, 
-                    Notification, ProcessingLog, 
-                    ColumnMapping, RawAnimalData, Cliente
-                ]
-                
-                for model in models_to_sync:
-                    # Obter schema e nome da tabela
-                    table_name = model.__tablename__
-                    schema = None
-                    if hasattr(model, "__table_args__"):
-                        args = model.__table_args__
-                        if isinstance(args, dict):
-                            schema = args.get("schema")
-                        elif isinstance(args, tuple):
-                            for arg in args:
-                                if isinstance(arg, dict) and "schema" in arg:
-                                    schema = arg["schema"]
-                    
-                    # Colunas atuais no DB
-                    existing_cols = [c["name"] for c in inspector.get_columns(table_name, schema=schema)]
-                    
-                    # Verificar o que falta
-                    for column in model.__table__.columns:
-                        if column.name not in existing_cols:
-                            try:
-                                # Mapeamento de tipos simplificado para Postgres
-                                col_type = "TEXT"
-                                if "VARCHAR" in str(column.type).upper():
-                                    length = getattr(column.type, 'length', 255) or 255
-                                    col_type = f"VARCHAR({length})"
-                                elif "FLOAT" in str(column.type).upper() or "DECIMAL" in str(column.type).upper():
-                                    col_type = "DOUBLE PRECISION"
-                                elif "INT" in str(column.type).upper():
-                                    col_type = "INTEGER"
-                                elif "BOOLEAN" in str(column.type).upper():
-                                    col_type = "BOOLEAN"
-                                elif "DATETIME" in str(column.type).upper():
-                                    col_type = "TIMESTAMP"
-                                elif "DATE" in str(column.type).upper():
-                                    col_type = "DATE"
-                                elif "JSON" in str(column.type).upper():
-                                    col_type = "JSONB"
-                                
-                                table_full = f"{schema}.{table_name}" if schema else table_name
-                                print(f"Sincronizando: {table_full}.{column.name} ({col_type})")
-                                with engine.connect() as conn_migration:
-                                    conn_migration.execute(text(f"ALTER TABLE {table_full} ADD COLUMN IF NOT EXISTS {column.name} {col_type}"))
-                                    conn_migration.commit()
-                            except Exception as col_err:
-                                print(f"Erro ao criar coluna {column.name}: {col_err}")
-                
-                # 3. Força Bruta: Colunas de Genealogia e DEPs (que o auto-sync pode ter pulado)
-                genealogy_cols = [
-                    "avo_paterno_rgn", "avo_paterno_mae_rgn", "avo_materno_rgn", "avo_materno_mae_rgn",
-                    "bisavo_paterno_pai_rgn", "bisavo_paterno_mae_pai_rgn", "bisavo_materno_pai_rgn", "bisavo_materno_mae_pai_rgn",
-                    "bisavo_paterno_mae_rgn", "bisavo_paterno_mae_mae_rgn", "bisavo_materno_mae_rgn", "bisavo_materno_mae_mae_rgn",
-                    "trisavo_paterno_pai_rgn", "trisavo_paterno_mae_pai_rgn", "trisavo_materno_pai_rgn", "trisavo_materno_mae_pai_rgn",
-                    "trisavo_paterno_mae_rgn", "trisavo_paterno_mae_mae_rgn", "trisavo_materno_mae_rgn", "trisavo_materno_mae_mae_rgn",
-                    "peso_nascimento", "peso_final", "altura", "circumference", "intervalo_partos", "dias_gestacao",
-                    "anc_dipp", "anc_d3p", "anc_dstay", "anc_dpn", "anc_dp12", "anc_dpe", "anc_daol", "anc_dacab",
-                    "anc_ac_mg", "anc_ac_te", "anc_ac_m", "anc_ac_p",
-                    "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs", 
-                    "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar", "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
-                    "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol", "pmg_acab", "pmg_mar",
-                    "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay", "pmg_deca_pe", "pmg_deca_aol",
-                    "pmg_meta_p", "pmg_meta_m", "pmg_meta_t", "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m"
-                ]
-                with engine.connect() as conn_force:
-                    for col in genealogy_cols:
-                        try:
-                            type_sql = "VARCHAR(50)" if ("rgn" in col or "deca" in col) else "DOUBLE PRECISION"
-                            conn_force.execute(text(f"ALTER TABLE silver.animais ADD COLUMN IF NOT EXISTS {col} {type_sql}"))
-                        except Exception as e:
-                            print(f"Erro ao criar coluna força bruta {col}: {e}")
-                    conn_force.commit()
-                
-                print("Database synchronization finished.")
         except Exception as e:
-            print(f"Auto-migration error: {e}")
+            print(f"Erro ao criar schemas: {e}")
+    
+    # Criar todas as tabelas (modelos existentes + v2)
+    from backend.models import Base
+    all_models = list(Base.metadata.tables.keys()) + [
+        'animal_base', 'animal_platform_data', 'animal_snapshot', 'animal_audit'
+    ]
+    
+    try:
+        from backend.models.v2 import Base as BaseV2
+        BaseV2.metadata.create_all(bind=engine)
+        print("Tabelas v2 criadas com sucesso.")
+    except Exception as e:
+        print(f"Erro ao criar tabelas v2: {e}")
+    
+    print("Database initialization complete.")
     
     # 4. Create all tables (standard) - Wrapped to prevent startup crash
     try:
@@ -624,7 +565,7 @@ def delete_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a processing log and its legacy associated animals."""
+    """Delete a processing log and all its associated animals."""
     log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
@@ -632,11 +573,10 @@ def delete_log(
     if current_user.role != "admin" and log.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Exclui os animais vinculados a esse log através da farm e source system que não estejam marcados no novo sistema
+    # Exclui apenas os animais associados a este log específico
     db.query(Animal).filter(
         Animal.id_farm == log.id_farm,
-        Animal.fonte_origem == log.source_system,
-        Animal.upload_id.is_(None)
+        Animal.processing_log_id == log_id
     ).delete(synchronize_session=False)
 
     db.delete(log)

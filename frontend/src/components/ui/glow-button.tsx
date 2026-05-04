@@ -4,7 +4,7 @@ import { motion, type HTMLMotionProps } from "framer-motion";
 import { forwardRef } from "react";
 
 interface GlowButtonProps extends HTMLMotionProps<"button"> {
-  variant?: "primary" | "ghost" | "danger";
+  variant?: "primary" | "ghost" | "danger" | "outline" | "secondary";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   children: React.ReactNode;
@@ -34,9 +34,15 @@ export const GlowButton = forwardRef<HTMLButtonElement, GlowButtonProps>(
 
     const variants = {
       primary:
-        "bg-gradient-to-r from-cyan-glow-deep to-cyan-glow text-white " +
-        "hover:shadow-[0_0_30px_rgba(6,182,212,0.4),0_0_60px_rgba(6,182,212,0.2)] " +
+        "bg-gradient-to-r from-emerald-glow-deep to-emerald-glow text-white " +
+        "hover:shadow-[0_0_30px_rgba(16,185,129,0.4),0_0_60px_rgba(16,185,129,0.2)] " +
         "active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none",
+      secondary:
+        "bg-white/5 text-text-secondary border border-white/10 " +
+        "hover:bg-white/10 hover:border-white/20",
+      outline:
+        "bg-transparent text-emerald-glow border border-emerald-glow/30 " +
+        "hover:bg-emerald-glow/10",
       ghost:
         "bg-transparent text-text-secondary border border-white/[0.06] " +
         "hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-text-primary",

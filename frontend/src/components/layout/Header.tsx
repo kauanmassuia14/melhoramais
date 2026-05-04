@@ -81,22 +81,22 @@ export const Header = () => {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "success": return "text-emerald-glow-400";
-      case "error": return "text-rose-neon-400";
-      case "warning": return "text-yellow-400";
-      default: return "text-cyan-glow-400";
+      case "success": return "text-emerald-600";
+      case "error": return "text-red-500";
+      case "warning": return "text-yellow-500";
+      default: return "text-emerald-600";
     }
   };
 
   return (
-    <header className="h-[64px] border-b border-white/[0.04] flex items-center justify-between px-8 bg-deep-dark/80 backdrop-blur-xl sticky top-0 z-20 w-full">
+    <header className="h-[64px] border-b border-white/[0.06] flex items-center justify-between px-8 bg-deep-dark-900 sticky top-0 z-20 w-full">
       {/* Search */}
       <div className="relative w-96 group">
-        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-cyan-glow transition-colors" />
+        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-emerald-glow transition-colors" />
         <input
           type="text"
           placeholder="Buscar animais, relatórios..."
-          className="w-full bg-white/[0.02] border border-white/[0.06] rounded-xl py-2 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-cyan-glow/40 focus:shadow-[0_0_0_3px_rgba(6,182,212,0.08)] transition-all"
+          className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-emerald-glow/40 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted border border-white/[0.08] rounded px-1.5 py-0.5 font-mono">
           ⌘K
@@ -115,7 +115,7 @@ export const Header = () => {
           >
             <BellIcon className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-2 right-2 min-w-[16px] h-4 flex items-center justify-center bg-cyan-glow rounded-full text-[10px] text-white font-bold px-1 glow-cyan animate-pulse">
+              <span className="absolute top-2 right-2 min-w-[16px] h-4 flex items-center justify-center bg-emerald-glow rounded-full text-[10px] text-white font-bold px-1 glow-green animate-pulse">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -136,7 +136,7 @@ export const Header = () => {
                     <button
                       onClick={handleMarkAllRead}
                       disabled={loading}
-                      className="text-xs text-cyan-glow-400 hover:text-cyan-glow-300 transition-colors"
+                      className="text-xs text-emerald-glow-400 hover:text-emerald-glow-300 transition-colors"
                     >
                       {loading ? "..." : "Marcar todas como lidas"}
                     </button>
@@ -154,7 +154,7 @@ export const Header = () => {
                       <div
                         key={notif.id}
                         className={`relative px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors ${
-                          !notif.is_read ? "bg-cyan-glow/[0.03]" : ""
+                          !notif.is_read ? "bg-emerald-glow/[0.03]" : ""
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -162,7 +162,7 @@ export const Header = () => {
                             notif.type === "success" ? "bg-emerald-glow" :
                             notif.type === "error" ? "bg-rose-neon" :
                             notif.type === "warning" ? "bg-yellow-400" :
-                            "bg-cyan-glow"
+                            "bg-emerald-glow"
                           }`} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-text-primary truncate">{notif.title}</p>
@@ -174,7 +174,7 @@ export const Header = () => {
                           {!notif.is_read && (
                             <button
                               onClick={() => handleMarkAsRead(notif.id)}
-                              className="flex-shrink-0 p-1 rounded-lg text-text-muted hover:text-cyan-glow-400 hover:bg-white/[0.04] transition-all"
+                              className="flex-shrink-0 p-1 rounded-lg text-text-muted hover:text-emerald-glow-400 hover:bg-white/[0.04] transition-all"
                               title="Marcar como lida"
                             >
                               <CheckIcon className="w-4 h-4" />
@@ -199,7 +199,7 @@ export const Header = () => {
             <p className="text-sm font-medium text-text-primary">{user?.nome || "Usuário"}</p>
             <p className="text-[11px] text-text-muted capitalize">{user?.role || "Usuário"}</p>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-glow-deep to-violet-glow flex items-center justify-center text-white text-sm font-bold">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-500 flex items-center justify-center text-white text-sm font-bold">
             {user?.nome ? user.nome.charAt(0).toUpperCase() : "U"}
           </div>
         </div>
