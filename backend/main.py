@@ -368,10 +368,27 @@ def delete_farm(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
-    """Delete farm - admin only."""
+    """Delete farm - admin only. Deletes all related animals, uploads, and processing logs."""
     db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
     if not db_farm:
         raise HTTPException(status_code=404, detail="Farm not found")
+    
+    logs = db.query(ProcessingLog).filter(ProcessingLog.id_farm == farm_id).all()
+    for log in logs:
+        log_id = log.id
+        # Delete raw animal data by processing_log_id
+        db.query(RawAnimalData).filter(
+            RawAnimalData.processing_log_id == log_id
+        ).delete(synchronize_session=False)
+    
+    # Delete all animals
+    db.query(Animal).filter(Animal.id_farm == farm_id).delete(synchronize_session=False)
+    
+    # Delete all uploads
+    db.query(Upload).filter(Upload.id_farm == farm_id).delete(synchronize_session=False)
+    
+    # Delete all processing logs
+    db.query(ProcessingLog).filter(ProcessingLog.id_farm == farm_id).delete(synchronize_session=False)
     
     db.delete(db_farm)
     db.commit()
