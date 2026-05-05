@@ -528,6 +528,15 @@ class GeneticDataProcessor:
         # Step 2: Convert dataframe to list of dicts
         records = df.to_dict('records')
         
+        # Fix boolean columns: 'SIM'/'NÃO' -> True/False
+        for values in records:
+            if 'genotipado' in values:
+                val = str(values.get('genotipado', '')).upper().strip()
+                values['genotipado'] = True if val == 'SIM' else False if val in ['NÃO', 'N', 'NAO', ''] else None
+            if 'csg' in values:
+                val = str(values.get('csg', '')).upper().strip()
+                values['csg'] = True if val == 'SIM' else False if val in ['NÃO', 'N', 'NAO', ''] else None
+        
         # Step 3: Process each record
         animals_to_insert = []
         animals_to_update = []
