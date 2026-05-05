@@ -339,7 +339,7 @@ class GeneticDataProcessor:
 
         return df
 
-def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
+    def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
         """
         PMGZ Excel files have MULTI-ROW headers due to merged cells.
         
@@ -426,7 +426,7 @@ def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
         logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {unique_names[:15]}")
 
         return df
-    
+
     def _map_pmgz_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Map PMGZ column names to database field names."""
         rename_map = {
