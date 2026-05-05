@@ -601,6 +601,11 @@ def delete_logs(
         ).distinct().all()
         upload_ids = [u[0] for u in upload_ids if u[0]]
         
+        # Delete raw animal data first (has FK to processing_log)
+        db.query(RawAnimalData).filter(
+            RawAnimalData.processing_log_id == log_id
+        ).delete(synchronize_session=False)
+        
         # Get all animal IDs to delete raw data
         animais = db.query(Animal).filter(
             Animal.id_farm == log.id_farm,
@@ -608,7 +613,7 @@ def delete_logs(
         ).all()
         animais_ids = [a.id_animal for a in animais]
         
-        # Delete raw animal data
+        # Delete raw data for those animals
         if animais_ids:
             db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
         
@@ -645,6 +650,11 @@ def delete_log(
     
     if current_user.role != "admin" and log.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Delete raw animal data first (has FK to processing_log)
+    db.query(RawAnimalData).filter(
+        RawAnimalData.processing_log_id == log_id
+    ).delete(synchronize_session=False)
     
     # Find upload associated with this log via animals
     upload_ids = db.query(Animal.upload_id).filter(
