@@ -330,7 +330,9 @@ class GeneticDataProcessor:
         raw = pd.read_excel(
             io.BytesIO(file_content), header=None, nrows=20
         )
-
+        
+        logger.info(f"_read_pmgz_excel: scanned {len(raw)} rows to find header")
+        
         best_row = None
         best_score = 0
         header_keywords = {
@@ -348,6 +350,8 @@ class GeneticDataProcessor:
             if score > best_score:
                 best_score = score
                 best_row = i
+        
+        logger.info(f"_read_pmgz_excel: best_row={best_row}, best_score={best_score}")
 
         if best_row is None or best_score < 2:
             rows_info = []
@@ -394,7 +398,9 @@ class GeneticDataProcessor:
             skiprows=best_row + 1,
         )
         df.columns = unique_names
-
+        
+        logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {unique_names[:15]}")
+        
         return df
 
     def _clean_data(self, df: pd.DataFrame, source_system: str) -> pd.DataFrame:
