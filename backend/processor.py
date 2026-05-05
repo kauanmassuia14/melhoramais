@@ -330,10 +330,6 @@ class GeneticDataProcessor:
         # Strip whitespace from column names
         df.columns = [str(c).strip() for c in df.columns]
 
-        # Map PMGZ columns to database fields
-        if source_system == "PMGZ":
-            df = self._map_pmgz_columns(df)
-        
         # Drop fully empty rows
         df = df.dropna(how="all")
 
