@@ -257,8 +257,23 @@ class GeneticDataProcessor:
         df = self._read_file(file_content, filename, source_system)
         col_map = self.get_mappings(source_system)
         required = self.get_required_columns(source_system)
+        # DEBUG: Log all file columns to understand the structure
+        logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
+        logger.info(f"Mapping for source_system={source_system}: {col_map}")
+        
         df, rename = self._match_columns(df, col_map, required)
         df = df.rename(columns=rename)
+        
+        logger.info(f"File columns AFTER mapping ({len(df.columns)}): {list(df.columns)[:30]}")
+        logger.info(f"Rename dict applied: {rename}")
+        
+        valid_targets = set(Animal.__table__.columns.keys())
+        logger.info(f"Valid DB columns: {len(valid_targets)}")
+        
+        keep = [c for c in df.columns if c in valid_targets]
+        missing_from_db = [c for c in df.columns if c not in valid_targets]
+        logger.info(f"Columns matched to DB: {len(keep)}")
+        logger.info(f"Columns NOT matched (missing in DB): {missing_from_db[:20]}")
         valid_targets = set(Animal.__table__.columns.keys())
         keep = [c for c in df.columns if c in valid_targets]
         df = df[keep]
@@ -468,54 +483,72 @@ class GeneticDataProcessor:
     def _upsert_animals(
         self, df: pd.DataFrame
     ) -> Tuple[int, int, int]:
-        """UPSERT animals using individual inserts."""
+        """UPSERT animals using BULK operations for performance."""
         inserted = 0
         updated = 0
         failed = 0
         
-        logger.info(f"Processing {len(df)} animals...")
-        logger.info(f"Columns in df: {list(df.columns)[:15]}")
+        logger.info(f"Processing {len(df)} animals with BULK method...")
+        logger.info(f"Columns in df: {list(df.columns)[:20]}")
         
-        for _, row in df.iterrows():
-            nested = self.db.begin_nested()
-            try:
-                values = row.to_dict()
-                values = {
-                    k: (None if pd.isna(v) else v) for k, v in values.items()
-                }
-                values["processing_log_id"] = self.upload_log_id
-                
-                # Debug: check if values has rgn_animal
-                if not values.get("rgn_animal"):
-                    logger.warning(f"Skipping row - no rgn_animal: {values}")
-                    continue
-                
-                logger.info(f"Inserting animal: {values.get('rgn_animal')}")
-
-                existing = (
-                    self.db.query(Animal)
-                    .filter(
-                        Animal.id_farm == self.farm_id,
-                        Animal.rgn_animal == values.get("rgn_animal"),
-                    )
-                    .first()
-                )
-
-                if existing:
-                    for k, v in values.items():
-                        if k not in ("id_animal", "id_farm", "rgn_animal"):
-                            setattr(existing, k, v)
-                    existing.processing_log_id = self.upload_log_id
-                    updated += 1
-                else:
-                    animal = Animal(**values)
-                    self.db.add(animal)
-                    inserted += 1
-                nested.commit()
-            except Exception as e:
-                nested.rollback()
+        # Step 1: Query ALL existing animals at once (1 query, not N)
+        existing_animals = self.db.query(Animal).filter(
+            Animal.id_farm == self.farm_id
+        ).all()
+        
+        # Create lookup dict: rgn_animal -> Animal object
+        existing_map = {a.rgn_animal: a for a in existing_animals}
+        logger.info(f"Found {len(existing_map)} existing animals in DB")
+        
+        # Step 2: Convert dataframe to list of dicts
+        records = df.to_dict('records')
+        
+        # Step 3: Process each record
+        animals_to_insert = []
+        animals_to_update = []
+        
+        for values in records:
+            # Clean NaN values
+            values = {k: (None if pd.isna(v) else v) for k, v in values.items()}
+            values["processing_log_id"] = self.upload_log_id
+            values["id_farm"] = self.farm_id
+            
+            rgn = values.get("rgn_animal")
+            if not rgn:
+                logger.warning(f"Skipping row - no rgn_animal: {values}")
                 failed += 1
-                logger.error(f"Failed animal {values.get('rgn_animal')}: {e}")
+                continue
+            
+            if rgn in existing_map:
+                # Update existing
+                existing = existing_map[rgn]
+                for k, v in values.items():
+                    if k not in ("id_animal", "id_farm", "rgn_animal"):
+                        setattr(existing, k, v)
+                existing.processing_log_id = self.upload_log_id
+                updated += 1
+            else:
+                # Insert new
+                animals_to_insert.append(values)
+                inserted += 1
+        
+        # Step 4: Bulk insert new animals
+        if animals_to_insert:
+            logger.info(f"Bulk inserting {len(animals_to_insert)} new animals...")
+            for values in animals_to_insert:
+                animal = Animal(**values)
+                self.db.add(animal)
+        
+        # Step 5: Single commit for everything
+        try:
+            self.db.commit()
+            logger.info(f"COMMIT successful - inserted={inserted}, updated={updated}, failed={failed}")
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"COMMIT failed: {e}")
+            failed = inserted + updated
+            inserted = 0
+            updated = 0
         
         logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
