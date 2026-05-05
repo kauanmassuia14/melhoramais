@@ -434,7 +434,12 @@ class GeneticDataProcessor:
             df["data_nascimento"] = pd.to_datetime(
                 df["data_nascimento"], errors="coerce"
             ).dt.date
-
+        
+        # Default race to Nelore if empty
+        if "raca" in df.columns:
+            df["raca"] = df["raca"].fillna("Nelore")
+            df["raca"] = df["raca"].replace(["", "nan", "None", "-"], "Nelore")
+        
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
         
