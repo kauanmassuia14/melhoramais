@@ -263,7 +263,11 @@ class GeneticDataProcessor:
         df = self._read_file(file_content, filename, source_system)
         logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
         logger.info(f"df columns: {list(df.columns)[:20]}")
+        
+        # Get mappings
+        col_map = self.get_mappings(source_system)
         required = self.get_required_columns(source_system)
+        
         # DEBUG: Log all file columns to understand the structure
         logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
         logger.info(f"Mapping for source_system={source_system}: {col_map}")
