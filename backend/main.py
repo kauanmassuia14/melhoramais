@@ -1171,3 +1171,18 @@ if __name__ == "__main__":
     import os
     port = int(os.getenv("PORT", 8080))
     uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
+
+
+# ============================================================
+# TEMPORARY ENDPOINT FOR SEEDING - REMOVE AFTER USE
+# ============================================================
+@app.post("/admin/seed-mappings")
+def seed_mappings_temp(db: Session = Depends(get_db)):
+    """Temporary endpoint to seed column mappings. Remove after use!"""
+    from backend.seed import seed_mappings_only
+    
+    try:
+        seed_mappings_only(db)
+        return {"message": "Mappings seeded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

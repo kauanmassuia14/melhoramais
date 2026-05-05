@@ -19,6 +19,15 @@ def seed():
         db.commit()
         print("Default farm seeded.")
 
+    # Use seed_mappings_only
+    seed_mappings_only(db)
+
+
+def seed_mappings_only(db: Session):
+    """Seed only mappings - for use with existing db session."""
+    from sqlalchemy import text
+    db.execute(text("SET search_path TO silver, public"))
+    
     # Wipe all mappings and re-seed clean
     db.query(ColumnMapping).delete()
     db.commit()
