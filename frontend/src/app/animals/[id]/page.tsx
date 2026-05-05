@@ -149,20 +149,146 @@ export default function AnimalDetailPage() {
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
+                  label="iABCZ — Índice ABCZ"
+                  value={animal.pmg_iabc?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="DECA"
+                  value={animal.pmg_deca?.toString() ?? null}
+                />
+                <StatCard
+                  label="P % — Top"
+                  value={animal.pmg_p_percent?.toFixed(1) ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="F % — Femea"
+                  value={animal.pmg_f_percent?.toFixed(1) ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="PN-EDg — Peso Nascimento"
+                  value={animal.pmg_pn_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="PN-EDg — AC%"
+                  value={animal.pmg_pn_ac?.toString() ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="PA-EDg — Peso Ano"
+                  value={animal.pmg_pa_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="PA-EDg — AC%"
+                  value={animal.pmg_pa_ac?.toString() ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="PS-EDg — Peso Sobreano"
+                  value={animal.pmg_ps_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="PS-EDg — AC%"
+                  value={animal.pmg_ps_ac?.toString() ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="PM-EMg — Peso Materno"
+                  value={animal.pmg_pm_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="PM-EMg — AC%"
+                  value={animal.pmg_pm_ac?.toString() ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="STAYg — Stayability"
+                  value={animal.pmg_stay_dep?.toFixed(2) ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="STAYg — AC%"
+                  value={animal.pmg_stay_ac?.toString() ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="IPPg — Idade 1º Parto"
+                  value={animal.pmg_ipp_dep?.toFixed(2) ?? null}
+                  unit="dias"
+                />
+                <StatCard
+                  label="PE-365g — Perímetro Escrotal"
+                  value={animal.pmg_pe365_dep?.toFixed(2) ?? null}
+                  unit="cm"
+                />
+                <StatCard
+                  label="AOLg — Área Olho Lobo"
+                  value={animal.pmg_aol_dep?.toFixed(2) ?? null}
+                  unit="cm²"
+                />
+                <StatCard
+                  label="ACABg — Acabamento"
+                  value={animal.pmg_acab_dep?.toFixed(2) ?? null}
+                  unit="mm"
+                />
+                <StatCard
+                  label="MARg — Marmoreio"
+                  value={animal.pmg_mar_dep?.toFixed(2) ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="Eg — Estrutura"
+                  value={animal.pmg_eg_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="Pg — Precocidade"
+                  value={animal.pmg_p_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="Mg — Musculosidade"
+                  value={animal.pmg_m_dep?.toFixed(2) ?? null}
+                />
+                <StatCard
+                  label="PSNg — Precocidade Sexual"
+                  value={animal.pmg_psn_dep?.toFixed(2) ?? null}
+                  unit="%"
+                />
+                <StatCard
+                  label="Genotipado"
+                  value={animal.genotipado ? "SIM" : "NÃO"}
+                />
+                <StatCard
+                  label="CSG"
+                  value={animal.csg ? "SIM" : "NÃO"}
+                />
+              </div>
+
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mt-6 mb-4">
+                Características de Crescimento
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard
                   label="P210 — Peso Desmama"
                   value={animal.p210_peso_desmama?.toFixed(2) ?? null}
-                  unit="%"
+                  unit="kg"
                 />
                 <StatCard
                   label="P365 — Peso Ano"
                   value={animal.p365_peso_ano?.toFixed(2) ?? null}
-                  unit="%"
+                  unit="kg"
                 />
                 <StatCard
                   label="P450 — Peso Sobreano"
                   value={animal.p450_peso_sobreano?.toFixed(2) ?? null}
-                  unit="%"
+                  unit="kg"
                 />
+              </div>
+
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mt-6 mb-4">
+                Medidas
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label="PE — Perímetro Escrotal"
                   value={animal.pe_perimetro_escrotal?.toFixed(2) ?? null}
