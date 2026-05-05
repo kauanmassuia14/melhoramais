@@ -525,11 +525,17 @@ class GeneticDataProcessor:
         animals_to_insert = []
         animals_to_update = []
         
+        logger.info(f"_upsert_animals: first record keys: {list(records[0].keys())[:20]}")
+        
         for values in records:
             # Clean NaN values
             values = {k: (None if pd.isna(v) else v) for k, v in values.items()}
             values["processing_log_id"] = self.upload_log_id
             values["id_farm"] = self.farm_id
+            
+            # DEBUG: Log the values for first record only
+            if updated + inserted == 0:
+                logger.info(f"_upsert_animals: sample values: rgn={values.get('rgn_animal')}, pmg_iabc={values.get('pmg_iabc')}, pmg_stay_dep={values.get('pmg_stay_dep')}")
             
             rgn = values.get("rgn_animal")
             if not rgn:
