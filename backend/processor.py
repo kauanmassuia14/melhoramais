@@ -254,8 +254,15 @@ class GeneticDataProcessor:
         self, file_content: bytes, filename: str, source_system: str
     ) -> Tuple[pd.DataFrame, int, int, int]:
         """Process file and persist animals. Called within a separate transaction."""
+        logger.info(f"=== START _process_and_persist ===")
+        logger.info(f"file_content size: {len(file_content)} bytes")
+        logger.info(f"filename: {filename}, source_system: {source_system}")
+        
+        # Read file
+        logger.info(f"Calling _read_file...")
         df = self._read_file(file_content, filename, source_system)
-        col_map = self.get_mappings(source_system)
+        logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
+        logger.info(f"df columns: {list(df.columns)[:20]}")
         required = self.get_required_columns(source_system)
         # DEBUG: Log all file columns to understand the structure
         logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
