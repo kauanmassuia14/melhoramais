@@ -269,6 +269,10 @@ class GeneticDataProcessor:
         col_map = self.get_mappings(source_system)
         required = self.get_required_columns(source_system)
         
+        # For PMGZ, use mapped/target column names for validation (since we've already mapped columns)
+        if source_system == "PMGZ":
+            required = list(col_map.values())  # Use target names like 'rgn_animal'
+        
         # DEBUG: Log all file columns to understand the structure
         logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
         logger.info(f"Mapping for source_system={source_system}: {col_map}")
