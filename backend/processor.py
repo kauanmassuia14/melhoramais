@@ -104,15 +104,16 @@ class GeneticDataProcessor:
                     # Try lowercase with spaces
                     alt = norm_source.replace("_", "-")
                     actual = file_lookup.get(alt)
-
+            
             if actual is not None:
                 rename[actual] = target_col
             else:
-                # Try fuzzy match: if source is a suffix of any file column
+                # Try PREFIX match: "RGN" should match "ANIMAL RGN"
                 source_lower = source_col.lower()
                 for file_col in df.columns:
-                    if file_col.lower().endswith(source_lower) or source_lower in file_col.lower():
+                    if file_col.lower().endswith(source_lower):
                         actual = file_col
+                        logger.info(f"Prefix match: '{source_col}' -> '{file_col}'")
                         break
             
             if actual is not None:
