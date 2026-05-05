@@ -76,6 +76,30 @@ export interface Animal {
   pmg_leg?: number | null;
   pmg_sh?: number | null;
   pmg_pp30?: number | null;
+  pmg_deca?: number | null;
+  pmg_p_percent?: number | null;
+  pmg_f_percent?: number | null;
+  pmg_pn_dep?: number | null;
+  pmg_pn_ac?: number | null;
+  pmg_pa_dep?: number | null;
+  pmg_pa_ac?: number | null;
+  pmg_ps_dep?: number | null;
+  pmg_ps_ac?: number | null;
+  pmg_pm_dep?: number | null;
+  pmg_pm_ac?: number | null;
+  pmg_stay_dep?: number | null;
+  pmg_stay_ac?: number | null;
+  pmg_ipp_dep?: number | null;
+  pmg_pe365_dep?: number | null;
+  pmg_aol_dep?: number | null;
+  pmg_acab_dep?: number | null;
+  pmg_mar_dep?: number | null;
+  pmg_eg_dep?: number | null;
+  pmg_p_dep?: number | null;
+  pmg_m_dep?: number | null;
+  pmg_psn_dep?: number | null;
+  genotipado?: boolean | null;
+  csg?: boolean | null;
 }
 
 export interface ColumnMapping {
