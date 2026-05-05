@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -572,13 +572,73 @@ def list_logs(
     return query.order_by(ProcessingLog.started_at.desc()).limit(limit).all()
 
 
+@app.delete("/logs", status_code=204)
+def delete_logs(
+    log_ids: List[int] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete multiple processing logs and all their associated data."""
+    if not log_ids:
+        raise HTTPException(status_code=400, detail="No log IDs provided")
+    
+    logs = db.query(ProcessingLog).filter(ProcessingLog.id.in_(log_ids)).all()
+    if not logs:
+        raise HTTPException(status_code=404, detail="Logs not found")
+    
+    for log in logs:
+        if current_user.role != "admin" and log.id_farm != current_user.id_farm:
+            raise HTTPException(status_code=403, detail=f"Access denied to log {log.id}")
+    
+    for log in logs:
+        log_id = log.id
+        
+        # Find upload associated with this log via animals
+        upload_ids = db.query(Animal.upload_id).filter(
+            Animal.id_farm == log.id_farm,
+            Animal.processing_log_id == log_id,
+            Animal.upload_id.isnot(None)
+        ).distinct().all()
+        upload_ids = [u[0] for u in upload_ids if u[0]]
+        
+        # Get all animal IDs to delete raw data
+        animais = db.query(Animal).filter(
+            Animal.id_farm == log.id_farm,
+            Animal.processing_log_id == log_id
+        ).all()
+        animais_ids = [a.id_animal for a in animais]
+        
+        # Delete raw animal data
+        if animais_ids:
+            db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
+        
+        # Delete animals
+        db.query(Animal).filter(
+            Animal.id_farm == log.id_farm,
+            Animal.processing_log_id == log_id
+        ).delete(synchronize_session=False)
+        
+        # Delete associated uploads
+        if upload_ids:
+            for upload_id in upload_ids:
+                upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+                if upload:
+                    db.delete(upload)
+        
+        # Delete the log
+        db.delete(log)
+    
+    db.commit()
+    return {"message": f"{len(logs)} logs and associated data deleted successfully"}
+
+
 @app.delete("/logs/{log_id}", status_code=204)
 def delete_log(
     log_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a processing log and all its associated animals."""
+    """Delete a processing log, associated animals, and linked upload."""
     log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
@@ -586,13 +646,39 @@ def delete_log(
     if current_user.role != "admin" and log.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Exclui os animais associados a este log
+    # Find upload associated with this log via animals
+    upload_ids = db.query(Animal.upload_id).filter(
+        Animal.id_farm == log.id_farm,
+        Animal.processing_log_id == log_id,
+        Animal.upload_id.isnot(None)
+    ).distinct().all()
+    upload_ids = [u[0] for u in upload_ids if u[0]]
+    
+    # Get all animal IDs to delete raw data
+    animais = db.query(Animal).filter(
+        Animal.id_farm == log.id_farm,
+        Animal.processing_log_id == log_id
+    ).all()
+    animais_ids = [a.id_animal for a in animais]
+    
+    # Delete raw animal data
+    if animais_ids:
+        db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
+    
+    # Delete animals
     db.query(Animal).filter(
         Animal.id_farm == log.id_farm,
         Animal.processing_log_id == log_id
     ).delete(synchronize_session=False)
     
-    # Exclui o log
+    # Delete associated uploads
+    if upload_ids:
+        for upload_id in upload_ids:
+            upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+            if upload:
+                db.delete(upload)
+    
+    # Delete the log
     db.delete(log)
     db.commit()
     return {"message": "Log and associated data deleted successfully"}

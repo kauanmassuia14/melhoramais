@@ -253,6 +253,9 @@ export const api = {
   deleteLog: (logId: number) =>
     fetchApi<void>(`/logs/${logId}`, { method: 'DELETE' }),
 
+  deleteLogs: (logIds: number[]) =>
+    fetchApi<void>(`/logs`, { method: 'DELETE', body: JSON.stringify(logIds) }),
+
   getUploadDetail: (logId: number) =>
     fetchApi<UploadDetail>(`/reports/upload/${logId}`),
 
