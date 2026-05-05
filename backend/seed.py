@@ -1,4 +1,4 @@
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy import text
 from backend.models import ColumnMapping, Farm, Base
 from backend.database import engine
