@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { api, type ProcessingLog, type ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
   CheckCircleIcon,
   ExclamationCircleIcon,
@@ -22,6 +23,7 @@ export default function HistoryPage() {
   const [selectedLogs, setSelectedLogs] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const { showToast } = useToast();
+  const { confirm, dialog } = useConfirm();
 
   const loadLogs = () => {
     setLoading(true);
@@ -58,7 +60,14 @@ export default function HistoryPage() {
 
   const handleDeleteSelected = async () => {
     if (selectedLogs.size === 0) return;
-    if (!confirm(`Tem certeza que deseja excluir ${selectedLogs.size} processo(s) e todos os seus dados?`)) return;
+    
+    const confirmed = await confirm({
+      title: "Excluir processamentos",
+      message: `Tem certeza que deseja excluir ${selectedLogs.size} processo(s)? Esta ação não pode ser desfeita e todos os animais associados serão removidos.`,
+      type: "danger",
+    });
+    
+    if (!confirmed) return;
     
     setDeleting(true);
     try {
@@ -75,7 +84,14 @@ export default function HistoryPage() {
   };
 
   const handleDeleteLog = async (logId: number) => {
-    if (!confirm('Tem certeza que deseja excluir esse processo e todos os seus dados?')) return;
+    const confirmed = await confirm({
+      title: "Excluir processamento",
+      message: "Tem certeza que deseja excluir este processamento? Esta ação não pode ser desfeita e todos os animais associados serão removidos.",
+      type: "danger",
+    });
+
+    if (!confirmed) return;
+
     try {
       await api.deleteLog(logId);
       setLogs((prev) => prev.filter((l) => l.id !== logId));
@@ -229,6 +245,7 @@ export default function HistoryPage() {
           </Card>
         )}
       </div>
+      {dialog}
     </DashboardLayout>
   );
 }

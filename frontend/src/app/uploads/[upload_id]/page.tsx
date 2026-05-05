@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { motion } from "framer-motion";
 import { api, UploadWithAnimals, Farm, Animal } from "@/lib/api";
 import {
@@ -49,6 +50,7 @@ export default function UploadDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const { showToast } = useToast();
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     if (uploadId) {
@@ -70,9 +72,13 @@ export default function UploadDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Tem certeza que deseja excluir este upload? Todos os animais associados serão removidos.")) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Excluir upload",
+      message: "Tem certeza que deseja excluir este upload? Todos os animais associados serão removidos permanentemente.",
+      type: "danger",
+    });
+
+    if (!confirmed) return;
 
     try {
       await api.deleteUpload(uploadId);
@@ -290,6 +296,7 @@ export default function UploadDetailPage() {
           </div>
         )}
       </motion.div>
+      {dialog}
     </DashboardLayout>
   );
 }

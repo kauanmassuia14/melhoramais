@@ -24,6 +24,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { api, Farm, DashboardStats, Upload } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -53,6 +54,7 @@ export default function FarmsPage() {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { showToast } = useToast();
+  const { confirm, dialog } = useConfirm();
 
   const fetchFarms = async () => {
     setLoading(true);
@@ -155,7 +157,14 @@ export default function FarmsPage() {
   };
 
   const handleDelete = async (farmId: number) => {
-    if (!confirm("Tem certeza que deseja excluir esta fazenda? Todos os animais, uploads e processamentos serão removidos.")) return;
+    const confirmed = await confirm({
+      title: "Excluir fazenda",
+      message: `Tem certeza que deseja excluir esta fazenda? Todos os animais, uploads e processamentos serão removidos permanentemente.`,
+      type: "danger",
+    });
+
+    if (!confirmed) return;
+
     setDeletingId(farmId);
     try {
       await api.deleteFarm(farmId);
@@ -475,6 +484,7 @@ export default function FarmsPage() {
           </div>
         )}
       </div>
+      {dialog}
     </DashboardLayout>
   );
 }
