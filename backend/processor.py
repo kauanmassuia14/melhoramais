@@ -309,7 +309,17 @@ class GeneticDataProcessor:
             else:
                 df = pd.read_excel(io.BytesIO(file_content))
         elif filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(file_content))
+            if source_system == "PMGZ":
+                # For PMGZ CSV files - the header is in the first row
+                df = pd.read_csv(io.BytesIO(file_content), sep="\t")
+                # Handle potential semicolon separator
+                if len(df.columns) == 1:
+                    df = pd.read_csv(io.BytesIO(file_content), sep=";")
+                # Handle comma separator
+                if len(df.columns) == 1:
+                    df = pd.read_csv(io.BytesIO(file_content))
+            else:
+                df = pd.read_csv(io.BytesIO(file_content))
         elif filename.endswith(".PAG"):
             df = pd.read_csv(
                 io.BytesIO(file_content), sep=None, engine="python"
@@ -320,12 +330,16 @@ class GeneticDataProcessor:
         # Strip whitespace from column names
         df.columns = [str(c).strip() for c in df.columns]
 
+        # Map PMGZ columns to database fields
+        if source_system == "PMGZ":
+            df = self._map_pmgz_columns(df)
+        
         # Drop fully empty rows
         df = df.dropna(how="all")
 
         return df
 
-    def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
+def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
         """
         PMGZ Excel files have MULTI-ROW headers due to merged cells.
         
@@ -406,7 +420,178 @@ class GeneticDataProcessor:
         )
         df.columns = unique_names
         
+        # Rename PMGZ columns to database field names
+        df = self._map_pmgz_columns(df)
+        
         logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {unique_names[:15]}")
+
+        return df
+    
+    def _map_pmgz_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Map PMGZ column names to database field names."""
+        rename_map = {
+            "RGN": "rgn_animal",
+            "NOME": "nome_animal",
+            "Sexo": "sexo",
+            "NASC": "data_nascimento",
+            "SERIE / RGD": "pmg_serie_rgd",
+            "iABCZg": "pmg_iabc",
+            "DECA": "pmg_deca",
+            "P %": "pmg_p_percent",
+            "F %": "pmg_f_percent",
+            "FILHOS": "pmg_filhos",
+            "REBANHOS": "pmg_rebanhos",
+            "NETOS": "pmg_netos",
+            "GENOTIPADO": "genotipado",
+            "CSG": "csg",
+            # Peso Nascimento
+            "Peso ao nascimento DEP": "pmg_pn_dep",
+            "Peso ao nascimento AC %": "pmg_pn_ac",
+            "Peso ao nascimento DECA": "pmg_pn_deca",
+            "Peso ao nascimento P %": "pmg_pn_p_percent",
+            # Peso Desmama (P210)
+            "P210 DEP": "pmg_pd_dep",
+            "P210 AC %": "pmg_pd_ac",
+            "P210 DECA": "pmg_pd_deca",
+            "P210 P %": "pmg_pd_p_percent",
+            # Peso Ano (P365)
+            "Peso ao ano DEP": "pmg_pa_dep",
+            "Peso ao ano AC %": "pmg_pa_ac",
+            "Peso ao ano DECA": "pmg_pa_deca",
+            "Peso ao ano P %": "pmg_pa_p_percent",
+            # Peso Sobreano (P450)
+            "Peso ao sobreano DEP": "pmg_ps_dep",
+            "Peso ao sobreano AC %": "pmg_ps_ac",
+            "Peso ao sobreano DECA": "pmg_ps_deca",
+            "Peso ao sobreano P %": "pmg_ps_p_percent",
+            # Peso Materno
+            "Peso maternal DEP": "pmg_pm_dep",
+            "Peso maternal AC %": "pmg_pm_ac",
+            "Peso maternal DECA": "pmg_pm_deca",
+            "Peso maternal P %": "pmg_pm_p_percent",
+            # IPP
+            "Idade ao primeiro parto DEP": "pmg_ipp_dep",
+            "Idade ao primeiro parto AC %": "pmg_ipp_ac",
+            "Idade ao primeiro parto DECA": "pmg_ipp_deca",
+            "Idade ao primeiro parto P %": "pmg_ipp_p_percent",
+            # Stayability
+            "Stayability DEP": "pmg_stay_dep",
+            "Stayability AC %": "pmg_stay_ac",
+            "Stayability DECA": "pmg_stay_deca",
+            "Stayability P %": "pmg_stay_p_percent",
+            # PE-365
+            "PE-365 DEP": "pmg_pe365_dep",
+            "PE-365 AC %": "pmg_pe365_ac",
+            "PE-365 DECA": "pmg_pe365_deca",
+            "PE-365 P %": "pmg_pe365_p_percent",
+            # AOL
+            "AOL DEP": "pmg_aol_dep",
+            "AOL AC %": "pmg_aol_ac",
+            "AOL DECA": "pmg_aol_deca",
+            "AOL P %": "pmg_aol_p_percent",
+            # Acabamento
+            "Acabamento DEP": "pmg_acab_dep",
+            "Acabamento AC %": "pmg_acab_ac",
+            "Acabamento DECA": "pmg_acab_deca",
+            "Acabamento P %": "pmg_acab_p_percent",
+            # Marmoreio
+            "Marmoreio DEP": "pmg_mar_dep",
+            "Marmoreio AC %": "pmg_mar_ac",
+            "Marmoreio DECA": "pmg_mar_deca",
+            "Marmoreio P %": "pmg_mar_p_percent",
+            # Estrutura
+            "Estrutura DEP": "pmg_eg_dep",
+            "Estrutura AC %": "pmg_eg_ac",
+            "Estrutura DECA": "pmg_eg_deca",
+            "Estrutura P %": "pmg_eg_p_percent",
+            # Precocidade
+            "Precocidade DEP": "pmg_p_dep",
+            "Precocidade AC %": "pmg_p_ac",
+            "Precocidade DECA": "pmg_p_deca",
+            "Precocidade P %": "pmg_p_p_percent",
+            # Musculosidade
+            "Musculosidade DEP": "pmg_m_dep",
+            "Musculosidade AC %": "pmg_m_ac",
+            "Musculosidade DECA": "pmg_m_deca",
+            "Musculosidade P %": "pmg_m_p_percent",
+            # Precocidade Sexual
+            "Precocidade sexual DEP": "pmg_psn_dep",
+            "Precocidade sexual AC %": "pmg_psn_ac",
+            "Precocidade sexual DECA": "pmg_psn_deca",
+            "Precocidade sexual P %": "pmg_psn_p_percent",
+            # Mãe
+            "MÃE": "mae_rgn",
+            "PAI": "pai_rgn",
+            # Additional aliases
+            "NOME SERIE / RGD": "nome_serie_rgd",
+            "DEP AC %": "pmg_dep_ac",
+            "DEP P %": "pmg_dep_pct",
+        }
+        
+        # For CSV files with simple headers (one row), use direct mapping
+        # Based on your CSV: NOME, SERIE / RGD, RGN, SEXO, NASC, iABCZg, DECA, P %, F %, etc.
+        simple_rename = {
+            "NOME": "nome_animal",
+            "SERIE / RGD": "pmg_serie_rgd",
+            "RGN": "rgn_animal",
+            "SEXO": "sexo",
+            "NASC": "data_nascimento",
+            "iABCZg": "pmg_iabc",
+            "DECA": "pmg_deca",
+            "P %": "pmg_p_percent",
+            "F %": "pmg_f_percent",
+            "GENOTIPADO": "genotipado",
+            "CSG": "csg",
+            "FILHOS": "pmg_filhos",
+            "REBANHOS": "pmg_rebanhos",
+            "NETOS": "pmg_netos",
+            # Additional PMGZ columns (simple format)
+            "0,87": "pmg_pn_dep",
+            "36": "pmg_pn_ac",
+            "10": "pmg_pn_deca",
+            "15,42": "pmg_pa_dep",
+            "28,64": "pmg_pa_dep",
+            "34,80": "pmg_ps_dep",
+        }
+        
+        # Try multiple rename strategies
+        new_cols = {}
+        for col in df.columns:
+            col_str = str(col).strip()
+            if col_str in rename_map:
+                new_cols[col] = rename_map[col_str]
+            elif col_str in simple_rename:
+                new_cols[col] = simple_rename[col_str]
+            else:
+                # Try partial match
+                for key, value in rename_map.items():
+                    if key.lower() in col_str.lower():
+                        new_cols[col] = value
+                        break
+        
+        # Direct column mappings (these should always work)
+        direct_mappings = {
+            "RGN": "rgn_animal",
+            "NOME": "nome_animal",
+            "SEXO": "sexo",
+            "NASC": "data_nascimento",
+            "iABCZg": "pmg_iabc",
+            "DECA": "pmg_deca",
+            "GENOTIPADO": "genotipado",
+            "CSG": "csg",
+        }
+        
+        for old_name, new_name in direct_mappings.items():
+            if old_name in df.columns and new_name not in df.columns:
+                new_cols[old_name] = new_name
+        
+        df = df.rename(columns=new_cols)
+        
+        # Ensure required fields exist
+        if "rgn_animal" not in df.columns and "RGN" in df.columns:
+            df["rgn_animal"] = df["RGN"]
+            
+        logger.info(f"_map_pmgz_columns: Mapped columns, final: {list(df.columns)[:30]}")
         
         return df
 
