@@ -194,7 +194,70 @@ class AnimalResponse(BaseModel):
     pmg_meta_m: Optional[float] = None
     pmg_meta_t: Optional[float] = None
     
-    # PMGZ - AC
+    # PMGZ - DEP (Direct Predicted)
+    pmg_pn_dep: Optional[float] = None
+    pmg_pn_ac: Optional[int] = None
+    pmg_pn_deca: Optional[str] = None
+    pmg_pn_p_percent: Optional[float] = None
+    pmg_pd_dep: Optional[float] = None
+    pmg_pd_ac: Optional[int] = None
+    pmg_pd_deca: Optional[str] = None
+    pmg_pd_p_percent: Optional[float] = None
+    pmg_pa_dep: Optional[float] = None
+    pmg_pa_ac: Optional[int] = None
+    pmg_pa_deca: Optional[str] = None
+    pmg_pa_p_percent: Optional[float] = None
+    pmg_ps_dep: Optional[float] = None
+    pmg_ps_ac: Optional[int] = None
+    pmg_ps_deca: Optional[str] = None
+    pmg_ps_p_percent: Optional[float] = None
+    pmg_pm_dep: Optional[float] = None
+    pmg_pm_ac: Optional[int] = None
+    pmg_pm_deca: Optional[str] = None
+    pmg_pm_p_percent: Optional[float] = None
+    pmg_ipp_dep: Optional[float] = None
+    pmg_ipp_ac: Optional[int] = None
+    pmg_ipp_deca: Optional[str] = None
+    pmg_ipp_p_percent: Optional[float] = None
+    pmg_stay_dep: Optional[float] = None
+    pmg_stay_ac: Optional[int] = None
+    pmg_stay_deca: Optional[str] = None
+    pmg_stay_p_percent: Optional[float] = None
+    pmg_pe365_dep: Optional[float] = None
+    pmg_pe365_ac: Optional[int] = None
+    pmg_pe365_deca: Optional[str] = None
+    pmg_pe365_p_percent: Optional[float] = None
+    
+    # PMGZ - Características de Carcaça
+    pmg_aol_dep: Optional[float] = None
+    pmg_aol_ac: Optional[int] = None
+    pmg_aol_deca: Optional[str] = None
+    pmg_acab_dep: Optional[float] = None
+    pmg_acab_ac: Optional[int] = None
+    pmg_acab_deca: Optional[str] = None
+    pmg_mar_dep: Optional[float] = None
+    pmg_mar_ac: Optional[int] = None
+    pmg_mar_deca: Optional[str] = None
+    
+    # PMGZ - Morfológicas
+    pmg_eg_dep: Optional[float] = None
+    pmg_eg_ac: Optional[int] = None
+    pmg_eg_deca: Optional[str] = None
+    pmg_p_dep: Optional[float] = None
+    pmg_p_ac: Optional[int] = None
+    pmg_p_deca: Optional[str] = None
+    pmg_m_dep: Optional[float] = None
+    pmg_m_ac: Optional[int] = None
+    pmg_m_deca: Optional[str] = None
+    pmg_psn_dep: Optional[float] = None
+    pmg_psn_ac: Optional[int] = None
+    pmg_psn_deca: Optional[str] = None
+    
+    # PMGZ - Extras
+    pmg_p_percent: Optional[float] = None
+    pmg_f_percent: Optional[float] = None
+    
+    # PMGZ - AC (Accuracy)
     pmg_ac_iabc: Optional[float] = None
     pmg_ac_p: Optional[float] = None
     pmg_ac_m: Optional[float] = None
