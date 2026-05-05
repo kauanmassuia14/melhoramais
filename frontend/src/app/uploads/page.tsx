@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
+import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
 import { api, Upload, Farm } from "@/lib/api";
 import {
@@ -49,6 +50,7 @@ export default function UploadsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filterFarm, setFilterFarm] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -88,8 +90,9 @@ export default function UploadsPage() {
     try {
       await api.deleteUpload(uploadId);
       setUploads(uploads.filter((u) => u.upload_id !== uploadId));
+      showToast("Upload excluído com sucesso", "success");
     } catch (err: any) {
-      alert(err.message || "Erro ao excluir upload");
+      showToast(err.message || "Erro ao excluir upload", "error");
     }
   };
 

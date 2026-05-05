@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
+import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
 import { api, UploadWithAnimals, Farm, Animal } from "@/lib/api";
 import {
@@ -47,6 +48,7 @@ export default function UploadDetailPage() {
   const [data, setData] = useState<UploadWithAnimals | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (uploadId) {
@@ -74,9 +76,10 @@ export default function UploadDetailPage() {
 
     try {
       await api.deleteUpload(uploadId);
+      showToast("Upload excluído com sucesso", "success");
       window.location.href = "/uploads";
     } catch (err: any) {
-      alert(err.message || "Erro ao excluir upload");
+      showToast(err.message || "Erro ao excluir upload", "error");
     }
   };
 

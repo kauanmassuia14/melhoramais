@@ -23,6 +23,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { AnimatedInput } from "@/components/ui/animated-input";
+import { useToast } from "@/components/ui/Toast";
 import { api, Farm, DashboardStats, Upload } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -51,6 +52,7 @@ export default function FarmsPage() {
     email: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const { showToast } = useToast();
 
   const fetchFarms = async () => {
     setLoading(true);
@@ -153,14 +155,15 @@ export default function FarmsPage() {
   };
 
   const handleDelete = async (farmId: number) => {
-    if (!confirm("Tem certeza que deseja excluir esta fazenda? Esta ação não pode ser desfeita.")) return;
+    if (!confirm("Tem certeza que deseja excluir esta fazenda? Todos os animais, uploads e processamentos serão removidos.")) return;
     setDeletingId(farmId);
     try {
       await api.deleteFarm(farmId);
       fetchFarms();
+      showToast("Fazenda excluída com sucesso", "success");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao excluir fazenda";
-      setError(msg);
+      showToast(msg, "error");
     } finally {
       setDeletingId(null);
     }

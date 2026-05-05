@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import { api, type ProcessingLog, type ApiError } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
 import {
   CheckCircleIcon,
   ExclamationCircleIcon,
@@ -20,6 +21,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedLogs, setSelectedLogs] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const { showToast } = useToast();
 
   const loadLogs = () => {
     setLoading(true);
@@ -64,8 +66,9 @@ export default function HistoryPage() {
       await api.deleteLogs(idsToDelete);
       setLogs((prev) => prev.filter((l) => !selectedLogs.has(l.id)));
       setSelectedLogs(new Set());
+      showToast(`${idsToDelete.length} processo(s) excluído(s) com sucesso`, "success");
     } catch (err: any) {
-      alert(err.message || 'Erro ao excluir logs');
+      showToast(err.message || "Erro ao excluir logs", "error");
     } finally {
       setDeleting(false);
     }
@@ -76,8 +79,9 @@ export default function HistoryPage() {
     try {
       await api.deleteLog(logId);
       setLogs((prev) => prev.filter((l) => l.id !== logId));
+      showToast("Processamento excluído com sucesso", "success");
     } catch (err: any) {
-      alert(err.message || 'Erro ao excluir log');
+      showToast(err.message || "Erro ao excluir log", "error");
     }
   };
 

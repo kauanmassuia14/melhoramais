@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api, Notification } from "@/lib/api";
 import { CheckIcon } from "@heroicons/react/24/outline";
+import { useToast } from "@/components/ui/Toast";
 
 export const Header = () => {
   const { user } = useAuth();
@@ -13,13 +14,36 @@ export const Header = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { showToast } = useToast();
+
+  // Only fetch on first load and when dropdown opens
+  const fetchNotifications = async () => {
+    try {
+      const [notifs, count] = await Promise.all([
+        api.getNotifications(true),
+        api.getUnreadCount(),
+      ]);
+      setNotifications(notifs);
+      setUnreadCount(count.count);
+      setInitialLoadDone(true);
+    } catch {
+      // silently fail
+    }
+  };
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!initialLoadDone) {
+      fetchNotifications();
+    }
+  }, [initialLoadDone]);
+
+  useEffect(() => {
+    if (showDropdown && initialLoadDone) {
+      fetchNotifications();
+    }
+  }, [showDropdown, initialLoadDone]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -31,25 +55,16 @@ export const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchNotifications = async () => {
-    try {
-      const [notifs, count] = await Promise.all([
-        api.getNotifications(true),
-        api.getUnreadCount(),
-      ]);
-      setNotifications(notifs);
-      setUnreadCount(count.count);
-    } catch {
-      // silently fail
-    }
-  };
-
   const handleMarkAsRead = async (id: number) => {
     try {
       await api.markAsRead(id);
-      fetchNotifications();
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+      showToast("Notificação marcada como lida", "success");
     } catch {
-      // silently fail
+      showToast("Erro ao marcar notificação", "error");
     }
   };
 
@@ -57,9 +72,11 @@ export const Header = () => {
     setLoading(true);
     try {
       await api.markAllAsRead();
-      fetchNotifications();
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      showToast("Todas marcadas como lidas", "success");
     } catch {
-      // silently fail
+      showToast("Erro ao marcar notificações", "error");
     } finally {
       setLoading(false);
     }
