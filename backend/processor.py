@@ -294,7 +294,9 @@ class GeneticDataProcessor:
         # Add upload_id if provided
         if self.upload_id:
             df["upload_id"] = self.upload_id
+        logger.info(f"Calling _upsert_animals with {len(df)} records...")
         inserted, updated, failed = self._upsert_animals(df)
+        logger.info(f"_upsert_animals result: inserted={inserted}, updated={updated}, failed={failed}")
         return df, inserted, updated, failed
 
     def _read_file(
@@ -508,6 +510,11 @@ class GeneticDataProcessor:
         
         logger.info(f"Processing {len(df)} animals with BULK method...")
         logger.info(f"Columns in df: {list(df.columns)[:20]}")
+        
+        # DEBUG: Show first record
+        first_record = df.iloc[0].to_dict()
+        logger.info(f"First record sample: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}, pmg_stay_dep={first_record.get('pmg_stay_dep')}")
+        logger.info(f"First record keys: {list(first_record.keys())[:30]}")
         
         # Step 1: Query ALL existing animals at once (1 query, not N)
         existing_animals = self.db.query(Animal).filter(
