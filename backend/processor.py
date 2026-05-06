@@ -774,21 +774,20 @@ class GeneticDataProcessor:
         return df
 
     def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
-        """Upsert animals directly into genetics schema using raw SQL."""
+        """Upsert animals using batch processing for better performance."""
         from sqlalchemy import text
         import uuid
-        import json
         
         inserted = 0
         updated = 0
         failed = 0
         
-        # Verificar dados do primeiro registro
+        BATCH_SIZE = 100
+        
         if len(df) > 0:
             first_record = df.iloc[0].to_dict()
             logger.info(f"First record: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}")
         
-        # Map farm_id (silver) to genetics farm
         farm = self.db.query(GeneticsFarm).first()
         if not farm:
             logger.error("No farm found in genetics.farms")
@@ -797,46 +796,106 @@ class GeneticDataProcessor:
         genetics_farm_id = farm.id
         logger.info(f"Using genetics farm: {farm.nome}")
         
-        # Processar cada animal
-        for _, row in df.iterrows():
-            try:
+        def safe_str(val):
+            if pd.isna(val):
+                return None
+            s = str(val).strip()
+            return s if s and s.lower() not in ['nan', 'none', ''] else None
+        
+        def to_tuple(dep_val, ac_val, deca_val, p_val):
+            def clean_val(v):
+                if pd.isna(v):
+                    return None
+                try:
+                    return float(v)
+                except:
+                    return None
+            return (
+                clean_val(dep_val),
+                clean_val(ac_val),
+                clean_val(deca_val) if deca_val and not pd.isna(deca_val) else None,
+                clean_val(p_val)
+            )
+        
+        upload_id_val = self.upload_id if self.upload_id else None
+        
+        # Batch processing
+        total_rows = len(df)
+        for batch_start in range(0, total_rows, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total_rows)
+            batch_df = df.iloc[batch_start:batch_end]
+            
+            logger.info(f"Processing batch {batch_start}-{batch_end} of {total_rows}")
+            
+            # Get existing RGNs in this batch
+            batch_rgns = [str(r).strip() for r in batch_df['rgn_animal'].tolist() if r and str(r).strip()]
+            
+            if batch_rgns:
+                existing_ids = {
+                    row.rgn: row.id 
+                    for row in self.db.query(GeneticsAnimal.rgn, GeneticsAnimal.id).filter(
+                        GeneticsAnimal.rgn.in_(batch_rgns),
+                        GeneticsAnimal.farm_id == genetics_farm_id
+                    ).all()
+                }
+            else:
+                existing_ids = {}
+            
+            # Prepare batch data
+            animals_to_insert = []
+            animals_to_update = []
+            rgn_to_id = {}
+            
+            for _, row in batch_df.iterrows():
                 rgn = row.get('rgn_animal')
                 if not rgn or str(rgn).strip() == '':
                     failed += 1
                     continue
                 
-                # Verificar se animal existe
-                existing = self.db.query(GeneticsAnimal).filter(
-                    GeneticsAnimal.rgn == str(rgn).strip(),
-                    GeneticsAnimal.farm_id == genetics_farm_id
-                ).first()
+                rgn_str = str(rgn).strip()
                 
-                animal_id = existing.id if existing else uuid.uuid4()
-                
-                # Função auxiliar para tratar NaN
-                def safe_str(val):
-                    if pd.isna(val):
-                        return None
-                    s = str(val).strip()
-                    return s if s and s.lower() not in ['nan', 'none', ''] else None
-                
-                # Preparar dados do animal
-                upload_id_val = self.upload_id if self.upload_id else None
-                animal_data = {
-                    'id': str(animal_id),
-                    'farm_id': str(genetics_farm_id),
-                    'rgn': str(rgn).strip(),
-                    'nome': safe_str(row.get('nome_animal')),
-                    'serie': safe_str(row.get('pmg_serie_rgd')),
-                    'sexo': safe_str(row.get('sexo')),
-                    'nascimento': safe_str(row.get('data_nascimento')),
-                    'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
-                    'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
-                    'upload_id': upload_id_val,
-                }
-                
-                if existing:
-                    # Update
+                if rgn_str in existing_ids:
+                    animal_id = existing_ids[rgn_str]
+                    animals_to_update.append({
+                        'id': str(animal_id),
+                        'nome': safe_str(row.get('nome_animal')),
+                        'serie': safe_str(row.get('pmg_serie_rgd')),
+                        'sexo': safe_str(row.get('sexo')),
+                        'nascimento': safe_str(row.get('data_nascimento')),
+                        'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                        'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                        'upload_id': upload_id_val,
+                    })
+                else:
+                    animal_id = uuid.uuid4()
+                    rgn_to_id[rgn_str] = animal_id
+                    animals_to_insert.append({
+                        'id': str(animal_id),
+                        'farm_id': str(genetics_farm_id),
+                        'rgn': rgn_str,
+                        'nome': safe_str(row.get('nome_animal')),
+                        'serie': safe_str(row.get('pmg_serie_rgd')),
+                        'sexo': safe_str(row.get('sexo')),
+                        'nascimento': safe_str(row.get('data_nascimento')),
+                        'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                        'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                        'upload_id': upload_id_val,
+                    })
+            
+            # Batch insert
+            if animals_to_insert:
+                self.db.execute(
+                    text("""
+                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
+                        VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
+                    """),
+                    animals_to_insert
+                )
+                inserted += len(animals_to_insert)
+            
+            # Batch update
+            if animals_to_update:
+                for data in animals_to_update:
                     self.db.execute(
                         text("""
                             UPDATE genetics.animals 
@@ -845,82 +904,56 @@ class GeneticDataProcessor:
                                 upload_id = :upload_id
                             WHERE id = :id
                         """),
-                        animal_data
+                        data
                     )
-                    updated += 1
-                else:
-                    # Insert
-                    self.db.execute(
-                        text("""
-                            INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
-                            VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
-                        """),
-                        animal_data
-                    )
-                    inserted += 1
+                updated += len(animals_to_update)
+            
+            # Process genetic evaluations for this batch
+            evaluations_to_insert = []
+            for _, row in batch_df.iterrows():
+                rgn = row.get('rgn_animal')
+                if not rgn or str(rgn).strip() == '':
+                    continue
                 
-                # Inserir avaliação genética se tiver iabc
+                rgn_str = str(rgn).strip()
+                animal_id = rgn_to_id.get(rgn_str) or existing_ids.get(rgn_str)
+                
                 iabc_val = row.get('pmg_iabc')
-                if iabc_val and str(iabc_val).strip():
-                    try:
-                        # Função auxiliar para converter valor para tupla (tratando NaN)
-                        def to_tuple(dep_val, ac_val, deca_val, p_val):
-                            # Limpar valores: converter para float, dividir por 100 se necessário, tratar NaN
-                            def clean_val(v):
-                                if pd.isna(v):
-                                    return None
-                                try:
-                                    return float(v)
-                                except:
-                                    return None
-                            
-                            return (
-                                clean_val(dep_val),
-                                clean_val(ac_val),
-                                clean_val(deca_val) if deca_val and not pd.isna(deca_val) else None,
-                                clean_val(p_val)
-                            )
-                        
-                        eval_data = {
-                            'id': str(uuid.uuid4()),
-                            'animal_id': str(animal_id),
-                            'farm_id': str(genetics_farm_id),
-                            'safra': 2026,
-                            'fonte_origem': source_system,
-                            'iabczg': float(iabc_val) if iabc_val else None,
-                            'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
-                            'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
-                            'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
-                            'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
-                            'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
-                            'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
-                            'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
-                            'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
-                            'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
-                            'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
-                            'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
-                            'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
-                            'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
-                            'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
-                        }
-                        
-                        self.db.execute(
-                            text("""
-                                INSERT INTO genetics.genetic_evaluations 
-                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
-                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_em, :ipp, :stay, :pe_365, :psn, :aol, :acab, :marmoreio, :eg, :pg, :mg)
-                            """),
-                            eval_data
-                        )
-                    except Exception as e:
-                        logger.error(f"Error inserting genetic evaluation: {e}")
-                
-                self.db.commit()
-                
-            except Exception as e:
-                self.db.rollback()
-                logger.error(f"Error processing animal: {e}")
-                failed += 1
+                if iabc_val and str(iabc_val).strip() and animal_id:
+                    evaluations_to_insert.append({
+                        'id': str(uuid.uuid4()),
+                        'animal_id': str(animal_id),
+                        'farm_id': str(genetics_farm_id),
+                        'safra': 2026,
+                        'fonte_origem': source_system,
+                        'iabczg': float(iabc_val) if iabc_val else None,
+                        'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
+                        'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
+                        'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
+                        'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
+                        'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
+                        'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
+                        'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
+                        'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
+                        'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
+                        'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
+                        'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
+                        'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
+                        'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
+                        'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
+                    })
+            
+            if evaluations_to_insert:
+                self.db.execute(
+                    text("""
+                        INSERT INTO genetics.genetic_evaluations 
+                        (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
+                        VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_em, :ipp, :stay, :pe_365, :psn, :aol, :acab, :marmoreio, :eg, :pg, :mg)
+                    """),
+                    evaluations_to_insert
+                )
+            
+            self.db.commit()
         
         logger.info(f"Genetics upsert: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
