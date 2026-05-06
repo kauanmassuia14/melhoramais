@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional, List
 import io
 import asyncio
@@ -119,12 +120,35 @@ def delete_upload(
         raise HTTPException(status_code=403, detail="Access denied")
     
     from backend.models import RawAnimalData
+    
+    # Get animal IDs before deletion
     animais_ids = [a.id_animal for a in db.query(Animal.id_animal).filter(Animal.upload_id == upload_id).all()]
     
+    # Delete raw animal data
     if animais_ids:
         db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
 
+    # Delete animals
     db.query(Animal).filter(Animal.upload_id == upload_id).delete(synchronize_session=False)
+    
+    # Delete genetics.animals and genetics.genetic_evaluations
+    genetics_animals = db.execute(
+        text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
+        {"upload_id": upload_id}
+    ).fetchall()
+    
+    if genetics_animals:
+        animal_ids = [a[0] for a in genetics_animals]
+        db.execute(
+            text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
+            {"animal_ids": animal_ids}
+        )
+        db.execute(
+            text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+            {"upload_id": upload_id}
+        )
+    
+    # Delete upload
     db.delete(upload)
     db.commit()
     

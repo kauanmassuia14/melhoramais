@@ -23,6 +23,10 @@ interface AnimalV2 {
   nascimento: string | null;
   genotipado: boolean | null;
   csg: boolean | null;
+  raca: string | null;
+  p210_info: string | null;
+  p365_info: string | null;
+  p450_info: string | null;
   evaluations: Array<{
     iabczg: number | null;
     fonte_origem: string | null;
@@ -288,20 +292,16 @@ export default function AnimalsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-text-secondary">
-                          {animal.nascimento ? new Date(animal.nascimento).toLocaleDateString('pt-BR') : "—"}
+                          {animal.raca || "—"}
                         </td>
                         <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
-                          {latestEval?.iabczg?.toFixed(2) || "—"}
+                          {animal.p210_info || "—"}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${animal.genotipado ? 'bg-emerald-glow/10 text-emerald-glow-400' : 'bg-white/[0.04] text-text-muted'}`}>
-                            {animal.genotipado ? 'Sim' : 'Não'}
-                          </span>
+                        <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                          {animal.p365_info || "—"}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">
-                            {latestEval?.fonte_origem || "—"}
-                          </span>
+                        <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                          {animal.p450_info || "—"}
                         </td>
                         <td className="px-4 py-3">
                           <Link

@@ -8,7 +8,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Que
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from typing import Optional, List
 from datetime import datetime
 import os
@@ -886,7 +886,24 @@ def delete_upload(
     # 3. Deletar os Animais da tabela principal
     db.query(Animal).filter(Animal.upload_id == upload_id).delete(synchronize_session=False)
     
-    # 4. Deletar a entrada de upload
+    # 4. Deletar genetics.animals e genetics.genetic_evaluations
+    genetics_animals = db.execute(
+        text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
+        {"upload_id": upload_id}
+    ).fetchall()
+    
+    if genetics_animals:
+        animal_ids = [a[0] for a in genetics_animals]
+        db.execute(
+            text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
+            {"animal_ids": animal_ids}
+        )
+        db.execute(
+            text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+            {"upload_id": upload_id}
+        )
+    
+    # 5. Deletar a entrada de upload
     db.delete(upload)
     db.commit()
     

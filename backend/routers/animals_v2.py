@@ -88,10 +88,14 @@ def list_animals(
             "sexo": a.sexo,
             "nascimento": a.nascimento.isoformat() if a.nascimento else None,
             "genotipado": a.genotipado,
+            "raca": a.raca,
             "csg": a.csg,
             "sire_id": str(a.sire_id) if a.sire_id else None,
             "dam_id": str(a.dam_id) if a.dam_id else None,
             "farm_id": str(a.farm_id) if a.farm_id else None,
+            "p210_info": latest_eval.p210_info if latest_eval else None,
+            "p365_info": latest_eval.p365_info if latest_eval else None,
+            "p450_info": latest_eval.p450_info if latest_eval else None,
             "evaluations": []
         }
 
@@ -278,9 +282,13 @@ def get_stats_v2(
     )
     animals_by_sex = {s or "unknown": c for s, c in sex_counts}
     
-    # Get evaluations to count by source
+    # Get evaluations to count by source and calculate averages
     animal_ids = [a.id for a in query.all()]
     source_counts = {}
+    avg_p210 = None
+    avg_p365 = None
+    avg_p450 = None
+    
     if animal_ids:
         eval_counts = (
             db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
@@ -289,9 +297,52 @@ def get_stats_v2(
             .all()
         )
         source_counts = {s or "unknown": c for s, c in eval_counts}
+        
+        # Calculate average weights from p210_info, p365_info, p450_info
+        from sqlalchemy import text
+        
+        p210_weights = db.execute(
+            text("""
+                SELECT AVG((p210_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p210_info IS NOT NULL 
+                AND (p210_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        p365_weights = db.execute(
+            text("""
+                SELECT AVG((p365_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p365_info IS NOT NULL 
+                AND (p365_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        p450_weights = db.execute(
+            text("""
+                SELECT AVG((p450_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p450_info IS NOT NULL 
+                AND (p450_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        avg_p210 = round(float(p210_weights), 2) if p210_weights else None
+        avg_p365 = round(float(p365_weights), 2) if p365_weights else None
+        avg_p450 = round(float(p450_weights), 2) if p450_weights else None
     
     return {
         "total_animals": total_animals,
         "animals_by_sex": animals_by_sex,
         "animals_by_source": source_counts,
+        "avg_p210": avg_p210,
+        "avg_p365": avg_p365,
+        "avg_p450": avg_p450,
     }
