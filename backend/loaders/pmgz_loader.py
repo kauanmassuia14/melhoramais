@@ -120,10 +120,10 @@ DE_PARA_PMGZ_COMPLETO = {
     "INFORMAÇÕES DE DESCENDENTES_Peso aos 365 dias (P365)_REBANHOS": "descendentes_p365_rebanhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Peso aos 450 dias (P450)_FILHOS": "descendentes_p450_filhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Peso aos 450 dias (P450)_REBANHOS": "descendentes_p450_rebanhos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120).1_NETOS": "descendentes_p120_materno_netos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120).1_REBANHOS": "descendentes_p120_materno_rebanhos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210).1_NETOS": "descendentes_p210_materno_netos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210).1_REBANHOS": "descendentes_p210_materno_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120)_NETOS": "descendentes_p120_materno_netos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120)_REBANHOS.1": "descendentes_p120_materno_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210)_NETOS": "descendentes_p210_materno_netos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210)_REBANHOS.1": "descendentes_p210_materno_rebanhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Perímetro Escrotal aos 365 dias (PE365)_FILHOS": "descendentes_pe365_filhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Perímetro Escrotal aos 365 dias (PE365)_REBANHOS": "descendentes_pe365_rebanhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Fenótipo Stayability (STAY)_FILHOS": "descendentes_stay_filhos_qtd",
@@ -132,8 +132,8 @@ DE_PARA_PMGZ_COMPLETO = {
     "INFORMAÇÕES DE DESCENDENTES_Fenótipo Idade ao Primeiro Parto (IPP)_REBANHOS": "descendentes_ipp_rebanhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Medida Área Olho de Lombo (AOL)_FILHOS": "descendentes_aol_filhos_qtd",
     "INFORMAÇÕES DE DESCENDENTES_Medida Área Olho de Lombo (AOL)_REBANHOS": "descendentes_aol_rebanhos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento De Carcaça (ACAB)_FILHOS": "descendentes_acab_filhos_qtd",
-    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento De Carcaça (ACAB)_REBANHOS": "descendentes_acab_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento de Carcaça (ACAB)_FILHOS": "descendentes_acab_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento de Carcaça (ACAB)_REBANHOS": "descendentes_acab_rebanhos_qtd",
     "INFORMAÇÕES EXTRAS_GENOTIPADO": "extra_genotipado",
     "INFORMAÇÕES EXTRAS_GENOTIPADO_": "extra_genotipado",
     "INFORMAÇÕES EXTRAS_GENOTIPAD": "extra_genotipado",
@@ -454,7 +454,7 @@ class PMGZLoader(BaseLoader):
 
         return df
 
-def para_colunas_banco(self, df: pd.DataFrame) -> pd.DataFrame:
+    def para_colunas_banco(self, df: pd.DataFrame) -> pd.DataFrame:
         """Converte colunas do formato novo para colunas existentes na tabela animais."""
         mapa = {
             # Identificação
