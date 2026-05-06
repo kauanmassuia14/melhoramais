@@ -253,20 +253,17 @@ class PMGZLoader(BaseLoader):
         new_columns = []
         for i, col in enumerate(df.columns):
             try:
-                if hasattr(col, '__iter__') and not isinstance(col, str):
+                col_tuple = tuple(col) if hasattr(col, '__iter__') and not isinstance(col, str) else (col,)
+                if len(col_tuple) > 1:
                     filtered = []
-                    for nivel in col:
-                        try:
-                            nivel_str = str(nivel).strip()
-                            nivel_str_check = str(nivel_str)
-                            if nivel_str and nivel_str != 'nan' and 'Unnamed' not in nivel_str_check:
-                                filtered.append(nivel_str)
-                        except:
-                            pass
+                    for nivel in col_tuple:
+                        nivel_str = str(nivel).strip()
+                        if nivel_str and nivel_str != 'nan' and 'Unnamed' not in nivel_str:
+                            filtered.append(nivel_str)
                     if filtered:
                         new_col = '_'.join(filtered)
                     else:
-                        new_col = str(col[-1]) if len(col) > 0 else 'unknown'
+                        new_col = str(col_tuple[-1]) if len(col_tuple) > 0 else 'unknown'
                 else:
                     new_col = str(col).strip()
                 new_columns.append(new_col)
