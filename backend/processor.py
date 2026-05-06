@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, GeneticsAnimal, GeneticsFarm
+from backend.models import ColumnMapping, ProcessingLog, Upload, IS_SQLITE, GeneticsAnimal, GeneticsFarm
 from backend.loaders import PMGZLoader
 
 logger = logging.getLogger(__name__)
@@ -762,18 +762,8 @@ class GeneticDataProcessor:
         
         return df
 
-    def _upsert_animals(
-        self, df: pd.DataFrame
-    ) -> Tuple[int, int, int]:
-        """UPSERT animals using BULK operations for performance."""
-        inserted = 0
-        updated = 0
-        failed = 0
-        
-        logger.info(f"Processing {len(df)} animals with BULK method...")
-        logger.info(f"Columns in df: {list(df.columns)[:20]}")
-        
-        # DEBUG: Show first record
+    def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
+        """Upsert animals directly into genetics schema using raw SQL."""
         first_record = df.iloc[0].to_dict()
         logger.info(f"First record sample: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}, pmg_stay_dep={first_record.get('pmg_stay_dep')}")
         logger.info(f"First record keys: {list(first_record.keys())[:30]}")
