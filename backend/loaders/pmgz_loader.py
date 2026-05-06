@@ -161,11 +161,11 @@ COLUNAS_FLOAT = [
     'genetica_crescimento_pd_edg_dep', 'genetica_crescimento_pd_edg_ac_perc', 'genetica_crescimento_pd_edg_p_perc',
     'genetica_crescimento_pa_edg_dep', 'genetica_crescimento_pa_edg_ac_perc', 'genetica_crescimento_pa_edg_p_perc',
     'genetica_crescimento_ps_edg_dep', 'genetica_crescimento_ps_edg_ac_perc', 'genetica_crescimento_ps_edg_p_perc',
-    'genetica_crescimento_pm_emg_dep', 'genetica_crescimento_pm_emg_ac_perc', 'genetica_crescimento_pm_emg_p_perc',
+    'genetica_materna_pm_emg_dep', 'genetica_materna_pm_emg_ac_perc', 'genetica_materna_pm_emg_p_perc',
     'genetica_reprodutiva_ippg_dep', 'genetica_reprodutiva_ippg_ac_perc', 'genetica_reprodutiva_ippg_p_perc',
     'genetica_reprodutiva_stayg_dep', 'genetica_reprodutiva_stayg_ac_perc', 'genetica_reprodutiva_stayg_p_perc',
     'genetica_reprodutiva_pe365g_dep', 'genetica_reprodutiva_pe365g_ac_perc', 'genetica_reprodutiva_pe365g_p_perc',
-    'genetica_reprodutiva_pe450g_dep', 'genetica_reprodutiva_pe450g_ac_perc', 'genetica_reprodutiva_pe450g_p_perc',
+    'genetica_reprodutiva_psng_dep', 'genetica_reprodutiva_psng_ac_perc', 'genetica_reprodutiva_psng_p_perc',
     'genetica_carcaca_aolg_dep', 'genetica_carcaca_aolg_ac_perc', 'genetica_carcaca_aolg_p_perc',
     'genetica_carcaca_acabg_dep', 'genetica_carcaca_acabg_ac_perc', 'genetica_carcaca_acabg_p_perc',
     'genetica_carcaca_marg_dep', 'genetica_carcaca_marg_ac_perc', 'genetica_carcaca_marg_p_perc',
@@ -174,17 +174,20 @@ COLUNAS_FLOAT = [
     'genetica_morfologica_mg_dep', 'genetica_morfologica_mg_ac_perc', 'genetica_morfologica_mg_p_perc',
     'medida_aol_cm2', 'medida_acabamento_mm',
     'peso_p120_kg', 'peso_p210_kg', 'peso_p365_kg', 'peso_p450_kg', 'medida_pe365_cm',
+    'descendentes_p120_filhos_qtd', 'descendentes_p120_rebanhos_qtd',
+    'descendentes_p210_filhos_qtd', 'descendentes_p210_rebanhos_qtd',
+    'descendentes_p365_filhos_qtd', 'descendentes_p365_rebanhos_qtd',
+    'descendentes_p450_filhos_qtd', 'descendentes_p450_rebanhos_qtd',
 ]
 
 COLUNAS_INTEGER = [
     'identificacao_indice_deca',
     'genetica_crescimento_pn_edg_deca', 'genetica_crescimento_pd_edg_deca',
-    'genetica_crescimento_pa_edg_deca', 'genetica_crescimento_ps_edg_deca', 'genetica_crescimento_pm_emg_deca',
+    'genetica_crescimento_pa_edg_deca', 'genetica_crescimento_ps_edg_deca', 'genetica_materna_pm_emg_deca',
     'genetica_reprodutiva_ippg_deca', 'genetica_reprodutiva_stayg_deca',
-    'genetica_reprodutiva_pe365g_deca', 'genetica_reprodutiva_pe450g_deca',
+    'genetica_reprodutiva_pe365g_deca', 'genetica_reprodutiva_psng_deca',
     'genetica_carcaca_aolg_deca', 'genetica_carcaca_acabg_deca', 'genetica_carcaca_marg_deca',
     'genetica_morfologica_eg_deca', 'genetica_morfologica_pg_deca', 'genetica_morfologica_mg_deca',
-    'descendentes_filhos_quantidade', 'descendentes_rebanhos_quantidade', 'descendentes_netos_quantidade',
     'fenotipo_ipp_dias',
 ]
 
@@ -271,8 +274,11 @@ class PMGZLoader(BaseLoader):
 
     def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Achatamento de MultiIndex (3 níveis) -> strings únicas. Mantém sufixo .1/.2 do Pandas para colunas repetidas."""
+        logger.info(f"_flatten_columns: nlevels={df.columns.nlevels}, cols={len(df.columns)}")
+        
         if df.columns.nlevels < 2:
             df.columns = [str(c) for c in df.columns]
+            logger.info(f"_flatten_columns: colunas simples convertidas: {df.columns[:5]}")
             return df
 
         new_columns = []
@@ -292,7 +298,7 @@ class PMGZLoader(BaseLoader):
             new_columns.append(new_col)
 
         df.columns = new_columns
-        logger.info(f"Flattening: {len(df.columns)} colunas achatadas")
+        logger.info(f"Flattening: {len(df.columns)} colunas achatadas, sample: {df.columns[:5]}")
         return df
 
     def _ler_csv(self, file_content: bytes) -> pd.DataFrame:
@@ -310,9 +316,14 @@ class PMGZLoader(BaseLoader):
 
     def _renomear_colunas_completo(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aplica dicionário DE_PARA_PMGZ_COMPLETO para mapeamento exato."""
+        logger.info(f"Colunas antes rename: {list(df.columns)[:10]}")
+        
         rename_map = {}
         for col in df.columns:
-            if col in DE_PARA_PMGZ_COMPLETO:
+            col_str = str(col)
+            if col_str in DE_PARA_PMGZ_COMPLETO:
+                rename_map[col_str] = DE_PARA_PMGZ_COMPLETO[col_str]
+            elif col in DE_PARA_PMGZ_COMPLETO:
                 rename_map[col] = DE_PARA_PMGZ_COMPLETO[col]
         
         df = df.rename(columns=rename_map)
