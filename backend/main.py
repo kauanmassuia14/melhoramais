@@ -83,6 +83,12 @@ from backend.routers.reports import router as reports_router
 app.include_router(reports_router)
 
 # ============================================
+# Dashboard Router (stats)
+# ============================================
+from backend.routers.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
+
+# ============================================
 # Migration Router (admin)
 # ============================================
 from backend.routers.migrate import router as migrate_router, run_migration_on_startup
