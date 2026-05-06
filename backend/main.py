@@ -88,6 +88,12 @@ app.include_router(reports_router)
 from backend.routers.migrate import router as migrate_router, run_migration_on_startup
 app.include_router(migrate_router)
 
+# ============================================
+# Animals V2 Router (genetics schema)
+# ============================================
+from backend.routers.animals_v2 import router as animals_v2_router
+app.include_router(animals_v2_router)
+
 # Run PMGZ migration on startup (auto-add columns if missing)
 try:
     run_migration_on_startup()

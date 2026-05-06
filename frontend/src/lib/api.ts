@@ -561,6 +561,42 @@ export const api = {
   deleteUpload: (uploadId: string) =>
     fetchApi<void>(`/uploads/${uploadId}`, { method: 'DELETE' }),
 
+  // Genetics V2 API
+  getAnimalsV2: (opts?: {
+    farmId?: string;
+    sexo?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
+    if (opts?.sexo) params.set('sexo', opts.sexo);
+    if (opts?.search) params.set('search', opts.search);
+    params.set('limit', String(opts?.limit || 50));
+    params.set('offset', String(opts?.offset || 0));
+    return fetchApi<{
+      total: number;
+      limit: number;
+      offset: number;
+      data: any[];
+    }>(`/v2/animals?${params.toString()}`);
+  },
+
+  getAnimalV2: (animalId: string) =>
+    fetchApi<any>(`/v2/animals/${animalId}`),
+
+  getAnimalsStatsByFarm: () =>
+    fetchApi<{ farm_id: string; farm_name: string; total_animals: number }[]>('/v2/animals/stats/by-farm'),
+
+  getAnimalsRanking: (opts?: { farmId?: string; metric?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
+    if (opts?.metric) params.set('metric', opts.metric);
+    params.set('limit', String(opts?.limit || 20));
+    return fetchApi<any[]>(`/v2/animals/stats/ranking?${params.toString()}`);
+  },
+
   uploadFileWithUpload: async (file: File, sourceSystem: string, farmId: number, uploadId: string): Promise<Blob> => {
     const token = getAccessToken();
     const formData = new FormData();

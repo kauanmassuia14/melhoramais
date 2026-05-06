@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, UniqueConstraint, Text, JSON, Enum
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, UniqueConstraint, Text, JSON, Enum, func, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import os
@@ -515,3 +515,86 @@ class Notification(Base):
     is_read = Column(Boolean, default=False)
     link = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================
+# GENETICS SCHEMA MODELS (NOVO)
+# ============================================
+
+class GeneticsFarm(Base):
+    __tablename__ = "farms"
+    __table_args__ = {"schema": "genetics"} if not IS_SQLITE else {}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    nome = Column(String(255))
+    documento = Column(String(50))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    animals = relationship("GeneticsAnimal", back_populates="farm")
+
+
+class GeneticsAnimal(Base):
+    __tablename__ = "animals"
+    __table_args__ = {"schema": "genetics"} if not IS_SQLITE else {}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    farm_id = Column(UUID(as_uuid=True), _fk("genetics.farms.id"), nullable=False)
+    nome = Column(String(255))
+    serie = Column(String(50))
+    rgn = Column(String(50), nullable=False)
+    sexo = Column(String(1))
+    nascimento = Column(Date)
+    genotipado = Column(Boolean)
+    csg = Column(Boolean)
+    sire_id = Column(UUID(as_uuid=True))
+    dam_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    farm = relationship("GeneticsFarm", back_populates="animals")
+    genetic_evaluations = relationship("GeneticsGeneticEvaluation", back_populates="animal")
+
+
+class GeneticsGeneticEvaluation(Base):
+    __tablename__ = "genetic_evaluations"
+    __table_args__ = {"schema": "genetics"} if not IS_SQLITE else {}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    animal_id = Column(UUID(as_uuid=True), _fk("genetics.animals.id"), nullable=False)
+    farm_id = Column(UUID(as_uuid=True), _fk("genetics.farms.id"), nullable=False)
+    safra = Column(Integer)
+    fonte_origem = Column(String(50))
+    iabczg = Column(Numeric(10, 4))
+    deca_index = Column(Integer)
+
+    # DEP armazenar como JSON string
+    pn_ed = Column(Text)
+    pd_ed = Column(Text)
+    pa_ed = Column(Text)
+    ps_ed = Column(Text)
+    pm_em = Column(Text)
+    ipp = Column(Text)
+    stay = Column(Text)
+    pe_365 = Column(Text)
+    psn = Column(Text)
+    aol = Column(Text)
+    acab = Column(Text)
+    marmoreio = Column(Text)
+    eg = Column(Text)
+    pg = Column(Text)
+    mg = Column(Text)
+
+    fenotipo_aol = Column(Numeric(10, 4))
+    fenotipo_acab = Column(Numeric(10, 4))
+    fenotipo_ipp = Column(Numeric(10, 4))
+    fenotipo_stay = Column(Numeric(10, 4))
+
+    p120_info = Column(Text)
+    p210_info = Column(Text)
+    p365_info = Column(Text)
+    p450_info = Column(Text)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    animal = relationship("GeneticsAnimal", back_populates="genetic_evaluations")
