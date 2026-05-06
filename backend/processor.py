@@ -813,15 +813,22 @@ class GeneticDataProcessor:
                 
                 animal_id = existing.id if existing else uuid.uuid4()
                 
+                # Função auxiliar para tratar NaN
+                def safe_str(val):
+                    if pd.isna(val):
+                        return None
+                    s = str(val).strip()
+                    return s if s and s.lower() not in ['nan', 'none', ''] else None
+                
                 # Preparar dados do animal
                 animal_data = {
                     'id': str(animal_id),
                     'farm_id': str(genetics_farm_id),
                     'rgn': str(rgn).strip(),
-                    'nome': str(row.get('nome_animal', '')).strip() if row.get('nome_animal') else None,
-                    'serie': str(row.get('serie', '')).strip() if row.get('serie') else None,
-                    'sexo': str(row.get('sexo', '')).strip() if row.get('sexo') else None,
-                    'nascimento': str(row.get('data_nascimento'))[:10] if row.get('data_nascimento') else None,
+                    'nome': safe_str(row.get('nome_animal')),
+                    'serie': safe_str(row.get('pmg_serie_rgd')),
+                    'sexo': safe_str(row.get('sexo')),
+                    'nascimento': safe_str(row.get('data_nascimento')),
                     'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                     'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                 }
@@ -853,6 +860,15 @@ class GeneticDataProcessor:
                 iabc_val = row.get('pmg_iabc')
                 if iabc_val and str(iabc_val).strip():
                     try:
+                        # Função auxiliar para converter valor para tupla (tratando NaN)
+                        def to_tuple(dep_val, ac_val, deca_val, p_val):
+                            return (
+                                None if pd.isna(dep_val) else float(dep_val),
+                                None if pd.isna(ac_val) else float(ac_val),
+                                None if pd.isna(deca_val) else int(deca_val),
+                                None if pd.isna(p_val) else float(p_val)
+                            )
+                        
                         eval_data = {
                             'id': str(uuid.uuid4()),
                             'animal_id': str(animal_id),
@@ -860,16 +876,27 @@ class GeneticDataProcessor:
                             'safra': 2026,
                             'fonte_origem': source_system,
                             'iabczg': float(iabc_val) if iabc_val else None,
-                            'pn_ed': json.dumps({'dep': row.get('pmg_pn_dep'), 'ac': row.get('pmg_pn_ac'), 'deca': row.get('pmg_pn_deca'), 'p_percent': row.get('pmg_pn_p_percent')}),
-                            'pd_ed': json.dumps({'dep': row.get('pmg_pd_dep'), 'ac': row.get('pmg_pd_ac'), 'deca': row.get('pmg_pd_deca'), 'p_percent': row.get('pmg_pd_p_percent')}),
-                            'ps_ed': json.dumps({'dep': row.get('pmg_ps_dep'), 'ac': row.get('pmg_ps_ac'), 'deca': row.get('pmg_ps_deca'), 'p_percent': row.get('pmg_ps_p_percent')}),
+                            'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
+                            'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
+                            'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
+                            'pm_ed': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
+                            'ipp_ed': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
+                            'stay_ed': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
+                            'pe365_ed': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
+                            'psn_ed': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
+                            'aol_ed': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
+                            'acab_ed': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
+                            'mar_ed': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
+                            'eg_ed': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
+                            'p_ed': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
+                            'm_ed': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
                         }
                         
                         self.db.execute(
                             text("""
                                 INSERT INTO genetics.genetic_evaluations 
-                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed)
-                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed)
+                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_ed, ipp_ed, stay_ed, pe365_ed, psn_ed, aol_ed, acab_ed, mar_ed, eg_ed, p_ed, m_ed)
+                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_ed, :ipp_ed, :stay_ed, :pe365_ed, :psn_ed, :aol_ed, :acab_ed, :mar_ed, :eg_ed, :p_ed, :m_ed)
                             """),
                             eval_data
                         )
