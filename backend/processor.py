@@ -426,17 +426,14 @@ class GeneticDataProcessor:
         
         PMGZ Excel has sections: ANIMAL, PAI, MÃE, AVÔ PATERNO, AVÔ MATERNO, AVÔ PATERNO DA MÃE, AVÔ MATERNO DA MÃE.
         Each section has the same sub-columns (NOME, RGN, SERIE/RGD, etc.).
-        We need to map each section to the correct DB field.
+        We map each to UNIQUE column names to avoid pandas duplicate key error.
         """
         
-        # Map full column name (with section prefix) to DB field
-        # Format from Excel: "ANIMAL NOME", "PAI RGN", "MÃE RGN", etc.
         rename_map = {}
         
-        # Section prefixes in the Excel file
         section_map = {
             "ANIMAL": "animal",
-            "PAI": "pai",
+            "PAI": "pai", 
             "MÃE": "mae",
             "AVÔ PATERNO": "avo_paterno",
             "AVÔ MATERNO": "avo_materno",
@@ -444,169 +441,174 @@ class GeneticDataProcessor:
             "AVÔ MATERNO DA MÃE": "avo_materno_mae",
         }
         
-        # Sub-columns to DB field mapping (without section prefix)
         field_map = {
             "NOME": "nome",
             "RGN": "rgn",
             "SERIE / RGD": "serie_rgd",
         }
         
-        # For each column in the dataframe, check which section it belongs to
         for col in df.columns:
             col_str = str(col).strip()
             
-            # Try to match section prefix
-            matched = False
+            # Match section prefix
             for section_prefix, section_key in section_map.items():
                 if col_str.startswith(section_prefix + " "):
-                    subcol = col_str[len(section_prefix) + 1:].strip()  # Remove prefix + space
+                    subcol = col_str[len(section_prefix) + 1:].strip()
                     if subcol in field_map:
-                        new_name = f"{section_key}_{field_map[subcol]}"
-                        rename_map[col] = new_name
-                        matched = True
+                        rename_map[col] = f"{section_key}_{field_map[subcol]}"
                         break
             
-            if not matched:
-                # Try direct mapping for animal-level columns (no section prefix)
-                if "Peso ao nascimento" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_pn_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_pn_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_pn_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_pn_p_percent"
-                elif "P210" in col_str or "Peso à desmama" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_pd_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_pd_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_pd_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_pd_p_percent"
-                elif "Peso ao ano" in col_str or "P365" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_pa_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_pa_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_pa_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_pa_p_percent"
-                elif "Peso ao sobreano" in col_str or "P450" in col_str or "PS-EDg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_ps_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_ps_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_ps_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_ps_p_percent"
-                elif "Peso maternal" in col_str or "PM-EMg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_pm_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_pm_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_pm_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_pm_p_percent"
-                elif "Idade ao primeiro parto" in col_str or "IPPg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_ipp_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_ipp_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_ipp_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_ipp_p_percent"
-                elif "Stayability" in col_str or "STAYg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_stay_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_stay_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_stay_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_stay_p_percent"
-                elif "PE-365" in col_str or "Perímetro escrotal" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_pe365_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_pe365_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_pe365_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_pe365_p_percent"
-                elif "AOL" in col_str or "Área de olho" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_aol_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_aol_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_aol_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_aol_p_percent"
-                elif "Acabamento" in col_str or "ACABg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_acab_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_acab_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_acab_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_acab_p_percent"
-                elif "Marmoreio" in col_str or "MAR" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_mar_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_mar_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_mar_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_mar_p_percent"
-                elif "Estrutura" in col_str or "EG" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_eg_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_eg_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_eg_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_eg_p_percent"
-                elif "Precocidade sexual" in col_str or "PSNg" in col_str:
-                    if "DEP" in col_str:
-                        rename_map[col] = "pmg_psn_dep"
-                    elif "AC %" in col_str:
-                        rename_map[col] = "pmg_psn_ac"
-                    elif "DECA" in col_str:
-                        rename_map[col] = "pmg_psn_deca"
-                    elif "P %" in col_str:
-                        rename_map[col] = "pmg_psn_p_percent"
-                elif "iABCZg" in col_str:
-                    rename_map[col] = "pmg_iabc"
+            # Animal-level traits (no section prefix)
+            if col_str == "ANIMAL NOME":
+                rename_map[col] = "nome_animal"
+            elif col_str == "ANIMAL SERIE / RGD":
+                rename_map[col] = "pmg_serie_rgd"
+            elif col_str == "ANIMAL RGN":
+                rename_map[col] = "rgn_animal"
+            elif col_str == "ANIMAL SEXO":
+                rename_map[col] = "sexo"
+            elif col_str == "ANIMAL NASC":
+                rename_map[col] = "data_nascimento"
+            elif "iABCZg" in col_str:
+                rename_map[col] = "pmg_iabc"
+            elif "DECA" in col_str:
+                rename_map[col] = "pmg_deca"
+            elif "P %" in col_str:
+                rename_map[col] = "pmg_p_percent"
+            elif "F %" in col_str:
+                rename_map[col] = "pmg_f_percent"
+            elif "GENOTIPADO" in col_str:
+                rename_map[col] = "genotipado"
+            elif "CSG" in col_str:
+                rename_map[col] = "csg"
+            elif "FILHOS" in col_str:
+                rename_map[col] = "pmg_filhos"
+            elif "REBANHOS" in col_str:
+                rename_map[col] = "pmg_rebanhos"
+            elif "NETOS" in col_str:
+                rename_map[col] = "pmg_netos"
+            elif "Peso ao nascimento" in col_str or "PN-EDg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_pn_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_pn_ac"
                 elif "DECA" in col_str:
-                    rename_map[col] = "pmg_deca"
+                    rename_map[col] = "pmg_pn_deca"
                 elif "P %" in col_str:
-                    rename_map[col] = "pmg_p_percent"
-                elif "F %" in col_str:
-                    rename_map[col] = "pmg_f_percent"
-                elif "GENOTIPADO" in col_str:
-                    rename_map[col] = "genotipado"
-                elif "CSG" in col_str:
-                    rename_map[col] = "csg"
-                elif "FILHOS" in col_str:
-                    rename_map[col] = "pmg_filhos"
-                elif "REBANHOS" in col_str:
-                    rename_map[col] = "pmg_rebanhos"
-                elif "NETOS" in col_str:
-                    rename_map[col] = "pmg_netos"
-                elif "Sexo" in col_str:
-                    rename_map[col] = "sexo"
-                elif "NASC" in col_str:
-                    rename_map[col] = "data_nascimento"
+                    rename_map[col] = "pmg_pn_p_percent"
+            elif "P210" in col_str or "Peso à desmama" in col_str or "PD-EDg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_pd_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_pd_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_pd_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_pd_p_percent"
+            elif "Peso ao ano" in col_str or "P365" in col_str or "PA-EDg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_pa_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_pa_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_pa_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_pa_p_percent"
+            elif "Peso ao sobreano" in col_str or "P450" in col_str or "PS-EDg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_ps_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_ps_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_ps_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_ps_p_percent"
+            elif "Peso maternal" in col_str or "PM-EMg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_pm_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_pm_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_pm_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_pm_p_percent"
+            elif "Idade ao primeiro parto" in col_str or "IPPg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_ipp_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_ipp_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_ipp_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_ipp_p_percent"
+            elif "Stayability" in col_str or "STAYg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_stay_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_stay_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_stay_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_stay_p_percent"
+            elif "PE-365" in col_str or "Perímetro escrotal" in col_str or "PE-365g" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_pe365_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_pe365_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_pe365_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_pe365_p_percent"
+            elif "AOL" in col_str or "Área de olho" in col_str or "AOLg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_aol_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_aol_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_aol_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_aol_p_percent"
+            elif "Acabamento" in col_str or "ACABg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_acab_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_acab_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_acab_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_acab_p_percent"
+            elif "Marmoreio" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_mar_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_mar_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_mar_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_mar_p_percent"
+            elif "Estrutura" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_eg_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_eg_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_eg_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_eg_p_percent"
+            elif "Precocidade sexual" in col_str or "PSNg" in col_str:
+                if "DEP" in col_str:
+                    rename_map[col] = "pmg_psn_dep"
+                elif "AC %" in col_str:
+                    rename_map[col] = "pmg_psn_ac"
+                elif "DECA" in col_str:
+                    rename_map[col] = "pmg_psn_deca"
+                elif "P %" in col_str:
+                    rename_map[col] = "pmg_psn_p_percent"
+        
+        df = df.rename(columns=rename_map)
+        logger.info(f"_map_pmgz_columns: Mapped {len(rename_map)} columns, final: {list(df.columns)[:30]}")
+        
+        return df
         
         # For CSV files with simple headers (one row), use direct mapping
         # Based on your CSV: NOME, SERIE / RGD, RGN, SEXO, NASC, iABCZg, DECA, P %, F %, etc.
