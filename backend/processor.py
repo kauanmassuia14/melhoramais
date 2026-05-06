@@ -821,7 +821,7 @@ class GeneticDataProcessor:
                     'nome': str(row.get('nome_animal', '')).strip() if row.get('nome_animal') else None,
                     'serie': str(row.get('serie', '')).strip() if row.get('serie') else None,
                     'sexo': str(row.get('sexo', '')).strip() if row.get('sexo') else None,
-                    'nascimento': row.get('data_nascimento').isoformat() if row.get('data_nascimento') else None,
+                    'nascimento': str(row.get('data_nascimento'))[:10] if row.get('data_nascimento') else None,
                     'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                     'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                 }

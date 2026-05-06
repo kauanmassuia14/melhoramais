@@ -621,29 +621,17 @@ class PMGZLoader(BaseLoader):
         rename = {col: novo for col, novo in mapa.items() if col in df.columns}
         df = df.rename(columns=rename)
         
-        # Ajuste de escala: dividir por 100 se valor > 1000 (regra PMGZ)
-        # IPP precisa de correção: -5464 -> -54.64
-        # PN precisa de correção: 93 -> 0.93
-        # F% e P% precisam: 723 -> 7.23
-        colunas_escala_100 = [
-            'pmg_iabc', 'pmg_p_percent', 'pmg_f_percent',
-            'pmg_pn_dep', 'pmg_pd_dep', 'pmg_pa_dep', 'pmg_ps_dep',
-            'pmg_ipp_dep', 'pmg_aol_dep', 'pmg_acab_dep',
-        ]
+        # Ajuste de escala: dividir por 100 SEMPRE (regra PMGZ)
+        # Todas as métricas (iABCZ, DEP, P%, F%) devem ser divididas por 100
+        colunas_para_dividir = [col for col in df.columns if any(
+            suffix in col for suffix in ['iabc', 'p_percent', 'f_percent', '_dep']
+        )]
         
-        for col in colunas_escala_100:
+        for col in colunas_para_dividir:
             if col in df.columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-                    # Para IPP (valores negativos grandes), dividir por 100
-                    if 'ipp' in col:
-                        df[col] = df[col] / 100
-                    # Para PN (valores positivos grandes), dividir por 100
-                    elif 'pn_dep' in col:
-                        df.loc[df[col] > 10, col] = df.loc[df[col] > 10, col] / 100
-                    # Para percentuais (P%, F%) e DEP de peso > 100, dividir por 100
-                    elif any(x in col for x in ['p_percent', 'f_percent', 'aol_dep', 'acab_dep']):
-                        df.loc[df[col] > 100, col] = df.loc[df[col] > 100, col] / 100
+                    df[col] = df[col] / 100
                 except Exception:
                     pass
         
