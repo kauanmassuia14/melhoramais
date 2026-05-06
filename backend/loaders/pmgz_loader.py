@@ -221,9 +221,29 @@ class PMGZLoader(BaseLoader):
             raise ValueError(f'Formato não suportado: {filename}')
 
     def _ler_excel_com_headers(self, file_content: bytes) -> pd.DataFrame:
-        """Lê Excel com headers multi-linha (3 níveis) com células mescladas."""
+        """Lê Excel com headers multi-linha (3 níveis) com células mescladas - tenta detectar corretamente."""
         try:
-            df = pd.read_excel(io.BytesIO(file_content), header=[0, 1, 2])
+            raw = pd.read_excel(io.BytesIO(file_content), header=None, nrows=25)
+            
+            keywords = {
+                'RGN', 'NOME', 'SEXO', 'NASC', 'SERIE', 'DECA', 'iABCZg', 'DEP',
+                'ANIMAL', 'PAI', 'MÃE', 'MAE', 'PESO', 'IPP', 'STAY', 'PE-365', 'AOL', 'ACAB', 'MAR',
+                'Estrutura', 'Precocidade', 'Musculosidade', 'GENOTIPADO', 'CSG', 'FILHOS', 'NETOS'
+            }
+            
+            best_row, best_score = 0, 0
+            for i in range(len(raw)):
+                row = raw.iloc[i]
+                score = sum(1 for val in row.values if str(val).strip().upper() in keywords)
+                if score > best_score:
+                    best_score, best_row = score, i
+            
+            logger.info(f"Melhor linha de header detectada: {best_row} com score {best_score}")
+            
+            if best_score < 2:
+                raise ValueError(f'Não foi possível detectar header no arquivo PMGZ. Score: {best_score}')
+            
+            df = pd.read_excel(io.BytesIO(file_content), header=[best_row, best_row+1, best_row+2])
             logger.info(f"Excel multi-header lido: {len(df)} linhas, colunas nível 0: {df.columns.nlevels}")
             return df
         except Exception as e:
