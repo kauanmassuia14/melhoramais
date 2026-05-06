@@ -240,8 +240,12 @@ class GeneticDataProcessor:
         
         # Read file
         logger.info(f"Calling _read_file...")
-        df = self._read_file(file_content, filename, source_system)
-        logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
+        try:
+            df = self._read_file(file_content, filename, source_system)
+            logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
+        except Exception as e:
+            logger.error(f"Error in _read_file: {e}")
+            raise
         
         # For PMGZ, use pre-mapped columns
         if source_system == "PMGZ":
@@ -252,7 +256,9 @@ class GeneticDataProcessor:
             required = self.get_required_columns(source_system)
         
         df, rename = self._match_columns(df, col_map, required)
+        logger.info(f"Columns mapped, rename count: {len(rename)}")
         df = df.rename(columns=rename)
+        logger.info(f"Columns after rename: {list(df.columns)[:20]}")
         
         # Clean data
         df = self._clean_data(df, source_system)
