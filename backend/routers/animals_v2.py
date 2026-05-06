@@ -183,11 +183,171 @@ def get_animal(
             }
             for e in evaluations
         ]
-    }
+}
 
 
 @router.get("/stats/by-farm")
 def get_stats_by_farm(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    farms = db.query(
+        GeneticsFarm.id,
+        GeneticsFarm.nome,
+        func.count(GeneticsAnimal.id).label("total_animals")
+    ).join(
+        GeneticsAnimal, GeneticsAnimal.farm_id == GeneticsFarm.id
+    ).group_by(
+        GeneticsFarm.id, GeneticsFarm.nome
+    ).all()
+
+    return [
+        {
+            "farm_id": str(f.id),
+            "farm_name": f.nome,
+            "total_animals": f.total_animals
+        }
+        for f in farms
+    ]
+
+
+@router.get("/stats/ranking")
+def get_animal_ranking(
+    farm_id: Optional[str] = Query(None),
+    metric: str = Query("iabczg"),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    subquery = db.query(
+        GeneticsGeneticEvaluation.animal_id,
+        GeneticsGeneticEvaluation.iabczg,
+        func.row_number().over(
+            partition_by=GeneticsGeneticEvaluation.animal_id,
+            order_by=GeneticsGeneticEvaluation.safra.desc()
+        ).label("rn")
+    ).subquery()
+
+    rankings = (
+        db.query(
+            GeneticsAnimal.id,
+            GeneticsAnimal.rgn,
+            GeneticsAnimal.nome,
+            GeneticsAnimal.sexo,
+            GeneticsGeneticEvaluation.iabczg,
+            GeneticsGeneticEvaluation.safra,
+        )
+        .join(
+            subquery,
+            subquery.c.animal_id == GeneticsAnimal.id
+        )
+        .filter(subquery.c.rn == 1)
+        .order_by(GeneticsGeneticEvaluation.iabczg.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "animal_id": str(r.id),
+            "rgn": r.rgn,
+            "nome": r.nome,
+            "sexo": r.sexo,
+            "iabczg": float(r.iabczg) if r.iabczg else None,
+            "safra": r.safra,
+        }
+        for r in rankings
+    ]
+
+
+@router.get("/stats")
+def get_stats_v2(
+    farm_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get dashboard statistics from genetics schema."""
+    query = db.query(GeneticsAnimal)
+    
+    if farm_id:
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
+    
+    total_animals = query.count()
+    
+    sex_counts = (
+        query.with_entities(GeneticsAnimal.sexo, func.count())
+        .group_by(GeneticsAnimal.sexo)
+        .all()
+    )
+    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
+    
+    animal_ids = [a.id for a in query.all()]
+    source_counts = {}
+    avg_p210 = None
+    avg_p365 = None
+    avg_p450 = None
+    
+    if animal_ids:
+        eval_counts = (
+            db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
+            .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+            .group_by(GeneticsGeneticEvaluation.fonte_origem)
+            .all()
+        )
+        source_counts = {s or "unknown": c for s, c in eval_counts}
+        
+        from sqlalchemy import text
+        
+        p210_weights = db.execute(
+            text("""
+                SELECT AVG((p210_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p210_info IS NOT NULL 
+                AND (p210_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        p365_weights = db.execute(
+            text("""
+                SELECT AVG((p365_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p365_info IS NOT NULL 
+                AND (p365_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        p450_weights = db.execute(
+            text("""
+                SELECT AVG((p450_info->>'dep')::numeric) 
+                FROM genetics.genetic_evaluations 
+                WHERE animal_id = ANY(:animal_ids) 
+                AND p450_info IS NOT NULL 
+                AND (p450_info->>'dep')::numeric IS NOT NULL
+            """),
+            {"animal_ids": animal_ids}
+        ).scalar()
+        
+        avg_p210 = round(float(p210_weights), 2) if p210_weights else None
+        avg_p365 = round(float(p365_weights), 2) if p365_weights else None
+        avg_p450 = round(float(p450_weights), 2) if p450_weights else None
+    
+    return {
+        "total_animals": total_animals,
+        "animals_by_sex": animals_by_sex,
+        "animals_by_source": source_counts,
+        "avg_p210": avg_p210,
+        "avg_p365": avg_p365,
+        "avg_p450": avg_p450,
+    }
+
+
+@router.get("/{animal_id}")
+def get_animal(
+    animal_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
