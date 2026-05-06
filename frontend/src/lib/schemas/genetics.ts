@@ -236,24 +236,24 @@ export type EvaluationFilter = z.infer<typeof EvaluationFilterSchema>;
 // ============================================
 
 export const AnimalResponseSchema = z.object({
-  data: Animal,
+  data: AnimalSchema,
   message: z.string().optional(),
 });
 
 export const AnimalListResponseSchema = z.object({
-  data: z.array(Animal),
+  data: z.array(AnimalSchema),
   total: z.number(),
   limit: z.number(),
   offset: z.number(),
 });
 
 export const EvaluationResponseSchema = z.object({
-  data: GeneticEvaluation,
+  data: GeneticEvaluationSchema,
   message: z.string().optional(),
 });
 
 export const EvaluationListResponseSchema = z.object({
-  data: z.array(GeneticEvaluation),
+  data: z.array(GeneticEvaluationSchema),
   total: z.number(),
   limit: z.number(),
   offset: z.number(),

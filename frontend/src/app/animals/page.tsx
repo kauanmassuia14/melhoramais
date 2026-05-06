@@ -13,47 +13,61 @@ import {
 } from "@heroicons/react/24/outline";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
-import { api, Animal } from "@/lib/api";
+import { api } from "@/lib/api";
+
+interface AnimalV2 {
+  id: string;
+  rgn: string;
+  nome: string | null;
+  sexo: string | null;
+  nascimento: string | null;
+  genotipado: boolean | null;
+  csg: boolean | null;
+  evaluations: Array<{
+    iabczg: number | null;
+    fonte_origem: string | null;
+  }>;
+}
 
 const PAGE_SIZE = 20;
 
 export default function AnimalsPage() {
-  const [animals, setAnimals] = useState<Animal[]>([]);
+  const [animals, setAnimals] = useState<AnimalV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("");
   const [sexo, setSexo] = useState("");
-  const [raca, setRaca] = useState("");
+  const [genotipado, setGenotipado] = useState("");
   const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
   const fetchAnimals = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getAnimals({
+      const data = await api.getAnimalsV2({
         search: search || undefined,
-        source: source || undefined,
         sexo: sexo || undefined,
-        raca: raca || undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       });
-      setAnimals(data);
-      setHasMore(data.length === PAGE_SIZE);
+      setAnimals(data.data);
+      setTotal(data.total);
+      setHasMore(data.data.length === PAGE_SIZE);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar animais");
     } finally {
       setLoading(false);
     }
-  }, [search, source, sexo, raca, page]);
+  }, [search, sexo, page]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
       fetchAnimals();
     }
-  }, [page, source, sexo, raca]); // Busca automática quando filtros rápidos ou página mudam
+  }, [page, source, sexo]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,17 +169,24 @@ export default function AnimalsPage() {
               </div>
             </div>
 
-            <div className="w-32">
+            <div className="w-28">
               <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
-                Raça
+                Genotipado
               </label>
-              <input
-                type="text"
-                placeholder="Ex: NEL"
-                value={raca}
-                onChange={(e) => { setRaca(e.target.value); setPage(0); }}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
-              />
+              <div className="relative">
+                <select
+                  value={source}
+                  onChange={(e) => { setSource(e.target.value); setPage(0); }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-deep-dark text-white">Todos</option>
+                  <option value="sim" className="bg-deep-dark text-white">Sim</option>
+                  <option value="nao" className="bg-deep-dark text-white">Não</option>
+                </select>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
 
             <button
@@ -223,7 +244,7 @@ export default function AnimalsPage() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="border-b border-white/[0.02]">
-                      {Array.from({ length: 9 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 bg-white/[0.04] rounded animate-pulse" />
                         </td>
@@ -232,65 +253,67 @@ export default function AnimalsPage() {
                   ))
                 ) : animals.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center">
+                    <td colSpan={8} className="px-4 py-12 text-center">
                       <p className="text-text-muted text-sm">
                         Nenhum animal encontrado
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  animals.map((animal, i) => (
-                    <motion.tr
-                      key={animal.id_animal}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.02 }}
-                      className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-emerald-glow-400">
-                          {animal.rgn_animal}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-text-primary">
-                        {animal.nome_animal || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${getSexColor(
-                            animal.sexo
-                          )}`}
-                        >
-                          {getSexLabel(animal.sexo)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-text-secondary">
-                        {animal.raca || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
-                        {animal.p210_peso_desmama?.toFixed(1) || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
-                        {animal.p365_peso_ano?.toFixed(1) || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
-                        {animal.p450_peso_sobreano?.toFixed(1) || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">
-                          {animal.fonte_origem || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/animals/${animal.id_animal}`}
-                          className="text-xs text-emerald-glow-400 hover:text-emerald-glow-300 transition-colors"
-                        >
-                          Detalhes
-                        </Link>
-                      </td>
-                    </motion.tr>
-                  ))
+                  animals.map((animal, i) => {
+                    const latestEval = animal.evaluations?.[0];
+                    return (
+                      <motion.tr
+                        key={animal.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.02 }}
+                        className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors"
+                      >
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-sm text-emerald-glow-400">
+                            {animal.rgn}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-text-primary">
+                          {animal.nome || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${getSexColor(
+                              animal.sexo
+                            )}`}
+                          >
+                            {getSexLabel(animal.sexo)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">
+                          {animal.nascimento ? new Date(animal.nascimento).toLocaleDateString('pt-BR') : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-text-primary text-right font-mono">
+                          {latestEval?.iabczg?.toFixed(2) || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${animal.genotipado ? 'bg-emerald-glow/10 text-emerald-glow-400' : 'bg-white/[0.04] text-text-muted'}`}>
+                            {animal.genotipado ? 'Sim' : 'Não'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">
+                            {latestEval?.fonte_origem || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/animals/${animal.id}`}
+                            className="text-xs text-emerald-glow-400 hover:text-emerald-glow-300 transition-colors"
+                          >
+                            Detalhes
+                          </Link>
+                        </td>
+                      </motion.tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
