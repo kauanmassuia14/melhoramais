@@ -469,10 +469,22 @@ class PMGZLoader(BaseLoader):
 
     def _tratar_dados(self, df: pd.DataFrame) -> pd.DataFrame:
         """Converte tipos, trata vírgulas, booleanos e limpa dados."""
+        seen = set()
+        unique_cols = []
         for col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-            df[col] = df[col].str.replace(',', '.', regex=False)
-            df[col] = df[col].replace(['-', '', 'nan', 'None', 'NaN', 'nat'], None)
+            if col not in seen:
+                seen.add(col)
+                unique_cols.append(col)
+        df = df[unique_cols]
+
+        for col in df.columns:
+            try:
+                df[col] = df[col].astype(str).str.strip()
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                df[col] = df[col].replace(['-', '', 'nan', 'None', 'NaN', 'nat'], None)
+            except Exception as e:
+                logger.warning(f"Erro ao tratar coluna {col}: {e}")
+                continue
 
         df = self._aplicar_tipos_numericos(df, COLUNAS_FLOAT)
         df = self._aplicar_tipos_inteiros(df, COLUNAS_INTEGER)
