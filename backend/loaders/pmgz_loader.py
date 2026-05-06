@@ -247,28 +247,33 @@ class PMGZLoader(BaseLoader):
 
     def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Achatamento de MultiIndex (3 níveis) -> strings únicas."""
+        import traceback
         logger.info(f"_flatten_columns: nlevels={df.columns.nlevels}, cols={len(df.columns)}")
         
-        if df.columns.nlevels < 2:
-            df.columns = [str(c) for c in df.columns]
-            return df
-
         new_columns = []
-        for col in df.columns:
-            if isinstance(col, tuple):
-                filtered = []
-                for nivel in col:
-                    nivel_str = str(nivel).strip()
-                    if nivel_str and nivel_str != 'nan' and 'Unnamed' not in nivel_str:
-                        filtered.append(nivel_str)
-                if filtered:
-                    new_col = '_'.join(filtered)
+        for i, col in enumerate(df.columns):
+            try:
+                if hasattr(col, '__iter__') and not isinstance(col, str):
+                    filtered = []
+                    for nivel in col:
+                        try:
+                            nivel_str = str(nivel).strip()
+                            nivel_str_check = str(nivel_str)
+                            if nivel_str and nivel_str != 'nan' and 'Unnamed' not in nivel_str_check:
+                                filtered.append(nivel_str)
+                        except:
+                            pass
+                    if filtered:
+                        new_col = '_'.join(filtered)
+                    else:
+                        new_col = str(col[-1]) if len(col) > 0 else 'unknown'
                 else:
-                    new_col = str(col[-1]) if len(col) > 0 else 'unknown'
-            else:
-                new_col = str(col).strip()
-            new_columns.append(new_col)
-
+                    new_col = str(col).strip()
+                new_columns.append(new_col)
+            except Exception as e:
+                logger.error(f"Erro na coluna {i}: {col} - {e}\n{traceback.format_exc()}")
+                new_columns.append(f"col_{i}")
+        
         df.columns = new_columns
         logger.info(f"Flattening: {len(df.columns)} colunas, sample: {df.columns[:5]}")
         return df
