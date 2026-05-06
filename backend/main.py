@@ -935,6 +935,28 @@ def delete_upload_genetics(
     return {"message": f"Deleted {len(animal_ids)} genetics animals and their evaluations"}
 
 
+@app.delete("/admin/clear-genetics", status_code=200)
+def clear_all_genetics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin only: Clear all genetics data."""
+    from sqlalchemy import text
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    # Delete all genetic evaluations
+    db.execute(text("DELETE FROM genetics.genetic_evaluations"))
+    
+    # Delete all animals
+    db.execute(text("DELETE FROM genetics.animals"))
+    
+    db.commit()
+    
+    return {"message": "All genetics data cleared"}
+
+
 # ============================================
 # Dashboard Stats — protected
 # ============================================

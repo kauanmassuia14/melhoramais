@@ -1,44 +1,58 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  ArrowLeftIcon,
-  ExclamationTriangleIcon,
-  ArrowPathIcon,
-} from "@heroicons/react/24/outline";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { GlassCard } from "@/components/ui/glass-card";
-import { api, Animal } from "@/lib/api";
+import { ArrowLeftIcon, ArrowPathIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { api } from "@/lib/api";
+import DashboardLayout from "@/components/DashboardLayout";
+import GlassCard from "@/components/GlassCard";
+import StatCard from "@/components/StatCard";
 
-interface StatCardProps {
-  label: string;
-  value: string | number | null;
-  unit?: string;
+interface EvaluationMetric {
+  dep: number | null;
+  ac: number | null;
+  deca: number | null;
+  p_percent: number | null;
 }
 
-function StatCard({ label, value, unit }: StatCardProps) {
-  return (
-    <div className="px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-      <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">
-        {label}
-      </p>
-      <p className="text-lg font-bold text-text-primary font-mono">
-        {value !== null && value !== undefined ? value : "—"}
-        {unit && value !== null && value !== undefined && (
-          <span className="text-xs text-text-muted ml-1">{unit}</span>
-        )}
-      </p>
-    </div>
-  );
+interface Evaluation {
+  id: string;
+  safra: number;
+  fonte_origem: string;
+  iabczg: number | null;
+  deca_index: number | null;
+  pn: EvaluationMetric | null;
+  pd: EvaluationMetric | null;
+  pa: EvaluationMetric | null;
+  ps: EvaluationMetric | null;
+  pm: EvaluationMetric | null;
+  ipp: EvaluationMetric | null;
+  stay: EvaluationMetric | null;
+  pe_365: EvaluationMetric | null;
+  psn: EvaluationMetric | null;
+  aol: EvaluationMetric | null;
+  acab: EvaluationMetric | null;
+  marmoreio: EvaluationMetric | null;
+  eg: EvaluationMetric | null;
+  pg: EvaluationMetric | null;
+  mg: EvaluationMetric | null;
 }
 
-export default function AnimalDetailPage() {
-  const params = useParams();
-  const id = Number(params.id);
-  const [animal, setAnimal] = useState<Animal | null>(null);
+interface AnimalV2 {
+  id: string;
+  rgn: string | null;
+  nome: string | null;
+  sexo: string | null;
+  nascimento: string | null;
+  genotipado: boolean | null;
+  csg: boolean | null;
+  farm_id: string | null;
+  evaluations: Evaluation[];
+}
+
+export default function AnimalDetailPage({ params }: { params: { id: string } }) {
+  const [animal, setAnimal] = useState<AnimalV2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +60,7 @@ export default function AnimalDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getAnimal(id);
+      const data = await api.getAnimalV2(params.id);
       setAnimal(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar animal");
@@ -56,14 +70,30 @@ export default function AnimalDetailPage() {
   };
 
   useEffect(() => {
-    if (id) fetchAnimal();
-  }, [id]);
+    if (params.id) fetchAnimal();
+  }, [params.id]);
 
   const getSexLabel = (s: string | null) => {
     if (s === "M") return "Macho";
     if (s === "F") return "Fêmea";
     return "—";
   };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    try {
+      return new Date(dateStr).toLocaleDateString("pt-BR");
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getLatestEvaluation = () => {
+    if (!animal?.evaluations?.length) return null;
+    return animal.evaluations[0];
+  };
+
+  const eval_ = getLatestEvaluation();
 
   return (
     <DashboardLayout>
@@ -83,11 +113,11 @@ export default function AnimalDetailPage() {
               ) : animal ? (
                 <>
                   <span className="font-mono text-cyan-glow-400">
-                    {animal.rgn_animal}
+                    {animal.rgn || "—"}
                   </span>
-                  {animal.nome_animal && (
+                  {animal.nome && (
                     <span className="text-text-secondary ml-3 text-2xl">
-                      — {animal.nome_animal}
+                      — {animal.nome}
                     </span>
                   )}
                 </>
@@ -97,8 +127,8 @@ export default function AnimalDetailPage() {
             </h1>
             {animal && (
               <p className="text-text-secondary text-sm mt-1">
-                {getSexLabel(animal.sexo)} · {animal.raca || "Raça não informada"} ·{" "}
-                Fonte: {animal.fonte_origem || "—"}
+                {getSexLabel(animal.sexo)} · {animal.genotipado ? "Genotipado" : "Não genotipado"} ·{" "}
+                Fonte: {eval_?.fonte_origem || "—"}
               </p>
             )}
           </div>
@@ -131,209 +161,216 @@ export default function AnimalDetailPage() {
                 Identificação
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="RGN" value={animal.rgn_animal} />
-                <StatCard label="Nome" value={animal.nome_animal} />
+                <StatCard label="RGN" value={animal.rgn} />
+                <StatCard label="Nome" value={animal.nome} />
                 <StatCard label="Sexo" value={getSexLabel(animal.sexo)} />
-                <StatCard label="Raça" value={animal.raca} />
-                <StatCard label="Data Nascimento" value={animal.data_nascimento || "—"} />
-                <StatCard label="Mãe (RGN)" value={animal.mae_rgn} />
-                <StatCard label="Pai (RGN)" value={animal.pai_rgn} />
-                <StatCard label="Fonte" value={animal.fonte_origem} />
+                <StatCard label="Data Nascimento" value={formatDate(animal.nascimento)} />
+                <StatCard 
+                  label="Genotipado" 
+                  value={animal.genotipado === true ? "Sim" : animal.genotipado === false ? "Não" : "—"} 
+                />
+                <StatCard 
+                  label="CSG" 
+                  value={animal.csg === true ? "Sim" : animal.csg === false ? "Não" : "—"} 
+                />
+                <StatCard label="Fonte" value={eval_?.fonte_origem || "—"} />
+                <StatCard label="Safra" value={eval_?.safra?.toString() || "—"} />
               </div>
             </GlassCard>
 
             {/* Genetic Indices */}
-            <GlassCard className="p-6">
-              <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
-                Índices Genéticos
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard
-                  label="iABCZ — Índice ABCZ"
-                  value={animal.pmg_iabc?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="DECA"
-                  value={animal.pmg_deca?.toString() ?? null}
-                />
-                <StatCard
-                  label="P % — Top"
-                  value={animal.pmg_p_percent?.toFixed(1) ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="F % — Femea"
-                  value={animal.pmg_f_percent?.toFixed(1) ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="PN-EDg — Peso Nascimento"
-                  value={animal.pmg_pn_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="PN-EDg — AC%"
-                  value={animal.pmg_pn_ac?.toString() ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="PA-EDg — Peso Ano"
-                  value={animal.pmg_pa_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="PA-EDg — AC%"
-                  value={animal.pmg_pa_ac?.toString() ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="PS-EDg — Peso Sobreano"
-                  value={animal.pmg_ps_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="PS-EDg — AC%"
-                  value={animal.pmg_ps_ac?.toString() ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="PM-EMg — Peso Materno"
-                  value={animal.pmg_pm_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="PM-EMg — AC%"
-                  value={animal.pmg_pm_ac?.toString() ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="STAYg — Stayability"
-                  value={animal.pmg_stay_dep?.toFixed(2) ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="STAYg — AC%"
-                  value={animal.pmg_stay_ac?.toString() ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="IPPg — Idade 1º Parto"
-                  value={animal.pmg_ipp_dep?.toFixed(2) ?? null}
-                  unit="dias"
-                />
-                <StatCard
-                  label="PE-365g — Perímetro Escrotal"
-                  value={animal.pmg_pe365_dep?.toFixed(2) ?? null}
-                  unit="cm"
-                />
-                <StatCard
-                  label="AOLg — Área Olho Lobo"
-                  value={animal.pmg_aol_dep?.toFixed(2) ?? null}
-                  unit="cm²"
-                />
-                <StatCard
-                  label="ACABg — Acabamento"
-                  value={animal.pmg_acab_dep?.toFixed(2) ?? null}
-                  unit="mm"
-                />
-                <StatCard
-                  label="MARg — Marmoreio"
-                  value={animal.pmg_mar_dep?.toFixed(2) ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="Eg — Estrutura"
-                  value={animal.pmg_eg_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="Pg — Precocidade"
-                  value={animal.pmg_p_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="Mg — Musculosidade"
-                  value={animal.pmg_m_dep?.toFixed(2) ?? null}
-                />
-                <StatCard
-                  label="PSNg — Precocidade Sexual"
-                  value={animal.pmg_psn_dep?.toFixed(2) ?? null}
-                  unit="%"
-                />
-                <StatCard
-                  label="Genotipado"
-                  value={animal.genotipado ? "SIM" : "NÃO"}
-                />
-                <StatCard
-                  label="CSG"
-                  value={animal.csg ? "SIM" : "NÃO"}
-                />
-              </div>
+            {eval_ && (
+              <GlassCard className="p-6">
+                <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
+                  Índices Genéticos
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard
+                    label="iABCZ — Índice ABCZ"
+                    value={eval_.iabczg?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="DECA"
+                    value={eval_.deca_index?.toString() ?? null}
+                  />
+                  
+                  {/* PN - Peso Nascimento */}
+                  <StatCard
+                    label="PN-EDg — Peso Nascimento"
+                    value={eval_.pn?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PN-EDg — AC%"
+                    value={eval_.pn?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+                  <StatCard
+                    label="PN-EDg — DECA"
+                    value={eval_.pn?.deca?.toString() ?? null}
+                  />
+                  <StatCard
+                    label="PN-EDg — P%"
+                    value={eval_.pn?.p_percent?.toFixed(1) ?? null}
+                    unit="%"
+                  />
 
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mt-6 mb-4">
-                Características de Crescimento
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard
-                  label="P210 — Peso Desmama"
-                  value={animal.p210_peso_desmama?.toFixed(2) ?? null}
-                  unit="kg"
-                />
-                <StatCard
-                  label="P365 — Peso Ano"
-                  value={animal.p365_peso_ano?.toFixed(2) ?? null}
-                  unit="kg"
-                />
-                <StatCard
-                  label="P450 — Peso Sobreano"
-                  value={animal.p450_peso_sobreano?.toFixed(2) ?? null}
-                  unit="kg"
-                />
-              </div>
+                  {/* PD - Peso Desmama */}
+                  <StatCard
+                    label="PD-EDg — Peso Desmama"
+                    value={eval_.pd?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PD-EDg — AC%"
+                    value={eval_.pd?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+                  <StatCard
+                    label="PD-EDg — DECA"
+                    value={eval_.pd?.deca?.toString() ?? null}
+                  />
+                  <StatCard
+                    label="PD-EDg — P%"
+                    value={eval_.pd?.p_percent?.toFixed(1) ?? null}
+                    unit="%"
+                  />
 
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mt-6 mb-4">
-                Medidas
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard
-                  label="PE — Perímetro Escrotal"
-                  value={animal.pe_perimetro_escrotal?.toFixed(2) ?? null}
-                  unit="cm"
-                />
-                <StatCard
-                  label="AOL — Área Olho de Lombo"
-                  value={animal.a_area_olho_lombo?.toFixed(2) ?? null}
-                  unit="cm²"
-                />
-                <StatCard
-                  label="EGP — Espessura Gordura"
-                  value={animal.eg_espessura_gordura?.toFixed(2) ?? null}
-                  unit="mm"
-                />
-                <StatCard
-                  label="IM — Idade 1º Parto"
-                  value={animal.im_idade_primeiro_parto?.toFixed(2) ?? null}
-                  unit="meses"
-                />
-                <StatCard
-                  label="Processado em"
-                  value={
-                    animal.data_processamento
-                      ? new Date(animal.data_processamento).toLocaleDateString("pt-BR")
-                      : "—"
-                  }
-                />
-              </div>
-            </GlassCard>
+                  {/* PA - Peso Ano */}
+                  <StatCard
+                    label="PA-EDg — Peso Ano"
+                    value={eval_.pa?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PA-EDg — AC%"
+                    value={eval_.pa?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* PS - Peso Sobreano */}
+                  <StatCard
+                    label="PS-EDg — Peso Sobreano"
+                    value={eval_.ps?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PS-EDg — AC%"
+                    value={eval_.ps?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* PM - Peso Materno */}
+                  <StatCard
+                    label="PM-EMg — Peso Materno"
+                    value={eval_.pm?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PM-EMg — AC%"
+                    value={eval_.pm?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* IPP */}
+                  <StatCard
+                    label="IPP — Idade Primeiro Parto"
+                    value={eval_.ipp?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="IPP — AC%"
+                    value={eval_.ipp?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* Stayability */}
+                  <StatCard
+                    label="STAYg — Stayability"
+                    value={eval_.stay?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="STAYg — AC%"
+                    value={eval_.stay?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* PE 365 */}
+                  <StatCard
+                    label="PE-365g — Perímetro Escrotal"
+                    value={eval_.pe_365?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="PE-365g — AC%"
+                    value={eval_.pe_365?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* AOL - Área Olho de Lombo */}
+                  <StatCard
+                    label="AOLg — Área Olho de Lombo"
+                    value={eval_.aol?.dep?.toFixed(2) ?? null}
+                    unit="cm²"
+                  />
+                  <StatCard
+                    label="AOLg — AC%"
+                    value={eval_.aol?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* ACAB - Acabamento */}
+                  <StatCard
+                    label="ACABg — Acabamento"
+                    value={eval_.acab?.dep?.toFixed(2) ?? null}
+                    unit="mm"
+                  />
+                  <StatCard
+                    label="ACABg — AC%"
+                    value={eval_.acab?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* Marmoreio */}
+                  <StatCard
+                    label="MARg — Marmoreio"
+                    value={eval_.marmoreio?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="MARg — AC%"
+                    value={eval_.marmoreio?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* EG - Estrutura Corporal */}
+                  <StatCard
+                    label="Eg — Estrutura"
+                    value={eval_.eg?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="Eg — AC%"
+                    value={eval_.eg?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* PG - Precocidade */}
+                  <StatCard
+                    label="Pg — Precocidade"
+                    value={eval_.pg?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="Pg — AC%"
+                    value={eval_.pg?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+
+                  {/* MG - Musculosidade */}
+                  <StatCard
+                    label="Mg — Musculosidade"
+                    value={eval_.mg?.dep?.toFixed(2) ?? null}
+                  />
+                  <StatCard
+                    label="Mg — AC%"
+                    value={eval_.mg?.ac?.toString() ?? null}
+                    unit="%"
+                  />
+                </div>
+              </GlassCard>
+            )}
           </motion.div>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="space-y-6">
-            <GlassCard className="p-6">
-              <div className="h-4 w-24 bg-white/[0.04] rounded animate-pulse mb-4" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-16 bg-white/[0.02] rounded-xl animate-pulse" />
-                ))}
-              </div>
-            </GlassCard>
-          </div>
         )}
       </div>
     </DashboardLayout>

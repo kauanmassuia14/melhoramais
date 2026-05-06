@@ -1,25 +1,40 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, String
 from typing import Optional, List
 import json
+import logging
 
 from backend.models import GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.models import User
 
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(prefix="/v2/animals", tags=["Animals V2"])
 
 
-def parse_metric_block(mb_text: Optional[str]) -> Optional[dict]:
-    """Parse metric_block from text (JSON) to dict."""
-    if not mb_text:
+def parse_metric_block(mb_value) -> Optional[dict]:
+    """Parse metric_block from database (tuple or text) to dict."""
+    if mb_value is None:
         return None
     try:
-        return json.loads(mb_text)
-    except:
+        # If it's already a tuple (from psycopg2)
+        if isinstance(mb_value, tuple):
+            return {
+                "dep": float(mb_value[0]) if mb_value[0] is not None else None,
+                "ac": float(mb_value[1]) if mb_value[1] is not None else None,
+                "deca": int(mb_value[2]) if mb_value[2] is not None else None,
+                "p_percent": float(mb_value[3]) if mb_value[3] is not None else None,
+            }
+        # If it's a string (JSON)
+        if isinstance(mb_value, str):
+            return json.loads(mb_value)
+        return None
+    except Exception as e:
+        logger.warning(f"Error parsing metric_block: {e}")
         return None
 
 
@@ -239,3 +254,44 @@ def get_animal_ranking(
         }
         for r in results
     ]
+
+
+@router.get("/stats")
+def get_stats_v2(
+    farm_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get dashboard statistics from genetics schema."""
+    query = db.query(GeneticsAnimal)
+    
+    if farm_id:
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
+    
+    total_animals = query.count()
+    
+    # Animals by sex
+    sex_counts = (
+        query.with_entities(GeneticsAnimal.sexo, func.count())
+        .group_by(GeneticsAnimal.sexo)
+        .all()
+    )
+    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
+    
+    # Get evaluations to count by source
+    animal_ids = [a.id for a in query.all()]
+    source_counts = {}
+    if animal_ids:
+        eval_counts = (
+            db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
+            .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+            .group_by(GeneticsGeneticEvaluation.fonte_origem)
+            .all()
+        )
+        source_counts = {s or "unknown": c for s, c in eval_counts}
+    
+    return {
+        "total_animals": total_animals,
+        "animals_by_sex": animals_by_sex,
+        "animals_by_source": source_counts,
+    }
