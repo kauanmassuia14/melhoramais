@@ -34,6 +34,59 @@ DE_PARA_PMGZ_COMPLETO = {
     "ANIMAL_DECA": "identificacao_indice_deca",
     "ANIMAL_P %": "identificacao_indice_p_perc",
     "ANIMAL_F %": "identificacao_indice_f_perc",
+    # Variações com CARACTERÍTICAS (comÍTICAS)
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DEP": "genetica_crescimento_pn_edg_dep",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_AC %": "genetica_crescimento_pn_edg_ac_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DECA": "genetica_crescimento_pn_edg_deca",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_P %": "genetica_crescimento_pn_edg_p_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_DEP": "genetica_crescimento_pd_edg_dep",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_AC %": "genetica_crescimento_pd_edg_ac_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_DECA": "genetica_crescimento_pd_edg_deca",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_P %": "genetica_crescimento_pd_edg_p_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_DEP": "genetica_crescimento_pa_edg_dep",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_AC %": "genetica_crescimento_pa_edg_ac_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_DECA": "genetica_crescimento_pa_edg_deca",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_P %": "genetica_crescimento_pa_edg_p_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_DEP": "genetica_crescimento_ps_edg_dep",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_AC %": "genetica_crescimento_ps_edg_ac_perc",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_DECA": "genetica_crescimento_ps_edg_deca",
+    "CARACTERÍTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_P %": "genetica_crescimento_ps_edg_p_perc",
+    "CARACTERÍTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_DEP": "genetica_materna_pm_emg_dep",
+    "CARACTERÍTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_AC %": "genetica_materna_pm_emg_ac_perc",
+    "CARACTERÍTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_DECA": "genetica_materna_pm_emg_deca",
+    "CARACTERÍTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_P %": "genetica_materna_pm_emg_p_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_DEP": "genetica_reprodutiva_ippg_dep",
+    "CARACTERÍTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_AC %": "genetica_reprodutiva_ippg_ac_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_DECA": "genetica_reprodutiva_ippg_deca",
+    "CARACTERÍTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_P %": "genetica_reprodutiva_ippg_p_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Stayability (STAYg) - %_DEP": "genetica_reprodutiva_stayg_dep",
+    "CARACTERÍTICAS REPRODUTIVAS_Stayability (STAYg) - %_AC %": "genetica_reprodutiva_stayg_ac_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Stayability (STAYg) - %_DECA": "genetica_reprodutiva_stayg_deca",
+    "CARACTERÍTICAS REPRODUTIVAS_Stayability (STAYg) - %_P %": "genetica_reprodutiva_stayg_p_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DEP": "genetica_carcaca_aolg_dep",
+    "CARACTERÍTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_AC %": "genetica_carcaca_aolg_ac_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DECA": "genetica_carcaca_aolg_deca",
+    "CARACTERÍTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_P %": "genetica_carcaca_aolg_p_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_DEP": "genetica_carcaca_acabg_dep",
+    "CARACTERÍTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_AC %": "genetica_carcaca_acabg_ac_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_DECA": "genetica_carcaca_acabg_deca",
+    "CARACTERÍTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_P %": "genetica_carcaca_acabg_p_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Marmoreio (MARg) %_DEP": "genetica_carcaca_marg_dep",
+    "CARACTERÍTICAS DE CARCAÇA_Marmoreio (MARg) %_AC %": "genetica_carcaca_marg_ac_perc",
+    "CARACTERÍTICAS DE CARCAÇA_Marmoreio (MARg) %_DECA": "genetica_carcaca_marg_deca",
+    "CARACTERÍTICAS DE CARCAÇA_Marmoreio (MARg) %_P %": "genetica_carcaca_marg_p_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_DEP": "genetica_morfologica_eg_dep",
+    "CARACTERÍTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_AC %": "genetica_morfologica_eg_ac_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_DECA": "genetica_morfologica_eg_deca",
+    "CARACTERÍTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_P %": "genetica_morfologica_eg_p_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Precocidade (Pg)_DEP": "genetica_morfologica_pg_dep",
+    "CARACTERÍTICAS MORFOLÓGICAS_Precocidade (Pg)_AC %": "genetica_morfologica_pg_ac_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Precocidade (Pg)_DECA": "genetica_morfologica_pg_deca",
+    "CARACTERÍTICAS MORFOLÓGICAS_Precocidade (Pg)_P %": "genetica_morfologica_pg_p_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Musculosidade (Mg)_DEP": "genetica_morfologica_mg_dep",
+    "CARACTERÍTICAS MORFOLÓGICAS_Musculosidade (Mg)_AC %": "genetica_morfologica_mg_ac_perc",
+    "CARACTERÍTICAS MORFOLÓGICAS_Musculosidade (Mg)_DECA": "genetica_morfologica_mg_deca",
+    "CARACTERÍTICAS MORFOLÓGICAS_Musculosidade (Mg)_P %": "genetica_morfologica_mg_p_perc",
     "PAI_NOME": "pedigree_pai_nome",
     "PAI_SERIE / RGD": "pedigree_pai_serie_rgd",
     "PAI_RGN": "pedigree_pai_rgn",
@@ -553,4 +606,20 @@ class PMGZLoader(BaseLoader):
 
         rename = {col: novo for col, novo in mapa.items() if col in df.columns}
         df = df.rename(columns=rename)
+        
+        # Ajuste de escala: dividir por 100 se valor > 1000 (regra PMGZ)
+        colunas_escala_100 = [
+            'pmg_iabc', 'pmg_p_percent', 'pmg_f_percent',
+            'pmg_pn_dep', 'pmg_pd_dep', 'pmg_pa_dep', 'pmg_ps_dep',
+            'pmg_aol_dep', 'pmg_acab_dep',
+        ]
+        
+        for col in colunas_escala_100:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    df.loc[df[col] > 1000, col] = df.loc[df[col] > 1000, col] / 100
+                except Exception:
+                    pass
+        
         return df

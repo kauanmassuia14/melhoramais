@@ -701,7 +701,10 @@ class GeneticDataProcessor:
         logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")
         
         # DEBUG: Sample of raw values before conversion
-        for col in list(df.columns)[:10]:
+        if "pmg_serie_rgd" in df.columns:
+            logger.info(f"pmg_serie_rgd BEFORE clean: {df['pmg_serie_rgd'].head(5).tolist()}")
+        
+        for col in list(df.columns)[:15]:
             try:
                 sample_vals = df[col].head(2).astype(str).tolist()
                 logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
@@ -738,7 +741,7 @@ class GeneticDataProcessor:
                       "pmg_acab", "pmg_mar", "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay",
                       "pmg_deca_pe", "pmg_deca_aol", "pmg_meta_p", "pmg_meta_m", "pmg_meta_t",
                       "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m",
-                      "pmg_serie_rgd", "pmg_p_percent", "pmg_f_percent",
+                      "pmg_p_percent", "pmg_f_percent",
                       "pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent",
                       "pmg_pd_dep", "pmg_pd_ac", "pmg_pd_deca", "pmg_pd_p_percent",
                       "pmg_pa_dep", "pmg_pa_ac", "pmg_pa_deca", "pmg_pa_p_percent",
