@@ -30,7 +30,15 @@ MAPEAMENTO_EXCEL_PARA_SNAKE: Dict[str, str] = {
     'ANIMAL NASC': 'identificacao_animal_nascimento',
     'iABCZg': 'identificacao_indice_iabczg',
     'iABCZ g': 'identificacao_indice_iabczg',
+    'ANIMAL iABCZg': 'identificacao_indice_iabczg',
     'DECA': 'identificacao_indice_deca',
+    'ANIMAL DECA': 'identificacao_indice_deca',
+    'P %': 'identificacao_indice_p_perc',
+    'P%': 'identificacao_indice_p_perc',
+    'ANIMAL P %': 'identificacao_indice_p_perc',
+    'F %': 'identificacao_indice_f_perc',
+    'F%': 'identificacao_indice_f_perc',
+    'ANIMAL F %': 'identificacao_indice_f_perc',
     'P %': 'identificacao_indice_p_perc',
     'P%': 'identificacao_indice_p_perc',
     'F %': 'identificacao_indice_f_perc',
@@ -488,13 +496,23 @@ class PMGZLoader(BaseLoader):
                     elif col_normalizado.startswith(p.upper() + ' '):
                         subcol = col_normalizado[len(p.upper()):].strip()
                         break
-                
+
                 if 'NOME' in subcol.upper():
                     rename_map[col] = f'pedigree_{prefixo_encontrado}_nome'
                 elif 'SERIE' in subcol.upper() or 'RGD' in subcol.upper():
                     rename_map[col] = f'pedigree_{prefixo_encontrado}_serie_rgd'
                 elif 'RGN' in subcol.upper():
                     rename_map[col] = f'pedigree_{prefixo_encontrado}_rgn'
+            elif col_normalizado.startswith('ANIMAL '):
+                subcol = col_normalizado[7:].strip()
+                if 'iABCZ' in subcol.upper():
+                    rename_map[col] = 'identificacao_indice_iabczg'
+                elif 'DECA' in subcol.upper():
+                    rename_map[col] = 'identificacao_indice_deca'
+                elif 'P %' in subcol or 'P%' in subcol:
+                    rename_map[col] = 'identificacao_indice_p_perc'
+                elif 'F %' in subcol or 'F%' in subcol:
+                    rename_map[col] = 'identificacao_indice_f_perc'
             else:
                 for excel_col, snake_col in MAPEAMENTO_EXCEL_PARA_SNAKE.items():
                     if excel_col.lower() in col_normalizado.lower() or col_normalizado.lower() in excel_col.lower():
