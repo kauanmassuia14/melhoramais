@@ -141,6 +141,15 @@ DE_PARA_PMGZ_COMPLETO = {
     "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_AC %": "genetica_reprodutiva_psng_ac_perc",
     "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_DECA": "genetica_reprodutiva_psng_deca",
     "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_P %": "genetica_reprodutiva_psng_p_perc",
+    # Variações com CARACTERÍTICAS (com ÍTICAS - acute i)
+    "CARACTERÍTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_DEP": "genetica_reprodutiva_pe365g_dep",
+    "CARACTERÍTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_AC %": "genetica_reprodutiva_pe365g_ac_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_DECA": "genetica_reprodutiva_pe365g_deca",
+    "CARACTERÍTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_P %": "genetica_reprodutiva_pe365g_p_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_DEP": "genetica_reprodutiva_psng_dep",
+    "CARACTERÍTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_AC %": "genetica_reprodutiva_psng_ac_perc",
+    "CARACTERÍTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_DECA": "genetica_reprodutiva_psng_deca",
+    "CARACTERÍTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_P %": "genetica_reprodutiva_psng_p_perc",
     "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DEP": "genetica_carcaca_aolg_dep",
     "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_AC %": "genetica_carcaca_aolg_ac_perc",
     "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DECA": "genetica_carcaca_aolg_deca",
@@ -548,6 +557,11 @@ class PMGZLoader(BaseLoader):
             'genetica_crescimento_pm_emg_ac_perc': 'pmg_pm_ac',
             'genetica_crescimento_pm_emg_deca': 'pmg_pm_deca',
             'genetica_crescimento_pm_emg_p_perc': 'pmg_pm_p_percent',
+            # Maternas (genetica_materna -> pmg_pm)
+            'genetica_materna_pm_emg_dep': 'pmg_pm_dep',
+            'genetica_materna_pm_emg_ac_perc': 'pmg_pm_ac',
+            'genetica_materna_pm_emg_deca': 'pmg_pm_deca',
+            'genetica_materna_pm_emg_p_perc': 'pmg_pm_p_percent',
             # Reprodutivas
             'genetica_reprodutiva_ippg_dep': 'pmg_ipp_dep',
             'genetica_reprodutiva_ippg_ac_perc': 'pmg_ipp_ac',
@@ -608,17 +622,28 @@ class PMGZLoader(BaseLoader):
         df = df.rename(columns=rename)
         
         # Ajuste de escala: dividir por 100 se valor > 1000 (regra PMGZ)
+        # IPP precisa de correção: -5464 -> -54.64
+        # PN precisa de correção: 93 -> 0.93
+        # F% e P% precisam: 723 -> 7.23
         colunas_escala_100 = [
             'pmg_iabc', 'pmg_p_percent', 'pmg_f_percent',
             'pmg_pn_dep', 'pmg_pd_dep', 'pmg_pa_dep', 'pmg_ps_dep',
-            'pmg_aol_dep', 'pmg_acab_dep',
+            'pmg_ipp_dep', 'pmg_aol_dep', 'pmg_acab_dep',
         ]
         
         for col in colunas_escala_100:
             if col in df.columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-                    df.loc[df[col] > 1000, col] = df.loc[df[col] > 1000, col] / 100
+                    # Para IPP (valores negativos grandes), dividir por 100
+                    if 'ipp' in col:
+                        df[col] = df[col] / 100
+                    # Para PN (valores positivos grandes), dividir por 100
+                    elif 'pn_dep' in col:
+                        df.loc[df[col] > 10, col] = df.loc[df[col] > 10, col] / 100
+                    # Para percentuais (P%, F%) e DEP de peso > 100, dividir por 100
+                    elif any(x in col for x in ['p_percent', 'f_percent', 'aol_dep', 'acab_dep']):
+                        df.loc[df[col] > 100, col] = df.loc[df[col] > 100, col] / 100
                 except Exception:
                     pass
         
