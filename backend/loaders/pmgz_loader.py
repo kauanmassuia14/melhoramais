@@ -10,60 +10,33 @@ from .base_loader import BaseLoader
 logger = logging.getLogger(__name__)
 
 DE_PARA_PMGZ_COMPLETO = {
-    "ANIMAL_NOME": "identificacao_animal_nome",
-    "ANIMAL_NOME_": "identificacao_animal_nome",
-    "ANIMAL_SERIE / RGD": "identificacao_animal_serie_rgd",
-    "ANIMAL_SERIE / RGD_": "identificacao_animal_serie_rgd",
-    "ANIMAL_RGN": "identificacao_animal_rgn",
-    "ANIMAL_RGN_": "identificacao_animal_rgn",
-    "ANIMAL_SEXO": "identificacao_animal_sexo",
-    "ANIMAL_SEXO_": "identificacao_animal_sexo",
-    "ANIMAL_NASC": "identificacao_animal_nascimento",
-    "ANIMAL_NASC_": "identificacao_animal_nascimento",
-    "ANIMAL_iABCZg": "identificacao_indice_iabczg",
-    "ANIMAL_iABCZg_": "identificacao_indice_iabczg",
-    "ANIMAL_DECA": "identificacao_indice_deca",
-    "ANIMAL_DECA_": "identificacao_indice_deca",
-    "ANIMAL_P %": "identificacao_indice_p_perc",
-    "ANIMAL_P %_": "identificacao_indice_p_perc",
-    "ANIMAL_F %": "identificacao_indice_f_perc",
-    "ANIMAL_F %_": "identificacao_indice_f_perc",
-    "PAI_NOME": "pedigree_pai_nome",
-    "PAI_NOME_": "pedigree_pai_nome",
-    "PAI_SERIE / RGD": "pedigree_pai_serie_rgd",
-    "PAI_SERIE / RGD_": "pedigree_pai_serie_rgd",
-    "PAI_RGN": "pedigree_pai_rgn",
-    "PAI_RGN_": "pedigree_pai_rgn",
-    "AVÔ PATERNO_NOME": "pedigree_avo_paterno_nome",
-    "AVÔ PATERNO_NOME_": "pedigree_avo_paterno_nome",
-    "AVÔ PATERNO_SERIE / RGD": "pedigree_avo_paterno_serie_rgd",
-    "AVÔ PATERNO_SERIE / RGD_": "pedigree_avo_paterno_serie_rgd",
-    "AVÔ PATERNO_RGN": "pedigree_avo_paterno_rgn",
-    "AVÔ PATERNO_RGN_": "pedigree_avo_paterno_rgn",
-    "AVÓ PATERNA_NOME": "pedigree_avo_paterna_nome",
-    "AVÓ PATERNA_NOME_": "pedigree_avo_paterna_nome",
-    "AVÓ PATERNA_SERIE / RGD": "pedigree_avo_paterna_serie_rgd",
-    "AVÓ PATERNA_SERIE / RGD_": "pedigree_avo_paterna_serie_rgd",
-    "AVÓ PATERNA_RGN": "pedigree_avo_paterna_rgn",
-    "AVÓ PATERNA_RGN_": "pedigree_avo_paterna_rgn",
-    "MÃE_NOME": "pedigree_mae_nome",
-    "MÃE_NOME_": "pedigree_mae_nome",
-    "MÃE_SERIE / RGD": "pedigree_mae_serie_rgd",
-    "MÃE_SERIE / RGD_": "pedigree_mae_serie_rgd",
-    "MÃE_RGN": "pedigree_mae_rgn",
-    "MÃE_RGN_": "pedigree_mae_rgn",
-    "AVÔ MATERNO_NOME": "pedigree_avo_materno_nome",
-    "AVÔ MATERNO_NOME_": "pedigree_avo_materno_nome",
-    "AVÔ MATERNO_SERIE / RGD": "pedigree_avo_materno_serie_rgd",
-    "AVÔ MATERNO_SERIE / RGD_": "pedigree_avo_materno_serie_rgd",
-    "AVÔ MATERNO_RGN": "pedigree_avo_materno_rgn",
-    "AVÔ MATERNO_RGN_": "pedigree_avo_materno_rgn",
-    "AVÓ MATERNA_NOME": "pedigree_avo_materna_nome",
-    "AVÓ MATERNA_NOME_": "pedigree_avo_materna_nome",
-    "AVÓ MATERNA_SERIE / RGD": "pedigree_avo_materna_serie_rgd",
-    "AVÓ MATERNA_SERIE / RGD_": "pedigree_avo_materna_serie_rgd",
-    "AVÓ MATERNA_RGN": "pedigree_avo_materna_rgn",
-    "AVÓ MATERNA_RGN_": "pedigree_avo_materna_rgn",
+    "_ANIMAL_NOME": "identificacao_animal_nome",
+    "_ANIMAL_SERIE / RGD": "identificacao_animal_serie_rgd",
+    "_ANIMAL_RGN": "identificacao_animal_rgn",
+    "_ANIMAL_SEXO": "identificacao_animal_sexo",
+    "_ANIMAL_NASC": "identificacao_animal_nascimento",
+    "_ANIMAL_iABCZg": "identificacao_indice_iabczg",
+    "_ANIMAL_DECA": "identificacao_indice_deca",
+    "_ANIMAL_P %": "identificacao_indice_p_perc",
+    "_ANIMAL_F %": "identificacao_indice_f_perc",
+    "_PAI_NOME": "pedigree_pai_nome",
+    "_PAI_SERIE / RGD": "pedigree_pai_serie_rgd",
+    "_PAI_RGN": "pedigree_pai_rgn",
+    "_AVÔ PATERNO_NOME": "pedigree_avo_paterno_nome",
+    "_AVÔ PATERNO_SERIE / RGD": "pedigree_avo_paterno_serie_rgd",
+    "_AVÔ PATERNO_RGN": "pedigree_avo_paterno_rgn",
+    "_AVÓ PATERNA_NOME": "pedigree_avo_paterna_nome",
+    "_AVÓ PATERNA_SERIE / RGD": "pedigree_avo_paterna_serie_rgd",
+    "_AVÓ PATERNA_RGN": "pedigree_avo_paterna_rgn",
+    "_MÃE_NOME": "pedigree_mae_nome",
+    "_MÃE_SERIE / RGD": "pedigree_mae_serie_rgd",
+    "_MÃE_RGN": "pedigree_mae_rgn",
+    "_AVÔ MATERNO_NOME": "pedigree_avo_materno_nome",
+    "_AVÔ MATERNO_SERIE / RGD": "pedigree_avo_materno_serie_rgd",
+    "_AVÔ MATERNO_RGN": "pedigree_avo_materno_rgn",
+    "_AVÓ MATERNA_NOME": "pedigree_avo_materna_nome",
+    "_AVÓ MATERNA_SERIE / RGD": "pedigree_avo_materna_serie_rgd",
+    "_AVÓ MATERNA_RGN": "pedigree_avo_materna_rgn",
     "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DEP": "genetica_crescimento_pn_edg_dep",
     "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_AC %": "genetica_crescimento_pn_edg_ac_perc",
     "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DECA": "genetica_crescimento_pn_edg_deca",
@@ -273,12 +246,11 @@ class PMGZLoader(BaseLoader):
         return df
 
     def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Achatamento de MultiIndex (3 níveis) -> strings únicas. Mantém sufixo .1/.2 do Pandas para colunas repetidas."""
+        """Achatamento de MultiIndex (3 níveis) -> strings únicas."""
         logger.info(f"_flatten_columns: nlevels={df.columns.nlevels}, cols={len(df.columns)}")
         
         if df.columns.nlevels < 2:
             df.columns = [str(c) for c in df.columns]
-            logger.info(f"_flatten_columns: colunas simples convertidas: {df.columns[:5]}")
             return df
 
         new_columns = []
@@ -286,9 +258,9 @@ class PMGZLoader(BaseLoader):
             if isinstance(col, tuple):
                 filtered = []
                 for nivel in col:
-                    nivel_str = str(nivel)
-                    if 'Unnamed' not in nivel_str:
-                        filtered.append(nivel_str.strip())
+                    nivel_str = str(nivel).strip()
+                    if nivel_str and nivel_str != 'nan' and 'Unnamed' not in nivel_str:
+                        filtered.append(nivel_str)
                 if filtered:
                     new_col = '_'.join(filtered)
                 else:
@@ -298,7 +270,7 @@ class PMGZLoader(BaseLoader):
             new_columns.append(new_col)
 
         df.columns = new_columns
-        logger.info(f"Flattening: {len(df.columns)} colunas achatadas, sample: {df.columns[:5]}")
+        logger.info(f"Flattening: {len(df.columns)} colunas, sample: {df.columns[:5]}")
         return df
 
     def _ler_csv(self, file_content: bytes) -> pd.DataFrame:
