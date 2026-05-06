@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, RawAnimalData
+from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, GeneticsAnimal, GeneticsFarm
 from backend.loaders import PMGZLoader
 
 logger = logging.getLogger(__name__)
@@ -173,28 +173,6 @@ class GeneticDataProcessor:
                 file_content, filename, source_system
             )
 
-            # Save ALL raw data to raw_animal_data table
-            from datetime import date as date_type
-            raw_batch = []
-            for _, row in df.iterrows():
-                raw_values = row.to_dict()
-                raw_values = {k: (None if pd.isna(v) else v) for k, v in raw_values.items()}
-                # Convert dates to ISO strings for JSON serialization
-                for k, v in raw_values.items():
-                    if isinstance(v, date_type):
-                        raw_values[k] = v.isoformat()
-                raw_batch.append({
-                    "id_animal": None,
-                    "id_farm": self.farm_id,
-                    "source_system": source_system,
-                    "processing_log_id": self.upload_log_id,
-                    "raw_data": raw_values,
-                })
-            
-            if raw_batch:
-                self.db.bulk_insert_mappings(RawAnimalData, raw_batch)
-            self.db.commit()
-
             log.total_rows = len(df)
             log.rows_inserted = inserted
             log.rows_updated = updated
@@ -255,7 +233,7 @@ class GeneticDataProcessor:
     def _process_and_persist(
         self, file_content: bytes, filename: str, source_system: str
     ) -> Tuple[pd.DataFrame, int, int, int]:
-        """Process file and persist animals. Called within a separate transaction."""
+        """Process file and persist to genetics schema."""
         logger.info(f"=== START _process_and_persist ===")
         logger.info(f"file_content size: {len(file_content)} bytes")
         logger.info(f"filename: {filename}, source_system: {source_system}")
@@ -264,48 +242,31 @@ class GeneticDataProcessor:
         logger.info(f"Calling _read_file...")
         df = self._read_file(file_content, filename, source_system)
         logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
-        logger.info(f"df columns: {list(df.columns)[:20]}")
         
-        # For PMGZ, we've already done column mapping in _read_file/_map_pmgz_columns
-        # Skip database column mapping
+        # For PMGZ, use pre-mapped columns
         if source_system == "PMGZ":
-            logger.info("PMGZ detected - using pre-mapped columns from _map_pmgz_columns")
-            # Just validate and proceed
             col_map = {}
             required = []
         else:
-            # Get mappings for other source systems
             col_map = self.get_mappings(source_system)
             required = self.get_required_columns(source_system)
-        
-        # DEBUG: Log all file columns to understand the structure
-        logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
-        logger.info(f"Mapping for source_system={source_system}: {col_map}")
         
         df, rename = self._match_columns(df, col_map, required)
         df = df.rename(columns=rename)
         
-        logger.info(f"File columns AFTER mapping ({len(df.columns)}): {list(df.columns)[:30]}")
-        logger.info(f"Rename dict applied: {rename}")
-        
-        valid_targets = set(Animal.__table__.columns.keys())
-        logger.info(f"Valid DB columns: {len(valid_targets)}")
-        
-        keep = [c for c in df.columns if str(c) in valid_targets]
-        missing_from_db = [c for c in df.columns if str(c) not in valid_targets]
-        logger.info(f"Columns matched to DB: {len(keep)}")
-        logger.info(f"Columns NOT matched (missing in DB): {missing_from_db[:20]}")
-        valid_targets = set(Animal.__table__.columns.keys())
-        keep = [c for c in df.columns if str(c) in valid_targets]
-        df = df[keep]
+        # Clean data
         df = self._clean_data(df, source_system)
+        
+        # Add id_farm
         df["id_farm"] = self.farm_id
-        # Add upload_id if provided
         if self.upload_id:
             df["upload_id"] = self.upload_id
-        logger.info(f"Calling _upsert_animals with {len(df)} records...")
-        inserted, updated, failed = self._upsert_animals(df)
-        logger.info(f"_upsert_animals result: inserted={inserted}, updated={updated}, failed={failed}")
+        
+        # Save to genetics schema
+        logger.info(f"Calling _upsert_genetics_animals with {len(df)} records...")
+        inserted, updated, failed = self._upsert_genetics_animals(df, source_system)
+        logger.info(f"_upsert_genetics_animals result: inserted={inserted}, updated={updated}, failed={failed}")
+        
         return df, inserted, updated, failed
 
     def _read_file(
@@ -892,6 +853,108 @@ class GeneticDataProcessor:
             updated = 0
         
         logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
+        return inserted, updated, failed
+
+    def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
+        """Upsert animals directly into genetics schema using raw SQL."""
+        from sqlalchemy import text
+        import uuid
+        import json
+        
+        inserted = 0
+        updated = 0
+        failed = 0
+        
+        # Map farm_id (silver) to genetics farm
+        farm = self.db.query(GeneticsFarm).first()
+        if not farm:
+            logger.error("No farm found in genetics.farms")
+            return 0, 0, len(df)
+        
+        genetics_farm_id = farm.id
+        
+        for _, row in df.iterrows():
+            try:
+                rgn = row.get('rgn_animal')
+                if not rgn:
+                    failed += 1
+                    continue
+                
+                # Check if animal exists
+                existing = self.db.query(GeneticsAnimal).filter(
+                    GeneticsAnimal.rgn == rgn,
+                    GeneticsAnimal.farm_id == genetics_farm_id
+                ).first()
+                
+                animal_id = existing.id if existing else uuid.uuid4()
+                
+                # Build animal data
+                animal_data = {
+                    'id': str(animal_id),
+                    'farm_id': str(genetics_farm_id),
+                    'rgn': str(rgn),
+                    'nome': row.get('nome_animal'),
+                    'serie': row.get('serie'),
+                    'sexo': row.get('sexo'),
+                    'nascimento': row.get('data_nascimento').isoformat() if row.get('data_nacimiento') else None,
+                    'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else False,
+                    'csg': True if str(row.get('csg', '')).upper() == 'SIM' else False,
+                }
+                
+                if existing:
+                    self.db.execute(
+                        text("""
+                            UPDATE genetics.animals 
+                            SET nome = :nome, serie = :serie, sexo = :sexo, 
+                                nascimento = :nascimento, genotipado = :genotipado, csg = :csg
+                            WHERE id = :id
+                        """),
+                        animal_data
+                    )
+                    updated += 1
+                else:
+                    self.db.execute(
+                        text("""
+                            INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg)
+                            VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg)
+                        """),
+                        animal_data
+                    )
+                    inserted += 1
+                
+                # Now insert genetic evaluation if we have DEP data
+                if row.get('pmg_iabc'):
+                    eval_data = {
+                        'id': str(uuid.uuid4()),
+                        'animal_id': str(animal_id),
+                        'farm_id': str(genetics_farm_id),
+                        'safra': 2026,
+                        'fonte_origem': source_system,
+                        'iabczg': float(row.get('pmg_iabc', 0)) if row.get('pmg_iabc') else None,
+                        'pn_ed': json.dumps({'dep': row.get('pmg_pn_dep'), 'ac': row.get('pmg_pn_ac'), 'deca': row.get('pmg_pn_deca'), 'p_percent': row.get('pmg_pn_p_percent')}),
+                        'pd_ed': json.dumps({'dep': row.get('pmg_pd_dep'), 'ac': row.get('pmg_pd_ac'), 'deca': row.get('pmg_pd_deca'), 'p_percent': row.get('pmg_pd_p_percent')}),
+                        'ps_ed': json.dumps({'dep': row.get('pmg_ps_dep'), 'ac': row.get('pmg_ps_ac'), 'deca': row.get('pmg_ps_deca'), 'p_percent': row.get('pmg_ps_p_percent')}),
+                    }
+                    
+                    self.db.execute(
+                        text("""
+                            INSERT INTO genetics.genetic_evaluations 
+                            (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed)
+                            VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed)
+                            ON CONFLICT (id) DO UPDATE SET
+                            iabczg = EXCLUDED.iabczg, pn_ed = EXCLUDED.pn_ed, pd_ed = EXCLUDED.pd_ed, ps_ed = EXCLUDED.ps_ed
+                        """),
+                        eval_data
+                    )
+                
+                self.db.commit()
+                
+            except Exception as e:
+                self.db.rollback()
+                logger.error(f"Error processing animal {rgn}: {e}")
+                failed += 1
+        
+        logger.info(f"Genetics upsert: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
 
     def generate_formatted_excel(self, df: pd.DataFrame) -> bytes:

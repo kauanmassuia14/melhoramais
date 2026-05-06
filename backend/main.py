@@ -1,6 +1,9 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import logging
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -493,7 +496,7 @@ async def process_genetic_data(
 
         # Rodar processamento pesado em thread para não bloquear o event loop
         loop = asyncio.get_event_loop()
-        df_cleaned, log, upload = await loop.run_in_executor(
+        df_cleaned, inserted, updated, failed, upload = await loop.run_in_executor(
             None, 
             processor.process_file, 
             content, 
