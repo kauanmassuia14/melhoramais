@@ -14,7 +14,7 @@ from datetime import datetime
 import os
 import io
 
-from backend.models import Base, Farm, ColumnMapping, ProcessingLog, User, Notification, Upload, Cliente, GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
+from backend.models import Base, Farm, ColumnMapping, ProcessingLog, User, Notification, Upload, Cliente, GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm, RawAnimalData, Animal
 from backend.database import get_db, engine
 from backend.schemas import (
     FarmCreate, FarmUpdate, FarmResponse,
