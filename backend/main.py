@@ -497,13 +497,23 @@ async def process_genetic_data(
 
         # Rodar processamento pesado em thread para não bloquear o event loop
         loop = asyncio.get_event_loop()
-        df_cleaned, inserted, updated, failed, upload = await loop.run_in_executor(
+        df_cleaned, log, upload = await loop.run_in_executor(
             None, 
             processor.process_file, 
             content, 
             file.filename or f"upload_{source_system}", 
             source_system
         )
+        
+        # Se process_file retorna None para log/upload, criar objetos vazios
+        if log is None:
+            inserted, updated, failed = 0, 0, 0
+        else:
+            inserted = log.rows_inserted or 0
+            updated = log.rows_updated or 0
+            failed = log.rows_failed or 0
+        
+        logger.info(f"Processamento concluído: {len(df_cleaned)} linhas, inserted={inserted}, updated={updated}, failed={failed}")
         
         excel_data = await loop.run_in_executor(
             None,
