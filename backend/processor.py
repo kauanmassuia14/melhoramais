@@ -764,89 +764,6 @@ class GeneticDataProcessor:
 
     def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
         """Upsert animals directly into genetics schema using raw SQL."""
-        first_record = df.iloc[0].to_dict()
-        logger.info(f"First record sample: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}, pmg_stay_dep={first_record.get('pmg_stay_dep')}")
-        logger.info(f"First record keys: {list(first_record.keys())[:30]}")
-        
-        # Step 1: Query ALL existing animals at once (1 query, not N)
-        existing_animals = self.db.query(Animal).filter(
-            Animal.id_farm == self.farm_id
-        ).all()
-        
-        # Create lookup dict: rgn_animal -> Animal object
-        existing_map = {a.rgn_animal: a for a in existing_animals}
-        logger.info(f"Found {len(existing_map)} existing animals in DB")
-        
-        # Step 2: Convert dataframe to list of dicts
-        records = df.to_dict('records')
-        
-        # Fix boolean columns: 'SIM'/'NÃO' -> True/False
-        for values in records:
-            if 'genotipado' in values:
-                val = str(values.get('genotipado', '')).upper().strip()
-                values['genotipado'] = True if val == 'SIM' else False if val in ['NÃO', 'N', 'NAO', ''] else None
-            if 'csg' in values:
-                val = str(values.get('csg', '')).upper().strip()
-                values['csg'] = True if val == 'SIM' else False if val in ['NÃO', 'N', 'NAO', ''] else None
-        
-        # Step 3: Process each record
-        animals_to_insert = []
-        animals_to_update = []
-        
-        logger.info(f"_upsert_animals: first record keys: {list(records[0].keys())[:20]}")
-        
-        for values in records:
-            # Clean NaN values
-            values = {k: (None if pd.isna(v) else v) for k, v in values.items()}
-            values["processing_log_id"] = self.upload_log_id
-            values["id_farm"] = self.farm_id
-            
-            # DEBUG: Log the values for first record only
-            if updated + inserted == 0:
-                logger.info(f"_upsert_animals: sample values: rgn={values.get('rgn_animal')}, pmg_iabc={values.get('pmg_iabc')}, pmg_stay_dep={values.get('pmg_stay_dep')}")
-            
-            rgn = values.get("rgn_animal")
-            if not rgn:
-                logger.warning(f"Skipping row - no rgn_animal: {values}")
-                failed += 1
-                continue
-            
-            if rgn in existing_map:
-                # Update existing
-                existing = existing_map[rgn]
-                for k, v in values.items():
-                    if k not in ("id_animal", "id_farm", "rgn_animal"):
-                        setattr(existing, k, v)
-                existing.processing_log_id = self.upload_log_id
-                updated += 1
-            else:
-                # Insert new
-                animals_to_insert.append(values)
-                inserted += 1
-        
-        # Step 4: Bulk insert new animals
-        if animals_to_insert:
-            logger.info(f"Bulk inserting {len(animals_to_insert)} new animals...")
-            for values in animals_to_insert:
-                animal = Animal(**values)
-                self.db.add(animal)
-        
-        # Step 5: Single commit for everything
-        try:
-            self.db.commit()
-            logger.info(f"COMMIT successful - inserted={inserted}, updated={updated}, failed={failed}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"COMMIT failed: {e}")
-            failed = inserted + updated
-            inserted = 0
-            updated = 0
-        
-        logger.info(f"Done: inserted={inserted}, updated={updated}, failed={failed}")
-        return inserted, updated, failed
-
-    def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
-        """Upsert animals directly into genetics schema using raw SQL."""
         from sqlalchemy import text
         import uuid
         import json
@@ -855,6 +772,11 @@ class GeneticDataProcessor:
         updated = 0
         failed = 0
         
+        # Verificar dados do primeiro registro
+        if len(df) > 0:
+            first_record = df.iloc[0].to_dict()
+            logger.info(f"First record: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}")
+        
         # Map farm_id (silver) to genetics farm
         farm = self.db.query(GeneticsFarm).first()
         if not farm:
@@ -862,36 +784,39 @@ class GeneticDataProcessor:
             return 0, 0, len(df)
         
         genetics_farm_id = farm.id
+        logger.info(f"Using genetics farm: {farm.nome}")
         
+        # Processar cada animal
         for _, row in df.iterrows():
             try:
                 rgn = row.get('rgn_animal')
-                if not rgn:
+                if not rgn or str(rgn).strip() == '':
                     failed += 1
                     continue
                 
-                # Check if animal exists
+                # Verificar se animal existe
                 existing = self.db.query(GeneticsAnimal).filter(
-                    GeneticsAnimal.rgn == rgn,
+                    GeneticsAnimal.rgn == str(rgn).strip(),
                     GeneticsAnimal.farm_id == genetics_farm_id
                 ).first()
                 
                 animal_id = existing.id if existing else uuid.uuid4()
                 
-                # Build animal data
+                # Preparar dados do animal
                 animal_data = {
                     'id': str(animal_id),
                     'farm_id': str(genetics_farm_id),
-                    'rgn': str(rgn),
-                    'nome': row.get('nome_animal'),
-                    'serie': row.get('serie'),
-                    'sexo': row.get('sexo'),
-                    'nascimento': row.get('data_nascimento').isoformat() if row.get('data_nacimiento') else None,
-                    'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else False,
-                    'csg': True if str(row.get('csg', '')).upper() == 'SIM' else False,
+                    'rgn': str(rgn).strip(),
+                    'nome': str(row.get('nome_animal', '')).strip() if row.get('nome_animal') else None,
+                    'serie': str(row.get('serie', '')).strip() if row.get('serie') else None,
+                    'sexo': str(row.get('sexo', '')).strip() if row.get('sexo') else None,
+                    'nascimento': row.get('data_nascimento').isoformat() if row.get('data_nascimento') else None,
+                    'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                    'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                 }
                 
                 if existing:
+                    # Update
                     self.db.execute(
                         text("""
                             UPDATE genetics.animals 
@@ -903,6 +828,7 @@ class GeneticDataProcessor:
                     )
                     updated += 1
                 else:
+                    # Insert
                     self.db.execute(
                         text("""
                             INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg)
@@ -912,36 +838,38 @@ class GeneticDataProcessor:
                     )
                     inserted += 1
                 
-                # Now insert genetic evaluation if we have DEP data
-                if row.get('pmg_iabc'):
-                    eval_data = {
-                        'id': str(uuid.uuid4()),
-                        'animal_id': str(animal_id),
-                        'farm_id': str(genetics_farm_id),
-                        'safra': 2026,
-                        'fonte_origem': source_system,
-                        'iabczg': float(row.get('pmg_iabc', 0)) if row.get('pmg_iabc') else None,
-                        'pn_ed': json.dumps({'dep': row.get('pmg_pn_dep'), 'ac': row.get('pmg_pn_ac'), 'deca': row.get('pmg_pn_deca'), 'p_percent': row.get('pmg_pn_p_percent')}),
-                        'pd_ed': json.dumps({'dep': row.get('pmg_pd_dep'), 'ac': row.get('pmg_pd_ac'), 'deca': row.get('pmg_pd_deca'), 'p_percent': row.get('pmg_pd_p_percent')}),
-                        'ps_ed': json.dumps({'dep': row.get('pmg_ps_dep'), 'ac': row.get('pmg_ps_ac'), 'deca': row.get('pmg_ps_deca'), 'p_percent': row.get('pmg_ps_p_percent')}),
-                    }
-                    
-                    self.db.execute(
-                        text("""
-                            INSERT INTO genetics.genetic_evaluations 
-                            (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed)
-                            VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed)
-                            ON CONFLICT (id) DO UPDATE SET
-                            iabczg = EXCLUDED.iabczg, pn_ed = EXCLUDED.pn_ed, pd_ed = EXCLUDED.pd_ed, ps_ed = EXCLUDED.ps_ed
-                        """),
-                        eval_data
-                    )
+                # Inserir avaliação genética se tiver iabc
+                iabc_val = row.get('pmg_iabc')
+                if iabc_val and str(iabc_val).strip():
+                    try:
+                        eval_data = {
+                            'id': str(uuid.uuid4()),
+                            'animal_id': str(animal_id),
+                            'farm_id': str(genetics_farm_id),
+                            'safra': 2026,
+                            'fonte_origem': source_system,
+                            'iabczg': float(iabc_val) if iabc_val else None,
+                            'pn_ed': json.dumps({'dep': row.get('pmg_pn_dep'), 'ac': row.get('pmg_pn_ac'), 'deca': row.get('pmg_pn_deca'), 'p_percent': row.get('pmg_pn_p_percent')}),
+                            'pd_ed': json.dumps({'dep': row.get('pmg_pd_dep'), 'ac': row.get('pmg_pd_ac'), 'deca': row.get('pmg_pd_deca'), 'p_percent': row.get('pmg_pd_p_percent')}),
+                            'ps_ed': json.dumps({'dep': row.get('pmg_ps_dep'), 'ac': row.get('pmg_ps_ac'), 'deca': row.get('pmg_ps_deca'), 'p_percent': row.get('pmg_ps_p_percent')}),
+                        }
+                        
+                        self.db.execute(
+                            text("""
+                                INSERT INTO genetics.genetic_evaluations 
+                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed)
+                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed)
+                            """),
+                            eval_data
+                        )
+                    except Exception as e:
+                        logger.error(f"Error inserting genetic evaluation: {e}")
                 
                 self.db.commit()
                 
             except Exception as e:
                 self.db.rollback()
-                logger.error(f"Error processing animal {rgn}: {e}")
+                logger.error(f"Error processing animal: {e}")
                 failed += 1
         
         logger.info(f"Genetics upsert: inserted={inserted}, updated={updated}, failed={failed}")
