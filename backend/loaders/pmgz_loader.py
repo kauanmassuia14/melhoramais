@@ -1,6 +1,7 @@
 import io
 import re
 import logging
+import unicodedata
 from typing import Dict
 
 import pandas as pd
@@ -8,6 +9,20 @@ import pandas as pd
 from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
+
+
+def _normalizar_nome_coluna(nome: str) -> str:
+    """Normaliza nome de coluna para matching robusto."""
+    if not nome:
+        return ""
+    nome = str(nome)
+    nome = nome.replace('\n', ' ').replace('\r', ' ')
+    nome = re.sub(r'\s+', ' ', nome)
+    nome = nome.strip().lower()
+    nome = unicodedata.normalize('NFKD', nome)
+    nome = ''.join(c for c in nome if not unicodedata.combining(c))
+    return nome
+
 
 DE_PARA_PMGZ_COMPLETO = {
     "ANIMAL_NOME": "identificacao_animal_nome",
@@ -289,23 +304,33 @@ class PMGZLoader(BaseLoader):
         return df
 
     def _renomear_colunas_completo(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Aplica dicionário DE_PARA_PMGZ_COMPLETO para mapeamento exato."""
-        logger.info(f"Colunas antes rename: {list(df.columns)[:10]}")
+        """Aplica dicionário DE_PARA_PMGZ_COMPLETO para mapeamento exato com normalização."""
+        logger.info(f"Colunas antes rename (TOTAL={len(df.columns)}): {list(df.columns)}")
+        
+        # Normalizar chaves do dicionário para matching robusto
+        dict_normalizado = {_normalizar_nome_coluna(k): v for k, v in DE_PARA_PMGZ_COMPLETO.items()}
         
         rename_map = {}
+        colunas_sem_mapeamento = []
+        
         for col in df.columns:
             col_str = str(col)
-            if col_str in DE_PARA_PMGZ_COMPLETO:
+            col_norm = _normalizar_nome_coluna(col_str)
+            
+            # Tentar match normalizado
+            if col_norm in dict_normalizado:
+                rename_map[col_str] = dict_normalizado[col_norm]
+            # Tentar match direto
+            elif col_str in DE_PARA_PMGZ_COMPLETO:
                 rename_map[col_str] = DE_PARA_PMGZ_COMPLETO[col_str]
-            elif col in DE_PARA_PMGZ_COMPLETO:
-                rename_map[col] = DE_PARA_PMGZ_COMPLETO[col]
+            else:
+                colunas_sem_mapeamento.append(col_str)
         
         df = df.rename(columns=rename_map)
         logger.info(f'Colunas renomeadas via DE_PARA_PMGZ_COMPLETO: {len(rename_map)} mapeamentos')
         
-        colunas_sem_mapeamento = [c for c in df.columns if c not in rename_map.values()]
         if colunas_sem_mapeamento:
-            logger.warning(f'Colunas não mapeadas: {colunas_sem_mapeamento[:10]}')
+            logger.warning(f'Colunas não mapeadas ({len(colunas_sem_mapeamento)}): {colunas_sem_mapeamento[:15]}')
         
         return df
 
