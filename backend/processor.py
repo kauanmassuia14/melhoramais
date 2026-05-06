@@ -265,13 +265,17 @@ class GeneticDataProcessor:
         logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
         logger.info(f"df columns: {list(df.columns)[:20]}")
         
-        # Get mappings
-        col_map = self.get_mappings(source_system)
-        required = self.get_required_columns(source_system)
-        
-        # For PMGZ, use mapped/target column names for validation (since we've already mapped columns)
+        # For PMGZ, we've already done column mapping in _read_file/_map_pmgz_columns
+        # Skip database column mapping
         if source_system == "PMGZ":
-            required = list(col_map.values())  # Use target names like 'rgn_animal'
+            logger.info("PMGZ detected - using pre-mapped columns from _map_pmgz_columns")
+            # Just validate and proceed
+            col_map = {}
+            required = []
+        else:
+            # Get mappings for other source systems
+            col_map = self.get_mappings(source_system)
+            required = self.get_required_columns(source_system)
         
         # DEBUG: Log all file columns to understand the structure
         logger.info(f"File columns BEFORE mapping ({len(df.columns)}): {list(df.columns)[:30]}")
