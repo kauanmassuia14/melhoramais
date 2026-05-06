@@ -687,6 +687,8 @@ def delete_log(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a processing log, associated animals, and linked upload."""
+    from sqlalchemy import text
+    
     log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
@@ -730,6 +732,30 @@ def delete_log(
             upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
             if upload:
                 db.delete(upload)
+    
+    # Delete genetics.animals and genetic_evaluations linked to this log via upload_id
+    if upload_ids:
+        for upload_id in upload_ids:
+            # Get animal IDs from genetics
+            animals = db.execute(
+                text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
+                {"upload_id": upload_id}
+            ).fetchall()
+            
+            if animals:
+                animal_ids = [a[0] for a in animals]
+                
+                # Delete genetic evaluations first
+                db.execute(
+                    text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
+                    {"animal_ids": animal_ids}
+                )
+                
+                # Delete animals
+                db.execute(
+                    text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+                    {"upload_id": upload_id}
+                )
     
     # Delete the log
     db.delete(log)
