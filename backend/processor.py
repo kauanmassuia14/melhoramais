@@ -50,31 +50,31 @@ class GeneticDataProcessor:
         file_lookup: Dict[str, str] = {}
         
         for col in df.columns:
-            norm = str(col).strip().lower().replace(" ", "_")
-            file_lookup[norm] = col
+            col_str = str(col)
+            norm = col_str.strip().lower().replace(" ", "_")
+            file_lookup[norm] = col_str
             
-            parenthetical = re.search(r'\(([^)]+)\)', str(col))
+            parenthetical = re.search(r'\(([^)]+)\)', col_str)
             if parenthetical:
-                file_lookup[parenthetical.group(1).lower().strip()] = col
+                file_lookup[parenthetical.group(1).lower().strip()] = col_str
                 short_code = parenthetical.group(1).lower().strip().replace("-", "")
-                if short_code not in file_lookup:
-                    file_lookup[short_code] = col
-            file_lookup[norm] = col
+                if isinstance(file_lookup, dict) and short_code not in file_lookup:
+                    file_lookup[short_code] = col_str
+            file_lookup[norm] = col_str
             
-            col_lower = str(col).lower()
+            col_lower = col_str.lower()
             dep_suffixes = [" dep", " ac %", " deca", " p %"]
             for suffix in dep_suffixes:
                 if col_lower.endswith(suffix):
                     base = col_lower[:-len(suffix)].strip()
                     base_underscored = base.replace(" ", "_")
-                    if base not in file_lookup:
-                        file_lookup[base] = col
-                    if base_underscored not in file_lookup:
-                        file_lookup[base_underscored] = col
-                    # Also add version with underscore before suffix (e.g., "kg_ac_%")
+                    if isinstance(file_lookup, dict) and base not in file_lookup:
+                        file_lookup[base] = col_str
+                    if isinstance(file_lookup, dict) and base_underscored not in file_lookup:
+                        file_lookup[base_underscored] = col_str
                     base_with_underscore = base.replace(" ", "_")
-                    if base_with_underscore not in file_lookup:
-                        file_lookup[base_with_underscore] = col
+                    if isinstance(file_lookup, dict) and base_with_underscore not in file_lookup:
+                        file_lookup[base_with_underscore] = col_str
 
         rename: Dict[str, str] = {}
         missing: List[str] = []
@@ -291,12 +291,12 @@ class GeneticDataProcessor:
         valid_targets = set(Animal.__table__.columns.keys())
         logger.info(f"Valid DB columns: {len(valid_targets)}")
         
-        keep = [c for c in df.columns if c in valid_targets]
-        missing_from_db = [c for c in df.columns if c not in valid_targets]
+        keep = [c for c in df.columns if str(c) in valid_targets]
+        missing_from_db = [c for c in df.columns if str(c) not in valid_targets]
         logger.info(f"Columns matched to DB: {len(keep)}")
         logger.info(f"Columns NOT matched (missing in DB): {missing_from_db[:20]}")
         valid_targets = set(Animal.__table__.columns.keys())
-        keep = [c for c in df.columns if c in valid_targets]
+        keep = [c for c in df.columns if str(c) in valid_targets]
         df = df[keep]
         df = self._clean_data(df, source_system)
         df["id_farm"] = self.farm_id
