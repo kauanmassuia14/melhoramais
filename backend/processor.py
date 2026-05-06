@@ -244,7 +244,9 @@ class GeneticDataProcessor:
             df = self._read_file(file_content, filename, source_system)
             logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
         except Exception as e:
+            import traceback
             logger.error(f"Error in _read_file: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise
         
         # For PMGZ, use pre-mapped columns

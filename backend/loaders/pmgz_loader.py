@@ -431,7 +431,8 @@ class PMGZLoader(BaseLoader):
 
     def para_colunas_banco(self, df: pd.DataFrame) -> pd.DataFrame:
         """Converte colunas do formato novo para colunas existentes na tabela animais."""
-        mapa = {
+        try:
+            mapa = {
             # Identificação
             'identificacao_animal_nome': 'nome_animal',
             'identificacao_animal_rgn': 'rgn_animal',
@@ -525,3 +526,8 @@ class PMGZLoader(BaseLoader):
         rename = {col: novo for col, novo in mapa.items() if col in df.columns}
         df = df.rename(columns=rename)
         return df
+        except Exception as e:
+            import traceback
+            logger.error(f"Error in para_colunas_banco: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
