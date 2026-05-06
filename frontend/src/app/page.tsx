@@ -31,10 +31,26 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getStats();
-      setStats(data);
+      // Try V2 first (from genetics)
+      const data = await api.getStatsV2();
+      setStats({
+        total_animals: data.total_animals,
+        animals_by_sex: data.animals_by_sex,
+        animals_by_source: data.animals_by_source,
+        total_farms: 1,
+        recent_uploads: 0,
+        avg_p210: null,
+        avg_p365: null,
+        avg_p450: null,
+      });
     } catch (err: any) {
-      setError(err.message || "Erro ao carregar estatísticas");
+      // Fallback to old API
+      try {
+        const data = await api.getStats();
+        setStats(data);
+      } catch (err2: any) {
+        setError(err2.message || "Erro ao carregar estatísticas");
+      }
     } finally {
       setLoading(false);
     }
