@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from backend.models import ColumnMapping, Animal, ProcessingLog, Upload, IS_SQLITE, RawAnimalData
+from backend.loaders import PMGZLoader
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +314,9 @@ class GeneticDataProcessor:
         """Read file into DataFrame. Handles multi-row headers for PMGZ."""
         if filename.endswith((".xlsx", ".xls")):
             if source_system == "PMGZ":
-                df = self._read_pmgz_excel(file_content)
+                loader = PMGZLoader(farm_id=self.farm_id)
+                df = loader.load(file_content, filename)
+                df = loader.para_colunas_banco(df)
             else:
                 df = pd.read_excel(io.BytesIO(file_content))
         elif filename.endswith(".csv"):
