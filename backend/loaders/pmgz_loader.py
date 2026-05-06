@@ -303,7 +303,7 @@ class PMGZLoader(BaseLoader):
         df = df.rename(columns=rename_map)
         logger.info(f'Colunas renomeadas via DE_PARA_PMGZ_COMPLETO: {len(rename_map)} mapeamentos')
         
-        colunas_sem_mapeamento = [c for c in df.columns if c not in rename_map.values]
+        colunas_sem_mapeamento = [c for c in df.columns if c not in rename_map.values()]
         if colunas_sem_mapeamento:
             logger.warning(f'Colunas não mapeadas: {colunas_sem_mapeamento[:10]}')
         
