@@ -451,10 +451,50 @@ class PMGZLoader(BaseLoader):
     def _renomear_colunas(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aplica mapeamento Excel -> snake_case."""
         rename_map = {}
+        prefixos = {
+            'ANIMAL': 'animal',
+            'PAI': 'pai',
+            'MÃE': 'mae',
+            'MAE': 'mae',
+            'AVÔ PATERNO': 'avo_paterno',
+            'AVO PATERNO': 'avo_paterno',
+            'AVÓ PATERNA': 'avo_paterna',
+            'AVO PATERNA': 'avo_paterna',
+            'AVÔ MATERNO': 'avo_materno',
+            'AVO MATERNO': 'avo_materno',
+            'AVÓ MATERNA': 'avo_materna',
+            'AVO MATERNA': 'avo_materna',
+        }
+
         for col in df.columns:
             col_normalizado = str(col).strip()
+            
             if col_normalizado in MAPEAMENTO_EXCEL_PARA_SNAKE:
                 rename_map[col] = MAPEAMENTO_EXCEL_PARA_SNAKE[col_normalizado]
+                continue
+
+            prefixo_encontrado = None
+            for prefixo, key_prefix in prefixos.items():
+                if col_normalizado.startswith(prefixo + ' ') or col_normalizado.startswith(prefixo.upper() + ' '):
+                    prefixo_encontrado = key_prefix
+                    break
+            
+            if prefixo_encontrado:
+                subcol = col_normalizado
+                for p, k in prefixos.items():
+                    if col_normalizado.startswith(p + ' '):
+                        subcol = col_normalizado[len(p):].strip()
+                        break
+                    elif col_normalizado.startswith(p.upper() + ' '):
+                        subcol = col_normalizado[len(p.upper()):].strip()
+                        break
+                
+                if 'NOME' in subcol.upper():
+                    rename_map[col] = f'pedigree_{prefixo_encontrado}_nome'
+                elif 'SERIE' in subcol.upper() or 'RGD' in subcol.upper():
+                    rename_map[col] = f'pedigree_{prefixo_encontrado}_serie_rgd'
+                elif 'RGN' in subcol.upper():
+                    rename_map[col] = f'pedigree_{prefixo_encontrado}_rgn'
             else:
                 for excel_col, snake_col in MAPEAMENTO_EXCEL_PARA_SNAKE.items():
                     if excel_col.lower() in col_normalizado.lower() or col_normalizado.lower() in excel_col.lower():
@@ -465,6 +505,7 @@ class PMGZLoader(BaseLoader):
         df = df.rename(columns=rename_map)
         df = df.dropna(how='all')
         logger.info(f'Colunas renomeadas: {len(rename_map)} mapeamentos')
+        logger.info(f'Sample colunas após rename: {list(df.columns)[:15]}')
         return df
 
     def _tratar_dados(self, df: pd.DataFrame) -> pd.DataFrame:
