@@ -18,7 +18,7 @@ router = APIRouter(prefix="/v2/animals", tags=["Animals V2"])
 
 def parse_metric_block(mb_value) -> Optional[dict]:
     """Parse metric_block from database (tuple or text) to dict."""
-    if mb_value is None:
+    if mb_value is None or mb_value == "":
         return None
     try:
         # If it's already a tuple (from psycopg2)
