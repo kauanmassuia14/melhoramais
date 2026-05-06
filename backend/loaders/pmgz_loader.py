@@ -272,13 +272,17 @@ class PMGZLoader(BaseLoader):
     def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Achatamento de MultiIndex (3 níveis) -> strings únicas. Mantém sufixo .1/.2 do Pandas para colunas repetidas."""
         if df.columns.nlevels < 2:
-            df.columns = df.columns.astype(str)
+            df.columns = [str(c) for c in df.columns]
             return df
 
         new_columns = []
         for col in df.columns:
             if isinstance(col, tuple):
-                filtered = [str(c).strip() for c in col if 'Unnamed' not in str(c)]
+                filtered = []
+                for nivel in col:
+                    nivel_str = str(nivel)
+                    if 'Unnamed' not in nivel_str:
+                        filtered.append(nivel_str.strip())
                 if filtered:
                     new_col = '_'.join(filtered)
                 else:
