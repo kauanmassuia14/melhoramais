@@ -34,7 +34,7 @@ class Farm(Base):
     email = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    animais = relationship("Animal", back_populates="farm")
+    # Removido: animais - não usamos mais silver.animais
     processing_logs = relationship("ProcessingLog", back_populates="farm")
     uploads = relationship("Upload", back_populates="farm")
 
@@ -396,7 +396,6 @@ class Animal(Base):
     fonte_origem = Column(String(50))
     data_processamento = Column(DateTime, default=datetime.utcnow)
 
-    farm = relationship("Farm", back_populates="animais")
     upload = relationship("Upload", back_populates="animais")
 
 
