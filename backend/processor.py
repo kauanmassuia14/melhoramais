@@ -879,23 +879,23 @@ class GeneticDataProcessor:
                             'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
                             'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
                             'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
-                            'pm_ed': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
-                            'ipp_ed': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
-                            'stay_ed': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
-                            'pe365_ed': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
-                            'psn_ed': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
-                            'aol_ed': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
-                            'acab_ed': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
-                            'mar_ed': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
-                            'eg_ed': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
-                            'p_ed': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
-                            'm_ed': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
+                            'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
+                            'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
+                            'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
+                            'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
+                            'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
+                            'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
+                            'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
+                            'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
+                            'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
+                            'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
+                            'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
                         }
                         
                         self.db.execute(
                             text("""
                                 INSERT INTO genetics.genetic_evaluations 
-                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_ed, ipp_ed, stay_ed, pe365_ed, psn_ed, aol_ed, acab_ed, mar_ed, eg_ed, p_ed, m_ed)
+                                (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
                                 VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_ed, :ipp_ed, :stay_ed, :pe365_ed, :psn_ed, :aol_ed, :acab_ed, :mar_ed, :eg_ed, :p_ed, :m_ed)
                             """),
                             eval_data
