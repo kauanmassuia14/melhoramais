@@ -94,7 +94,7 @@ app.include_router(dashboard_router)
 # ============================================
 # Migration Router (admin)
 # ============================================
-from backend.routers.migrate import router as migrate_router, run_migration_on_startup
+from backend.routers.migrate import router as migrate_router
 app.include_router(migrate_router)
 
 # ============================================
@@ -104,10 +104,11 @@ from backend.routers.animals_v2 import router as animals_v2_router
 app.include_router(animals_v2_router)
 
 # Run PMGZ migration on startup (auto-add columns if missing)
-try:
-    run_migration_on_startup()
-except Exception as e:
-    logger.warning(f"Startup migration skipped: {e}")
+# DISABLED - silver.animais was deleted, using genetics schema instead
+# try:
+#     run_migration_on_startup()
+# except Exception as e:
+#     logger.warning(f"Startup migration skipped: {e}")
 
 # ============================================
 # Database Schema & Initialization (LIMPO)
