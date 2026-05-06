@@ -9,334 +9,149 @@ from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
-
-MAPEAMENTO_EXCEL_PARA_SNAKE: Dict[str, str] = {
-    # 1. Identificação do Animal
-    'Nome': 'identificacao_animal_nome',
-    'NOME': 'identificacao_animal_nome',
-    'ANIMAL NOME': 'identificacao_animal_nome',
-    'Série / RGD': 'identificacao_animal_serie_rgd',
-    'SERIE / RGD': 'identificacao_animal_serie_rgd',
-    'Serie / RGD': 'identificacao_animal_serie_rgd',
-    'ANIMAL SERIE / RGD': 'identificacao_animal_serie_rgd',
-    'RGN': 'identificacao_animal_rgn',
-    'ANIMAL RGN': 'identificacao_animal_rgn',
-    'Sexo': 'identificacao_animal_sexo',
-    'SEXO': 'identificacao_animal_sexo',
-    'ANIMAL SEXO': 'identificacao_animal_sexo',
-    'Data Nasc': 'identificacao_animal_nascimento',
-    'NASC': 'identificacao_animal_nascimento',
-    'Data de Nascimento': 'identificacao_animal_nascimento',
-    'ANIMAL NASC': 'identificacao_animal_nascimento',
-    'iABCZg': 'identificacao_indice_iabczg',
-    'iABCZ g': 'identificacao_indice_iabczg',
-    'ANIMAL iABCZg': 'identificacao_indice_iabczg',
-    'DECA': 'identificacao_indice_deca',
-    'ANIMAL DECA': 'identificacao_indice_deca',
-    'P %': 'identificacao_indice_p_perc',
-    'P%': 'identificacao_indice_p_perc',
-    'ANIMAL P %': 'identificacao_indice_p_perc',
-    'F %': 'identificacao_indice_f_perc',
-    'F%': 'identificacao_indice_f_perc',
-    'ANIMAL F %': 'identificacao_indice_f_perc',
-    'P %': 'identificacao_indice_p_perc',
-    'P%': 'identificacao_indice_p_perc',
-    'F %': 'identificacao_indice_f_perc',
-    'F%': 'identificacao_indice_f_perc',
-
-    # 2. Pedigree (Genealogia) - PAI
-    'PAI NOME': 'pedigree_pai_nome',
-    'PAI': 'pedigree_pai_nome',
-    'Nome do Pai': 'pedigree_pai_nome',
-    'PAI SÉRIE / RGD': 'pedigree_pai_serie_rgd',
-    'PAI SERIE / RGD': 'pedigree_pai_serie_rgd',
-    'PAI SERIE': 'pedigree_pai_serie_rgd',
-    'PAI SÉRIE': 'pedigree_pai_serie_rgd',
-    'PAI RGN': 'pedigree_pai_rgn',
-    'Registro do Pai': 'pedigree_pai_rgn',
-
-    # Pedigree - AVÔ PATERNO
-    'AVÔ PATERNO NOME': 'pedigree_avo_paterno_nome',
-    'AVO PATERNO NOME': 'pedigree_avo_paterno_nome',
-    'AVÔ PATERNO': 'pedigree_avo_paterno_nome',
-    'AVO PATERNO': 'pedigree_avo_paterno_nome',
-    'Nome do Avô Paterno': 'pedigree_avo_paterno_nome',
-    'AVÔ PATERNO SÉRIE / RGD': 'pedigree_avo_paterno_serie_rgd',
-    'AVO PATERNO SÉRIE / RGD': 'pedigree_avo_paterno_serie_rgd',
-    'AVÔ PATERNO SERIE / RGD': 'pedigree_avo_paterno_serie_rgd',
-    'AVO PATERNO SERIE / RGD': 'pedigree_avo_paterno_serie_rgd',
-    'AVÔ PATERNO RGN': 'pedigree_avo_paterno_rgn',
-    'AVO PATERNO RGN': 'pedigree_avo_paterno_rgn',
-
-    # Pedigree - AVÓ PATERNA
-    'AVÓ PATERNA NOME': 'pedigree_avo_paterna_nome',
-    'AVO PATERNA NOME': 'pedigree_avo_paterna_nome',
-    'AVÓ PATERNA': 'pedigree_avo_paterna_nome',
-    'AVO PATERNA': 'pedigree_avo_paterna_nome',
-    'Nome da Avó Paterna': 'pedigree_avo_paterna_nome',
-    'AVÓ PATERNA SÉRIE / RGD': 'pedigree_avo_paterna_serie_rgd',
-    'AVO PATERNA SÉRIE / RGD': 'pedigree_avo_paterna_serie_rgd',
-    'AVÓ PATERNA SERIE / RGD': 'pedigree_avo_paterna_serie_rgd',
-    'AVO PATERNA SERIE / RGD': 'pedigree_avo_paterna_serie_rgd',
-    'AVÓ PATERNA RGN': 'pedigree_avo_paterna_rgn',
-    'AVO PATERNA RGN': 'pedigree_avo_paterna_rgn',
-
-    # Pedigree - MÃE
-    'MÃE NOME': 'pedigree_mae_nome',
-    'MAE NOME': 'pedigree_mae_nome',
-    'MÃE': 'pedigree_mae_nome',
-    'MAE': 'pedigree_mae_nome',
-    'Nome da Mãe': 'pedigree_mae_nome',
-    'MÃE SÉRIE / RGD': 'pedigree_mae_serie_rgd',
-    'MAE SÉRIE / RGD': 'pedigree_mae_serie_rgd',
-    'MÃE SERIE / RGD': 'pedigree_mae_serie_rgd',
-    'MAE SERIE / RGD': 'pedigree_mae_serie_rgd',
-    'MÃE RGN': 'pedigree_mae_rgn',
-    'MAE RGN': 'pedigree_mae_rgn',
-    'Registro da Mãe': 'pedigree_mae_rgn',
-
-    # Pedigree - AVÔ MATERNO
-    'AVÔ MATERNO NOME': 'pedigree_avo_materno_nome',
-    'AVO MATERNO NOME': 'pedigree_avo_materno_nome',
-    'AVÔ MATERNO': 'pedigree_avo_materno_nome',
-    'AVO MATERNO': 'pedigree_avo_materno_nome',
-    'Nome do Avô Materno': 'pedigree_avo_materno_nome',
-    'AVÔ MATERNO SÉRIE / RGD': 'pedigree_avo_materno_serie_rgd',
-    'AVO MATERNO SÉRIE / RGD': 'pedigree_avo_materno_serie_rgd',
-    'AVÔ MATERNO SERIE / RGD': 'pedigree_avo_materno_serie_rgd',
-    'AVO MATERNO SERIE / RGD': 'pedigree_avo_materno_serie_rgd',
-    'AVÔ MATERNO RGN': 'pedigree_avo_materno_rgn',
-    'AVO MATERNO RGN': 'pedigree_avo_materno_rgn',
-
-    # Pedigree - AVÓ MATERNA
-    'AVÓ MATERNA NOME': 'pedigree_avo_materna_nome',
-    'AVO MATERNA NOME': 'pedigree_avo_materna_nome',
-    'AVÓ MATERNA': 'pedigree_avo_materna_nome',
-    'AVO MATERNA': 'pedigree_avo_materna_nome',
-    'Nome da Avó Materna': 'pedigree_avo_materna_nome',
-    'AVÓ MATERNA SÉRIE / RGD': 'pedigree_avo_materna_serie_rgd',
-    'AVO MATERNA SÉRIE / RGD': 'pedigree_avo_materna_serie_rgd',
-    'AVÓ MATERNA SERIE / RGD': 'pedigree_avo_materna_serie_rgd',
-    'AVO MATERNA SERIE / RGD': 'pedigree_avo_materna_serie_rgd',
-    'AVÓ MATERNA RGN': 'pedigree_avo_materna_rgn',
-    'AVO MATERNA RGN': 'pedigree_avo_materna_rgn',
-
-    # 3. Características Genéticas: Crescimento
-    # PN-EDg
-    'Peso ao nascimento - efeito direto (PN-EDg) - kg': 'genetica_crescimento_pn_edg_dep',
-    'Peso ao nascimento - efeito direto (PN-EDg) - kg DEP': 'genetica_crescimento_pn_edg_dep',
-    'PN-EDg DEP': 'genetica_crescimento_pn_edg_dep',
-    'PN-EDg': 'genetica_crescimento_pn_edg_dep',
-    'Peso ao nascimento - efeito direto (PN-EDg) - kg AC%': 'genetica_crescimento_pn_edg_ac_perc',
-    'PN-EDg AC%': 'genetica_crescimento_pn_edg_ac_perc',
-    'Peso ao nascimento - efeito direto (PN-EDg) - kg DECA': 'genetica_crescimento_pn_edg_deca',
-    'PN-EDg DECA': 'genetica_crescimento_pn_edg_deca',
-    'Peso ao nascimento - efeito direto (PN-EDg) - kg P %': 'genetica_crescimento_pn_edg_p_perc',
-    'PN-EDg P %': 'genetica_crescimento_pn_edg_p_perc',
-
-    # PD-EDg
-    'Peso à desmama - efeito direto (PD-EDg) - kg': 'genetica_crescimento_pd_edg_dep',
-    'Peso à desmama - efeito direto (PD-EDg) - kg DEP': 'genetica_crescimento_pd_edg_dep',
-    'PD-EDg DEP': 'genetica_crescimento_pd_edg_dep',
-    'PD-EDg': 'genetica_crescimento_pd_edg_dep',
-    'Peso à desmama - efeito direto (PD-EDg) - kg AC%': 'genetica_crescimento_pd_edg_ac_perc',
-    'PD-EDg AC%': 'genetica_crescimento_pd_edg_ac_perc',
-    'Peso à desmama - efeito direto (PD-EDg) - kg DECA': 'genetica_crescimento_pd_edg_deca',
-    'PD-EDg DECA': 'genetica_crescimento_pd_edg_deca',
-    'Peso à desmama - efeito direto (PD-EDg) - kg P %': 'genetica_crescimento_pd_edg_p_perc',
-    'PD-EDg P %': 'genetica_crescimento_pd_edg_p_perc',
-
-    # PA-EDg
-    'Peso ao ano - efeito direto (PA-EDg)': 'genetica_crescimento_pa_edg_dep',
-    'Peso ao ano - efeito direto (PA-EDg) - kg': 'genetica_crescimento_pa_edg_dep',
-    'Peso ao ano - efeito direto (PA-EDg) - kg DEP': 'genetica_crescimento_pa_edg_dep',
-    'PA-EDg DEP': 'genetica_crescimento_pa_edg_dep',
-    'PA-EDg': 'genetica_crescimento_pa_edg_dep',
-    'Peso ao ano - efeito direto (PA-EDg) AC%': 'genetica_crescimento_pa_edg_ac_perc',
-    'PA-EDg AC%': 'genetica_crescimento_pa_edg_ac_perc',
-    'Peso ao ano - efeito direto (PA-EDg) DECA': 'genetica_crescimento_pa_edg_deca',
-    'PA-EDg DECA': 'genetica_crescimento_pa_edg_deca',
-    'Peso ao ano - efeito direto (PA-EDg) P %': 'genetica_crescimento_pa_edg_p_perc',
-    'PA-EDg P %': 'genetica_crescimento_pa_edg_p_perc',
-
-    # PS-EDg
-    'Peso ao sobreano - efeito direto (PS-EDg) - kg': 'genetica_crescimento_ps_edg_dep',
-    'Peso ao sobreano - efeito direto (PS-EDg) - kg DEP': 'genetica_crescimento_ps_edg_dep',
-    'PS-EDg DEP': 'genetica_crescimento_ps_edg_dep',
-    'PS-EDg': 'genetica_crescimento_ps_edg_dep',
-    'Peso ao sobreano - efeito direto (PS-EDg) - kg AC%': 'genetica_crescimento_ps_edg_ac_perc',
-    'PS-EDg AC%': 'genetica_crescimento_ps_edg_ac_perc',
-    'Peso ao sobreano - efeito direto (PS-EDg) - kg DECA': 'genetica_crescimento_ps_edg_deca',
-    'PS-EDg DECA': 'genetica_crescimento_ps_edg_deca',
-    'Peso ao sobreano - efeito direto (PS-EDg) - kg P %': 'genetica_crescimento_ps_edg_p_perc',
-    'PS-EDg P %': 'genetica_crescimento_ps_edg_p_perc',
-
-    # PM-EMg
-    'Peso à fase materna - efeito materno (PM-EMg) - kg': 'genetica_crescimento_pm_emg_dep',
-    'Peso à fase materna - efeito materno (PM-EMg) - kg DEP': 'genetica_crescimento_pm_emg_dep',
-    'PM-EMg DEP': 'genetica_crescimento_pm_emg_dep',
-    'PM-EMg': 'genetica_crescimento_pm_emg_dep',
-    'Peso à fase materna - efeito materno (PM-EMg) - kg AC%': 'genetica_crescimento_pm_emg_ac_perc',
-    'PM-EMg AC%': 'genetica_crescimento_pm_emg_ac_perc',
-    'Peso à fase materna - efeito materno (PM-EMg) - kg DECA': 'genetica_crescimento_pm_emg_deca',
-    'PM-EMg DECA': 'genetica_crescimento_pm_emg_deca',
-    'Peso à fase materna - efeito materno (PM-EMg) - kg P %': 'genetica_crescimento_pm_emg_p_perc',
-    'PM-EMg P %': 'genetica_crescimento_pm_emg_p_perc',
-
-    # 4. Características Genéticas: Reprodutivas
-    # IPPg
-    'Idade ao primeiro parto (IPPg) - dias': 'genetica_reprodutiva_ippg_dep',
-    'Idade ao primeiro parto (IPPg) - dias DEP': 'genetica_reprodutiva_ippg_dep',
-    'IPPg DEP': 'genetica_reprodutiva_ippg_dep',
-    'IPPg': 'genetica_reprodutiva_ippg_dep',
-    'Idade ao primeiro parto (IPPg) - dias AC%': 'genetica_reprodutiva_ippg_ac_perc',
-    'IPPg AC%': 'genetica_reprodutiva_ippg_ac_perc',
-    'Idade ao primeiro parto (IPPg) - dias DECA': 'genetica_reprodutiva_ippg_deca',
-    'IPPg DECA': 'genetica_reprodutiva_ippg_deca',
-    'Idade ao primeiro parto (IPPg) - dias P %': 'genetica_reprodutiva_ippg_p_perc',
-    'IPPg P %': 'genetica_reprodutiva_ippg_p_perc',
-
-    # STAYg
-    'Stayability (STAYg) - %': 'genetica_reprodutiva_stayg_dep',
-    'Stayability (STAYg) - % DEP': 'genetica_reprodutiva_stayg_dep',
-    'STAYg DEP': 'genetica_reprodutiva_stayg_dep',
-    'STAYg': 'genetica_reprodutiva_stayg_dep',
-    'Stayability (STAYg) - % AC%': 'genetica_reprodutiva_stayg_ac_perc',
-    'STAYg AC%': 'genetica_reprodutiva_stayg_ac_perc',
-    'Stayability (STAYg) - % DECA': 'genetica_reprodutiva_stayg_deca',
-    'STAYg DECA': 'genetica_reprodutiva_stayg_deca',
-    'Stayability (STAYg) - % P %': 'genetica_reprodutiva_stayg_p_perc',
-    'STAYg P %': 'genetica_reprodutiva_stayg_p_perc',
-
-    # PE-365g
-    'Perímetro escrotal aos 365 dias (PE-365g) - cm': 'genetica_reprodutiva_pe365g_dep',
-    'Perímetro escrotal aos 365 dias (PE-365g) - cm DEP': 'genetica_reprodutiva_pe365g_dep',
-    'PE-365g DEP': 'genetica_reprodutiva_pe365g_dep',
-    'PE-365g': 'genetica_reprodutiva_pe365g_dep',
-    'Perímetro escrotal aos 365 dias (PE-365g) - cm AC%': 'genetica_reprodutiva_pe365g_ac_perc',
-    'PE-365g AC%': 'genetica_reprodutiva_pe365g_ac_perc',
-    'Perímetro escrotal aos 365 dias (PE-365g) - cm DECA': 'genetica_reprodutiva_pe365g_deca',
-    'PE-365g DECA': 'genetica_reprodutiva_pe365g_deca',
-    'Perímetro escrotal aos 365 dias (PE-365g) - cm P %': 'genetica_reprodutiva_pe365g_p_perc',
-    'PE-365g P %': 'genetica_reprodutiva_pe365g_p_perc',
-
-    # PE-450g
-    'Perímetro escrotal aos 450 dias (PE-450g) - cm': 'genetica_reprodutiva_pe450g_dep',
-    'Perímetro escrotal aos 450 dias (PE-450g) - cm DEP': 'genetica_reprodutiva_pe450g_dep',
-    'PE-450g DEP': 'genetica_reprodutiva_pe450g_dep',
-    'PE-450g': 'genetica_reprodutiva_pe450g_dep',
-    'Perímetro escrotal aos 450 dias (PE-450g) - cm AC%': 'genetica_reprodutiva_pe450g_ac_perc',
-    'PE-450g AC%': 'genetica_reprodutiva_pe450g_ac_perc',
-    'Perímetro escrotal aos 450 dias (PE-450g) - cm DECA': 'genetica_reprodutiva_pe450g_deca',
-    'PE-450g DECA': 'genetica_reprodutiva_pe450g_deca',
-    'Perímetro escrotal aos 450 dias (PE-450g) - cm P %': 'genetica_reprodutiva_pe450g_p_perc',
-    'PE-450g P %': 'genetica_reprodutiva_pe450g_p_perc',
-
-    # 5. Características Genéticas: Carcaça
-    # AOLg
-    'Área de olho de lombo (AOLg) - cm²': 'genetica_carcaca_aolg_dep',
-    'Área de olho de lombo (AOLg) - cm2': 'genetica_carcaca_aolg_dep',
-    'Área de olho de lombo (AOLg) - cm² DEP': 'genetica_carcaca_aolg_dep',
-    'AOLg DEP': 'genetica_carcaca_aolg_dep',
-    'AOLg': 'genetica_carcaca_aolg_dep',
-    'Área de olho de lombo (AOLg) - cm² AC%': 'genetica_carcaca_aolg_ac_perc',
-    'AOLg AC%': 'genetica_carcaca_aolg_ac_perc',
-    'Área de olho de lombo (AOLg) - cm² DECA': 'genetica_carcaca_aolg_deca',
-    'AOLg DECA': 'genetica_carcaca_aolg_deca',
-    'Área de olho de lombo (AOLg) - cm² P %': 'genetica_carcaca_aolg_p_perc',
-    'AOLg P %': 'genetica_carcaca_aolg_p_perc',
-
-    # ACABg
-    'Acabamento de carcaça (ACABg) - mm': 'genetica_carcaca_acabg_dep',
-    'Acabamento de carcaça (ACABg) - mm DEP': 'genetica_carcaca_acabg_dep',
-    'ACABg DEP': 'genetica_carcaca_acabg_dep',
-    'ACABg': 'genetica_carcaca_acabg_dep',
-    'Acabamento de carcaça (ACABg) - mm AC%': 'genetica_carcaca_acabg_ac_perc',
-    'ACABg AC%': 'genetica_carcaca_acabg_ac_perc',
-    'Acabamento de carcaça (ACABg) - mm DECA': 'genetica_carcaca_acabg_deca',
-    'ACABg DECA': 'genetica_carcaca_acabg_deca',
-    'Acabamento de carcaça (ACABg) - mm P %': 'genetica_carcaca_acabg_p_perc',
-    'ACABg P %': 'genetica_carcaca_acabg_p_perc',
-
-    # MARg
-    'Marmoreio (MARg) %': 'genetica_carcaca_marg_dep',
-    'Marmoreio (MARg) % DEP': 'genetica_carcaca_marg_dep',
-    'MARg DEP': 'genetica_carcaca_marg_dep',
-    'MARg': 'genetica_carcaca_marg_dep',
-    'Marmoreio (MARg) % AC%': 'genetica_carcaca_marg_ac_perc',
-    'MARg AC%': 'genetica_carcaca_marg_ac_perc',
-    'Marmoreio (MARg) % DECA': 'genetica_carcaca_marg_deca',
-    'MARg DECA': 'genetica_carcaca_marg_deca',
-    'Marmoreio (MARg) % P %': 'genetica_carcaca_marg_p_perc',
-    'MARg P %': 'genetica_carcaca_marg_p_perc',
-
-    # 6. Características Morfológicas
-    # Eg (Estrutura)
-    'Estrutura corporal (Eg)': 'genetica_morfologica_eg_dep',
-    'Estrutura corporal (Eg) DEP': 'genetica_morfologica_eg_dep',
-    'Eg DEP': 'genetica_morfologica_eg_dep',
-    'Eg': 'genetica_morfologica_eg_dep',
-    'Estrutura corporal (Eg) AC%': 'genetica_morfologica_eg_ac_perc',
-    'Eg AC%': 'genetica_morfologica_eg_ac_perc',
-    'Estrutura corporal (Eg) DECA': 'genetica_morfologica_eg_deca',
-    'Eg DECA': 'genetica_morfologica_eg_deca',
-    'Estrutura corporal (Eg) P %': 'genetica_morfologica_eg_p_perc',
-    'Eg P %': 'genetica_morfologica_eg_p_perc',
-
-    # Pg (Precocidade)
-    'Precocidade (Pg)': 'genetica_morfologica_pg_dep',
-    'Precocidade (Pg) DEP': 'genetica_morfologica_pg_dep',
-    'Pg DEP': 'genetica_morfologica_pg_dep',
-    'Pg': 'genetica_morfologica_pg_dep',
-    'Precocidade (Pg) AC%': 'genetica_morfologica_pg_ac_perc',
-    'Pg AC%': 'genetica_morfologica_pg_ac_perc',
-    'Precocidade (Pg) DECA': 'genetica_morfologica_pg_deca',
-    'Pg DECA': 'genetica_morfologica_pg_deca',
-    'Precocidade (Pg) P %': 'genetica_morfologica_pg_p_perc',
-    'Pg P %': 'genetica_morfologica_pg_p_perc',
-
-    # Mg (Musculosidade)
-    'Musculosidade (Mg)': 'genetica_morfologica_mg_dep',
-    'Musculosidade (Mg) DEP': 'genetica_morfologica_mg_dep',
-    'Mg DEP': 'genetica_morfologica_mg_dep',
-    'Mg': 'genetica_morfologica_mg_dep',
-    'Musculosidade (Mg) AC%': 'genetica_morfologica_mg_ac_perc',
-    'Mg AC%': 'genetica_morfologica_mg_ac_perc',
-    'Musculosidade (Mg) DECA': 'genetica_morfologica_mg_deca',
-    'Mg DECA': 'genetica_morfologica_mg_deca',
-    'Musculosidade (Mg) P %': 'genetica_morfologica_mg_p_perc',
-    'Mg P %': 'genetica_morfologica_mg_p_perc',
-
-    # 6. Informações de Descendentes e Extras
-    'FILHOS': 'descendentes_filhos_quantidade',
-    'Filhos': 'descendentes_filhos_quantidade',
-    'REBANHOS': 'descendentes_rebanhos_quantidade',
-    'Rebanhos': 'descendentes_rebanhos_quantidade',
-    'NETOS': 'descendentes_netos_quantidade',
-    'Netos': 'descendentes_netos_quantidade',
-    'GENOTIPADO': 'extra_genotipado',
-    'Genotipado': 'extra_genotipado',
-    'CSG': 'extra_csg',
-
-    # 7. Fenótipos e Medidas Reais
-    'IPP': 'fenotipo_ipp_dias',
-    'IPP (dias)': 'fenotipo_ipp_dias',
-    'AOL': 'medida_aol_cm2',
-    'AOL (cm2)': 'medida_aol_cm2',
-    'Área de Olho de Lombo': 'medida_aol_cm2',
-    'ACAB': 'medida_acabamento_mm',
-    'Acabamento': 'medida_acabamento_mm',
-    'Espessura de Gordura': 'medida_acabamento_mm',
-    'P120': 'peso_p120_kg',
-    'Peso aos 120 dias': 'peso_p120_kg',
-    'P210': 'peso_p210_kg',
-    'Peso aos 210 dias': 'peso_p210_kg',
-    'P365': 'peso_p365_kg',
-    'Peso aos 365 dias': 'peso_p365_kg',
-    'P450': 'peso_p450_kg',
-    'Peso aos 450 dias': 'peso_p450_kg',
-    'PE365': 'medida_pe365_cm',
-    'Perímetro Escrotal 365': 'medida_pe365_cm',
+DE_PARA_PMGZ_COMPLETO = {
+    "ANIMAL_NOME": "identificacao_animal_nome",
+    "ANIMAL_NOME_": "identificacao_animal_nome",
+    "ANIMAL_SERIE / RGD": "identificacao_animal_serie_rgd",
+    "ANIMAL_SERIE / RGD_": "identificacao_animal_serie_rgd",
+    "ANIMAL_RGN": "identificacao_animal_rgn",
+    "ANIMAL_RGN_": "identificacao_animal_rgn",
+    "ANIMAL_SEXO": "identificacao_animal_sexo",
+    "ANIMAL_SEXO_": "identificacao_animal_sexo",
+    "ANIMAL_NASC": "identificacao_animal_nascimento",
+    "ANIMAL_NASC_": "identificacao_animal_nascimento",
+    "ANIMAL_iABCZg": "identificacao_indice_iabczg",
+    "ANIMAL_iABCZg_": "identificacao_indice_iabczg",
+    "ANIMAL_DECA": "identificacao_indice_deca",
+    "ANIMAL_DECA_": "identificacao_indice_deca",
+    "ANIMAL_P %": "identificacao_indice_p_perc",
+    "ANIMAL_P %_": "identificacao_indice_p_perc",
+    "ANIMAL_F %": "identificacao_indice_f_perc",
+    "ANIMAL_F %_": "identificacao_indice_f_perc",
+    "PAI_NOME": "pedigree_pai_nome",
+    "PAI_NOME_": "pedigree_pai_nome",
+    "PAI_SERIE / RGD": "pedigree_pai_serie_rgd",
+    "PAI_SERIE / RGD_": "pedigree_pai_serie_rgd",
+    "PAI_RGN": "pedigree_pai_rgn",
+    "PAI_RGN_": "pedigree_pai_rgn",
+    "AVÔ PATERNO_NOME": "pedigree_avo_paterno_nome",
+    "AVÔ PATERNO_NOME_": "pedigree_avo_paterno_nome",
+    "AVÔ PATERNO_SERIE / RGD": "pedigree_avo_paterno_serie_rgd",
+    "AVÔ PATERNO_SERIE / RGD_": "pedigree_avo_paterno_serie_rgd",
+    "AVÔ PATERNO_RGN": "pedigree_avo_paterno_rgn",
+    "AVÔ PATERNO_RGN_": "pedigree_avo_paterno_rgn",
+    "AVÓ PATERNA_NOME": "pedigree_avo_paterna_nome",
+    "AVÓ PATERNA_NOME_": "pedigree_avo_paterna_nome",
+    "AVÓ PATERNA_SERIE / RGD": "pedigree_avo_paterna_serie_rgd",
+    "AVÓ PATERNA_SERIE / RGD_": "pedigree_avo_paterna_serie_rgd",
+    "AVÓ PATERNA_RGN": "pedigree_avo_paterna_rgn",
+    "AVÓ PATERNA_RGN_": "pedigree_avo_paterna_rgn",
+    "MÃE_NOME": "pedigree_mae_nome",
+    "MÃE_NOME_": "pedigree_mae_nome",
+    "MÃE_SERIE / RGD": "pedigree_mae_serie_rgd",
+    "MÃE_SERIE / RGD_": "pedigree_mae_serie_rgd",
+    "MÃE_RGN": "pedigree_mae_rgn",
+    "MÃE_RGN_": "pedigree_mae_rgn",
+    "AVÔ MATERNO_NOME": "pedigree_avo_materno_nome",
+    "AVÔ MATERNO_NOME_": "pedigree_avo_materno_nome",
+    "AVÔ MATERNO_SERIE / RGD": "pedigree_avo_materno_serie_rgd",
+    "AVÔ MATERNO_SERIE / RGD_": "pedigree_avo_materno_serie_rgd",
+    "AVÔ MATERNO_RGN": "pedigree_avo_materno_rgn",
+    "AVÔ MATERNO_RGN_": "pedigree_avo_materno_rgn",
+    "AVÓ MATERNA_NOME": "pedigree_avo_materna_nome",
+    "AVÓ MATERNA_NOME_": "pedigree_avo_materna_nome",
+    "AVÓ MATERNA_SERIE / RGD": "pedigree_avo_materna_serie_rgd",
+    "AVÓ MATERNA_SERIE / RGD_": "pedigree_avo_materna_serie_rgd",
+    "AVÓ MATERNA_RGN": "pedigree_avo_materna_rgn",
+    "AVÓ MATERNA_RGN_": "pedigree_avo_materna_rgn",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DEP": "genetica_crescimento_pn_edg_dep",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_AC %": "genetica_crescimento_pn_edg_ac_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_DECA": "genetica_crescimento_pn_edg_deca",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao nascimento - efeito direto (PN-EDg) - kg_P %": "genetica_crescimento_pn_edg_p_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_DEP": "genetica_crescimento_pd_edg_dep",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_AC %": "genetica_crescimento_pd_edg_ac_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_DECA": "genetica_crescimento_pd_edg_deca",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso à desmama - efeito direto (PD-EDg) - kg_P %": "genetica_crescimento_pd_edg_p_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_DEP": "genetica_crescimento_pa_edg_dep",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_AC %": "genetica_crescimento_pa_edg_ac_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_DECA": "genetica_crescimento_pa_edg_deca",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao ano - efeito direto (PA-EDg)_P %": "genetica_crescimento_pa_edg_p_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_DEP": "genetica_crescimento_ps_edg_dep",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_AC %": "genetica_crescimento_ps_edg_ac_perc",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_DECA": "genetica_crescimento_ps_edg_deca",
+    "CARACTERÍSTICAS DE CRESCIMENTO_Peso ao sobreano - efeito direto (PS-EDg) - kg_P %": "genetica_crescimento_ps_edg_p_perc",
+    "CARACTERÍSTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_DEP": "genetica_materna_pm_emg_dep",
+    "CARACTERÍSTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_AC %": "genetica_materna_pm_emg_ac_perc",
+    "CARACTERÍSTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_DECA": "genetica_materna_pm_emg_deca",
+    "CARACTERÍSTICAS MATERNAS_Peso à fase materna - efeito materno (PM-EMg) - kg_P %": "genetica_materna_pm_emg_p_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_DEP": "genetica_reprodutiva_ippg_dep",
+    "CARACTERÍSTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_AC %": "genetica_reprodutiva_ippg_ac_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_DECA": "genetica_reprodutiva_ippg_deca",
+    "CARACTERÍSTICAS REPRODUTIVAS_Idade ao primeiro parto (IPPg) - dias_P %": "genetica_reprodutiva_ippg_p_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Stayability (STAYg) - %_DEP": "genetica_reprodutiva_stayg_dep",
+    "CARACTERÍSTICAS REPRODUTIVAS_Stayability (STAYg) - %_AC %": "genetica_reprodutiva_stayg_ac_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Stayability (STAYg) - %_DECA": "genetica_reprodutiva_stayg_deca",
+    "CARACTERÍSTICAS REPRODUTIVAS_Stayability (STAYg) - %_P %": "genetica_reprodutiva_stayg_p_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_DEP": "genetica_reprodutiva_pe365g_dep",
+    "CARACTERÍSTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_AC %": "genetica_reprodutiva_pe365g_ac_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_DECA": "genetica_reprodutiva_pe365g_deca",
+    "CARACTERÍSTICAS REPRODUTIVAS_Perímetro escrotal aos 365 dias (PE-365g) - cm_P %": "genetica_reprodutiva_pe365g_p_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_DEP": "genetica_reprodutiva_psng_dep",
+    "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_AC %": "genetica_reprodutiva_psng_ac_perc",
+    "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_DECA": "genetica_reprodutiva_psng_deca",
+    "CARACTERÍSTICAS REPRODUTIVAS_Precocidade Sexual Natural ( PSNg ) %_P %": "genetica_reprodutiva_psng_p_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DEP": "genetica_carcaca_aolg_dep",
+    "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_AC %": "genetica_carcaca_aolg_ac_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_DECA": "genetica_carcaca_aolg_deca",
+    "CARACTERÍSTICAS DE CARCAÇA_Área de olho de lombo (AOLg) - cm²_P %": "genetica_carcaca_aolg_p_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_DEP": "genetica_carcaca_acabg_dep",
+    "CARACTERÍSTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_AC %": "genetica_carcaca_acabg_ac_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_DECA": "genetica_carcaca_acabg_deca",
+    "CARACTERÍSTICAS DE CARCAÇA_Acabamento de carcaça (ACABg) - mm_P %": "genetica_carcaca_acabg_p_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Marmoreio (MARg) %_DEP": "genetica_carcaca_marg_dep",
+    "CARACTERÍSTICAS DE CARCAÇA_Marmoreio (MARg) %_AC %": "genetica_carcaca_marg_ac_perc",
+    "CARACTERÍSTICAS DE CARCAÇA_Marmoreio (MARg) %_DECA": "genetica_carcaca_marg_deca",
+    "CARACTERÍSTICAS DE CARCAÇA_Marmoreio (MARg) %_P %": "genetica_carcaca_marg_p_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_DEP": "genetica_morfologica_eg_dep",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_AC %": "genetica_morfologica_eg_ac_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_DECA": "genetica_morfologica_eg_deca",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Estrutura corporal (Eg)_P %": "genetica_morfologica_eg_p_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Precocidade (Pg)_DEP": "genetica_morfologica_pg_dep",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Precocidade (Pg)_AC %": "genetica_morfologica_pg_ac_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Precocidade (Pg)_DECA": "genetica_morfologica_pg_deca",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Precocidade (Pg)_P %": "genetica_morfologica_pg_p_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Musculosidade (Mg)_DEP": "genetica_morfologica_mg_dep",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Musculosidade (Mg)_AC %": "genetica_morfologica_mg_ac_perc",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Musculosidade (Mg)_DECA": "genetica_morfologica_mg_deca",
+    "CARACTERÍSTICAS MORFOLÓGICAS_Musculosidade (Mg)_P %": "genetica_morfologica_mg_p_perc",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120)_FILHOS": "descendentes_p120_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120)_REBANHOS": "descendentes_p120_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210)_FILHOS": "descendentes_p210_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210)_REBANHOS": "descendentes_p210_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 365 dias (P365)_FILHOS": "descendentes_p365_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 365 dias (P365)_REBANHOS": "descendentes_p365_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 450 dias (P450)_FILHOS": "descendentes_p450_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 450 dias (P450)_REBANHOS": "descendentes_p450_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120).1_NETOS": "descendentes_p120_materno_netos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 120 dias (P120).1_REBANHOS": "descendentes_p120_materno_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210).1_NETOS": "descendentes_p210_materno_netos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Peso aos 210 dias (P210).1_REBANHOS": "descendentes_p210_materno_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Perímetro Escrotal aos 365 dias (PE365)_FILHOS": "descendentes_pe365_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Perímetro Escrotal aos 365 dias (PE365)_REBANHOS": "descendentes_pe365_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Fenótipo Stayability (STAY)_FILHOS": "descendentes_stay_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Fenótipo Stayability (STAY)_REBANHOS": "descendentes_stay_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Fenótipo Idade ao Primeiro Parto (IPP)_FILHOS": "descendentes_ipp_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Fenótipo Idade ao Primeiro Parto (IPP)_REBANHOS": "descendentes_ipp_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Área Olho de Lombo (AOL)_FILHOS": "descendentes_aol_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Área Olho de Lombo (AOL)_REBANHOS": "descendentes_aol_rebanhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento De Carcaça (ACAB)_FILHOS": "descendentes_acab_filhos_qtd",
+    "INFORMAÇÕES DE DESCENDENTES_Medida Acabamento De Carcaça (ACAB)_REBANHOS": "descendentes_acab_rebanhos_qtd",
+    "INFORMAÇÕES EXTRAS_GENOTIPADO": "extra_genotipado",
+    "INFORMAÇÕES EXTRAS_GENOTIPADO_": "extra_genotipado",
+    "INFORMAÇÕES EXTRAS_GENOTIPAD": "extra_genotipado",
+    "INFORMAÇÕES EXTRAS_GENOTIPAD_": "extra_genotipado",
+    "INFORMAÇÕES EXTRAS_CSG": "extra_csg",
+    "INFORMAÇÕES EXTRAS_CSG_": "extra_csg",
 }
 
 
@@ -383,10 +198,11 @@ class PMGZLoader(BaseLoader):
         super().__init__(farm_id)
 
     def load(self, file_content: bytes, filename: str) -> pd.DataFrame:
-        """Executa o pipeline completo de carregamento PMGZ."""
+        """Executa o pipeline completo de carregamento PMGZ com flattening de 3 níveis."""
         df = self._ler_arquivo(file_content, filename)
+        df = self._flatten_columns(df)
         df = self._normalizar_cabecalhos(df)
-        df = self._renomear_colunas(df)
+        df = self._renomear_colunas_completo(df)
         df = self._tratar_dados(df)
         df['id_farm'] = self.farm_id
         df['fonte_origem'] = 'PMGZ'
@@ -402,7 +218,17 @@ class PMGZLoader(BaseLoader):
             raise ValueError(f'Formato não suportado: {filename}')
 
     def _ler_excel_com_headers(self, file_content: bytes) -> pd.DataFrame:
-        """Lê Excel com headers multi-linha (células mescladas)."""
+        """Lê Excel com headers multi-linha (3 níveis) com células mescladas."""
+        try:
+            df = pd.read_excel(io.BytesIO(file_content), header=[0, 1, 2])
+            logger.info(f"Excel multi-header lido: {len(df)} linhas, colunas nível 0: {df.columns.nlevels}")
+            return df
+        except Exception as e:
+            logger.warning(f"Falha no multi-header, tentando método Legacy: {e}")
+            return self._ler_excel_com_headers_legacy(file_content)
+
+    def _ler_excel_com_headers_legacy(self, file_content: bytes) -> pd.DataFrame:
+        """Lê Excel com headers multi-linha (células mescladas) - método fallback."""
         raw = pd.read_excel(io.BytesIO(file_content), header=None, nrows=20)
 
         keywords = {
@@ -440,7 +266,29 @@ class PMGZLoader(BaseLoader):
         df = pd.read_excel(io.BytesIO(file_content), header=None, skiprows=best_row + 1)
         df.columns = composite_names
 
-        logger.info(f'Excel PMGZ lido: {len(df)} linhas, {len(df.columns)} colunas')
+        logger.info(f'Excel PMGZ lido (legacy): {len(df)} linhas, {len(df.columns)} colunas')
+        return df
+
+    def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Achatamento de MultiIndex (3 níveis) -> strings únicas. Mantém sufixo .1/.2 do Pandas para colunas repetidas."""
+        if df.columns.nlevels < 2:
+            df.columns = df.columns.astype(str)
+            return df
+
+        new_columns = []
+        for col in df.columns:
+            if isinstance(col, tuple):
+                filtered = [str(c).strip() for c in col if 'Unnamed' not in str(c)]
+                if filtered:
+                    new_col = '_'.join(filtered)
+                else:
+                    new_col = str(col[-1]) if len(col) > 0 else 'unknown'
+            else:
+                new_col = str(col).strip()
+            new_columns.append(new_col)
+
+        df.columns = new_columns
+        logger.info(f"Flattening: {len(df.columns)} colunas achatadas")
         return df
 
     def _ler_csv(self, file_content: bytes) -> pd.DataFrame:
@@ -454,6 +302,22 @@ class PMGZLoader(BaseLoader):
     def _normalizar_cabecalhos(self, df: pd.DataFrame) -> pd.DataFrame:
         """Normaliza nomes de colunas: strip, title case."""
         df.columns = [str(c).strip() for c in df.columns]
+        return df
+
+    def _renomear_colunas_completo(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Aplica dicionário DE_PARA_PMGZ_COMPLETO para mapeamento exato."""
+        rename_map = {}
+        for col in df.columns:
+            if col in DE_PARA_PMGZ_COMPLETO:
+                rename_map[col] = DE_PARA_PMGZ_COMPLETO[col]
+        
+        df = df.rename(columns=rename_map)
+        logger.info(f'Colunas renomeadas via DE_PARA_PMGZ_COMPLETO: {len(rename_map)} mapeamentos')
+        
+        colunas_sem_mapeamento = [c for c in df.columns if c not in rename_map.values]
+        if colunas_sem_mapeamento:
+            logger.warning(f'Colunas não mapeadas: {colunas_sem_mapeamento[:10]}')
+        
         return df
 
     def _renomear_colunas(self, df: pd.DataFrame) -> pd.DataFrame:
