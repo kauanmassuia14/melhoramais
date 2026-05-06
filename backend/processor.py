@@ -417,7 +417,7 @@ class GeneticDataProcessor:
         # Rename PMGZ columns to database field names
         df = self._map_pmgz_columns(df)
         
-        logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {unique_names[:15]}")
+        logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {composite_names[:15]}")
 
         return df
 
