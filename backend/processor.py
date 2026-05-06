@@ -606,6 +606,18 @@ class GeneticDataProcessor:
                     rename_map[col] = "pmg_psn_p_percent"
         
         df = df.rename(columns=rename_map)
+        
+        # Remove duplicate columns (keep first occurrence) - CRITICAL to avoid pandas error
+        seen = set()
+        unique_cols = []
+        for col in df.columns:
+            if col not in seen:
+                unique_cols.append(col)
+                seen.add(col)
+        if len(unique_cols) < len(df.columns):
+            logger.info(f"Deduplicating columns: {len(df.columns)} -> {len(unique_cols)}")
+            df = df[unique_cols]
+        
         logger.info(f"_map_pmgz_columns: Mapped {len(rename_map)} columns, final: {list(df.columns)[:30]}")
         
         return df
@@ -712,17 +724,6 @@ class GeneticDataProcessor:
         
         logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")
         
-        # Remove duplicate columns (keep first occurrence)
-        seen = set()
-        unique_cols = []
-        for col in df.columns:
-            if col not in seen:
-                unique_cols.append(col)
-                seen.add(col)
-        df = df[unique_cols]
-        
-        logger.info(f"_clean_data: After removing duplicates: {len(df.columns)} columns")
-        
         # DEBUG: Sample of raw values before conversion
         for col in list(df.columns)[:10]:
             try:
@@ -730,6 +731,13 @@ class GeneticDataProcessor:
                 logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
             except Exception as e:
                 logger.info(f"_clean_data: {col} sample BEFORE: <error: {e}>")
+        
+        # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
+        for col in df.columns:
+            col_dtype = df[col].dtype
+            # Skip if column is a DataFrame (duplicate column issue)
+            if hasattr(col_dtype, 'dtype'):
+                continue
         
         # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
         for col in df.columns:
