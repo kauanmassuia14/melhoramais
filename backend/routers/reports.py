@@ -12,7 +12,8 @@ import io
 import statistics
 
 from backend.database import get_db
-from backend.models import Animal, Farm, User, Upload
+from backend.models import Farm as SilverFarm, User, Upload
+from backend.models import GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
 from backend.auth.dependencies import get_current_user
 from backend.report_generator_v2 import ReportGeneratorV2
 
@@ -149,8 +150,8 @@ def generate_custom_report(
     - platforms=ANCP,PMGZ&columns=anc_mg,pmg_iabc
     """
     
-    # Verificar acesso à fazenda
-    farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
+    # Verificar acesso à fazenda (silver)
+    farm = db.query(SilverFarm).filter(SilverFarm.id_farm == farm_id).first()
     if not farm:
         raise HTTPException(status_code=404, detail="Fazenda não encontrada")
     
@@ -163,38 +164,92 @@ def generate_custom_report(
     if not valid_platforms:
         raise HTTPException(status_code=400, detail="Nenhuma plataforma válida informada")
     
+    # Mapear para genetics
+    genetics_farm = db.query(GeneticsFarm).filter(
+        GeneticsFarm.nome.ilike(f"%{farm.nome_farm}%")
+    ).first()
+    
+    if not genetics_farm:
+        raise HTTPException(status_code=404, detail="Fazenda não encontrada no genetics - importe dados primeiro")
+    
     # Buscar animais
-    query = db.query(Animal).filter(Animal.id_farm == farm_id)
+    import json
+    query = db.query(GeneticsAnimal).filter(GeneticsAnimal.farm_id == genetics_farm.id)
     
     if sexo:
-        query = query.filter(Animal.sexo == sexo)
-    if raca:
-        query = query.filter(Animal.raca == raca)
-    if min_p210:
-        query = query.filter(Animal.p210_peso_desmama >= min_p210)
-    if max_p210:
-        query = query.filter(Animal.p210_peso_desmama <= max_p210)
+        query = query.filter(GeneticsAnimal.sexo == sexo)
     
-    # Se não tem filtro de plataforma, buscar todos
-    # Se tem, buscar os que têm dados de pelo menos uma das plataformas
+    # raca não existe em genetics - usar genotipado como filtro alternativo
+    # min/max p210 filtrar após buscar
+    if min_p210 or max_p210:
+        all_animals = query.all()
+        filtered_ids = []
+        for a in all_animals:
+            latest = db.query(GeneticsGeneticEvaluation).filter(
+                GeneticsGeneticEvaluation.animal_id == a.id
+            ).order_by(GeneticsGeneticEvaluation.safra.desc()).first()
+            if latest and latest.pd_ed:
+                try:
+                    pd = json.loads(latest.pd_ed)
+                    pd_val = float(pd.get('dep', 0)) if pd.get('dep') else 0
+                    if min_p210 and pd_val < min_p210:
+                        continue
+                    if max_p210 and pd_val > max_p210:
+                        continue
+                    filtered_ids.append(a.id)
+                except:
+                    pass
+        query = query.filter(GeneticsAnimal.id.in_(filtered_ids))
+    
+    # Filtrar por plataforma - verificar se tem avaliações
     if valid_platforms:
-        platform_conditions = []
-        for p in valid_platforms:
-            platform = PLATFORMS[p]
-            # animals com pelo menos uma coluna dessa plataforma
-            for char in platform["characteristics"]:
-                col = char["code"]
-                if hasattr(Animal, col):
-                    platform_conditions.append(getattr(Animal, col).isnot(None))
-        
-        if platform_conditions:
-            from sqlalchemy import or_ as sql_or
-            query = query.filter(sql_or(*platform_conditions))
+        all_animals = query.all()
+        animal_ids_with_evals = []
+        for a in all_animals:
+            evals = db.query(GeneticsGeneticEvaluation).filter(
+                GeneticsGeneticEvaluation.animal_id == a.id,
+                GeneticsGeneticEvaluation.fonte_origem.in_(valid_platforms)
+            ).first()
+            if evals:
+                animal_ids_with_evals.append(a.id)
+        query = query.filter(GeneticsAnimal.id.in_(animal_ids_with_evals))
     
     animals = query.limit(limit).all()
     
     if not animals:
         raise HTTPException(status_code=404, detail="Nenhum animal encontrado com os filtros informados")
+    
+    # Preparar dados para o relatório - buscar avaliações
+    animal_data = []
+    for a in animals:
+        latest = db.query(GeneticsGeneticEvaluation).filter(
+            GeneticsGeneticEvaluation.animal_id == a.id
+        ).order_by(GeneticsGeneticEvaluation.safra.desc()).first()
+        
+        data = {
+            "rgn_animal": a.rgn,
+            "nome_animal": a.nome,
+            "sexo": a.sexo,
+            "data_nascimento": a.nascimento.isoformat() if a.nascimento else None,
+            "genotipado": a.genotipado,
+            "sire_id": str(a.sire_id) if a.sire_id else None,
+            "dam_id": str(a.dam_id) if a.dam_id else None,
+        }
+        
+        if latest:
+            data["fonte_origem"] = latest.fonte_origem
+            data["iabczg"] = float(latest.iabczg) if latest.iabczg else None
+            for field in ['pn_ed', 'pd_ed', 'pa_ed', 'ps_ed', 'pm_em', 'ipp', 'stay', 'pe_365', 'aol', 'acab', 'marmoreio', 'eg', 'pg', 'mg']:
+                val = getattr(latest, field)
+                if val:
+                    try:
+                        parsed = json.loads(val)
+                        for k, v in parsed.items():
+                            data[f"pmg_{field[:5]}_{k}"] = v
+                    except:
+                        pass
+        
+        animal_data.append(data)
     
     # Escolher colunas a incluir
     selected_columns = _select_columns(platforms, columns, include_basic, include_genealogy)
@@ -203,7 +258,7 @@ def generate_custom_report(
     generator = ReportGeneratorV2()
     pdf_bytes = generator.generate_custom_report(
         farm_name=farm.nome_farm,
-        animals=animals,
+        animals=animal_data,  # Passar dados formatados
         platforms=valid_platforms,
         selected_columns=selected_columns,
         include_genealogy=include_genealogy,
