@@ -712,10 +712,24 @@ class GeneticDataProcessor:
         
         logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")
         
-        # DEBUG: Sample of raw values before conversion
+        # Remove duplicate columns (keep first occurrence)
+        seen = set()
+        unique_cols = []
         for col in df.columns:
-            sample_vals = df[col].head(2).tolist()
-            logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
+            if col not in seen:
+                unique_cols.append(col)
+                seen.add(col)
+        df = df[unique_cols]
+        
+        logger.info(f"_clean_data: After removing duplicates: {len(df.columns)} columns")
+        
+        # DEBUG: Sample of raw values before conversion
+        for col in list(df.columns)[:10]:
+            try:
+                sample_vals = df[col].head(2).astype(str).tolist()
+                logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
+            except Exception as e:
+                logger.info(f"_clean_data: {col} sample BEFORE: <error: {e}>")
         
         # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
         for col in df.columns:
