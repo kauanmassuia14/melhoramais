@@ -469,6 +469,20 @@ class PMGZLoader(BaseLoader):
 
     def _tratar_dados(self, df: pd.DataFrame) -> pd.DataFrame:
         """Converte tipos, trata vírgulas, booleanos e limpa dados."""
+        new_columns = []
+        for i, col in enumerate(df.columns):
+            series = df.iloc[:, i]
+            if hasattr(series, 'str'):
+                try:
+                    series = series.astype(str).str.strip()
+                    series = series.str.replace(',', '.', regex=False)
+                    series = series.replace(['-', '', 'nan', 'None', 'NaN', 'nat'], None)
+                except:
+                    pass
+            new_columns.append(series)
+        df = pd.concat(new_columns, axis=1)
+        df.columns = df.columns.astype(str)
+
         seen = set()
         unique_cols = []
         for col in df.columns:
@@ -478,17 +492,17 @@ class PMGZLoader(BaseLoader):
         df = df[unique_cols]
 
         for col in df.columns:
-            try:
-                df[col] = df[col].astype(str).str.strip()
-                df[col] = df[col].str.replace(',', '.', regex=False)
-                df[col] = df[col].replace(['-', '', 'nan', 'None', 'NaN', 'nat'], None)
-            except Exception as e:
-                logger.warning(f"Erro ao tratar coluna {col}: {e}")
-                continue
-
-        df = self._aplicar_tipos_numericos(df, COLUNAS_FLOAT)
-        df = self._aplicar_tipos_inteiros(df, COLUNAS_INTEGER)
-        df = self._converter_booleanos(df, COLUNAS_BOOLEAN)
+            if col in COLUNAS_FLOAT:
+                df[col] = df[col].apply(self._converter_numero_brasileiro)
+            elif col in COLUNAS_INTEGER:
+                df[col] = df[col].apply(self._converter_numero_brasileiro)
+                df[col] = df[col].astype('Int64')
+            elif col in COLUNAS_BOOLEAN:
+                df[col] = df[col].apply(
+                    lambda x: True if str(x).upper().strip() == 'SIM'
+                    else (False if str(x).upper().strip() in ['NÃO', 'NAO', 'N']
+                    else None)
+                )
 
         if 'identificacao_animal_nascimento' in df.columns:
             df['identificacao_animal_nascimento'] = df['identificacao_animal_nascimento'].apply(self._converter_data)
