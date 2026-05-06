@@ -821,6 +821,7 @@ class GeneticDataProcessor:
                     return s if s and s.lower() not in ['nan', 'none', ''] else None
                 
                 # Preparar dados do animal
+                upload_id_val = self.upload_id if self.upload_id else None
                 animal_data = {
                     'id': str(animal_id),
                     'farm_id': str(genetics_farm_id),
@@ -831,6 +832,7 @@ class GeneticDataProcessor:
                     'nascimento': safe_str(row.get('data_nascimento')),
                     'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
                     'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                    'upload_id': upload_id_val,
                 }
                 
                 if existing:
@@ -839,7 +841,8 @@ class GeneticDataProcessor:
                         text("""
                             UPDATE genetics.animals 
                             SET nome = :nome, serie = :serie, sexo = :sexo, 
-                                nascimento = :nascimento, genotipado = :genotipado, csg = :csg
+                                nascimento = :nascimento, genotipado = :genotipado, csg = :csg,
+                                upload_id = :upload_id
                             WHERE id = :id
                         """),
                         animal_data
@@ -849,8 +852,8 @@ class GeneticDataProcessor:
                     # Insert
                     self.db.execute(
                         text("""
-                            INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg)
-                            VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg)
+                            INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
+                            VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
                         """),
                         animal_data
                     )

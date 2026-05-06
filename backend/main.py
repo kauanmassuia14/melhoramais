@@ -867,6 +867,48 @@ def delete_upload(
     return {"message": "Upload and associated data deleted successfully"}
 
 
+@app.delete("/uploads/{upload_id}/genetics", status_code=200)
+def delete_upload_genetics(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete genetics.animals and genetic_evaluations linked to an upload."""
+    from sqlalchemy import text
+    
+    upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    
+    if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Buscar IDs dos animais deste upload
+    animals = db.execute(
+        text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
+        {"upload_id": upload_id}
+    ).fetchall()
+    
+    animal_ids = [a[0] for a in animals]
+    
+    if animal_ids:
+        # Deletar genetic_evaluations primeiro (FK)
+        db.execute(
+            text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
+            {"animal_ids": animal_ids}
+        )
+        
+        # Deletar animals
+        db.execute(
+            text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+            {"upload_id": upload_id}
+        )
+    
+    db.commit()
+    
+    return {"message": f"Deleted {len(animal_ids)} genetics animals and their evaluations"}
+
+
 # ============================================
 # Dashboard Stats — protected
 # ============================================
