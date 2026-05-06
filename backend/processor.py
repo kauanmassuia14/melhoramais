@@ -862,11 +862,20 @@ class GeneticDataProcessor:
                     try:
                         # Função auxiliar para converter valor para tupla (tratando NaN)
                         def to_tuple(dep_val, ac_val, deca_val, p_val):
+                            # Limpar valores: converter para float, dividir por 100 se necessário, tratar NaN
+                            def clean_val(v):
+                                if pd.isna(v):
+                                    return None
+                                try:
+                                    return float(v)
+                                except:
+                                    return None
+                            
                             return (
-                                None if pd.isna(dep_val) else float(dep_val),
-                                None if pd.isna(ac_val) else float(ac_val),
-                                None if pd.isna(deca_val) else int(deca_val),
-                                None if pd.isna(p_val) else float(p_val)
+                                clean_val(dep_val),
+                                clean_val(ac_val),
+                                clean_val(deca_val) if deca_val and not pd.isna(deca_val) else None,
+                                clean_val(p_val)
                             )
                         
                         eval_data = {
@@ -896,7 +905,7 @@ class GeneticDataProcessor:
                             text("""
                                 INSERT INTO genetics.genetic_evaluations 
                                 (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
-                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_ed, :ipp_ed, :stay_ed, :pe365_ed, :psn_ed, :aol_ed, :acab_ed, :mar_ed, :eg_ed, :p_ed, :m_ed)
+                                VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_em, :ipp, :stay, :pe_365, :psn, :aol, :acab, :marmoreio, :eg, :pg, :mg)
                             """),
                             eval_data
                         )
