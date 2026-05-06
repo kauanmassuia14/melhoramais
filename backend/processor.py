@@ -614,9 +614,10 @@ class GeneticDataProcessor:
         seen = set()
         unique_cols = []
         for col in df.columns:
-            if col not in seen:
-                unique_cols.append(col)
-                seen.add(col)
+            col_str = str(col)
+            if col_str not in seen:
+                unique_cols.append(col_str)
+                seen.add(col_str)
         if len(unique_cols) < len(df.columns):
             logger.info(f"Deduplicating columns: {len(df.columns)} -> {len(unique_cols)}")
             df = df[unique_cols]
@@ -679,8 +680,10 @@ class GeneticDataProcessor:
         }
         
         for old_name, new_name in direct_mappings.items():
-            if old_name in df.columns and new_name not in df.columns:
-                new_cols[old_name] = new_name
+            old_str = str(old_name)
+            new_str = str(new_name)
+            if old_str in df.columns and new_str not in df.columns:
+                new_cols[old_str] = new_str
         
         df = df.rename(columns=new_cols)
         
@@ -722,7 +725,8 @@ class GeneticDataProcessor:
             df["raca"] = df["raca"].fillna("Nelore")
             df["raca"] = df["raca"].replace(["", "nan", "None", "-"], "Nelore")
         
-        if "fonte_origem" not in df.columns:
+        fonte_str = str("fonte_origem")
+        if fonte_str not in df.columns:
             df["fonte_origem"] = source_system
         
         logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")

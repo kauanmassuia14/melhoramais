@@ -306,7 +306,8 @@ class PMGZLoader(BaseLoader):
         df = df.rename(columns=rename_map)
         logger.info(f'Colunas renomeadas via DE_PARA_PMGZ_COMPLETO: {len(rename_map)} mapeamentos')
         
-        colunas_sem_mapeamento = [c for c in df.columns if c not in rename_map.values]
+        rename_map_values = set(str(v) for v in rename_map.values())
+        colunas_sem_mapeamento = [str(c) for c in df.columns if str(c) not in rename_map_values]
         if colunas_sem_mapeamento:
             logger.warning(f'Colunas não mapeadas: {colunas_sem_mapeamento[:10]}')
         
@@ -369,13 +370,14 @@ class PMGZLoader(BaseLoader):
                     rename_map[col] = 'identificacao_indice_p_perc'
                 elif 'F %' in subcol or 'F%' in subcol:
                     rename_map[col] = 'identificacao_indice_f_perc'
-            else:
+else:
                 for excel_col, snake_col in MAPEAMENTO_EXCEL_PARA_SNAKE.items():
                     if excel_col.lower() in col_normalizado.lower() or col_normalizado.lower() in excel_col.lower():
-                        if col not in rename_map:
-                            rename_map[col] = snake_col
+                        col_str = str(col)
+                        if col_str not in rename_map:
+                            rename_map[col_str] = snake_col
                         break
-
+        
         df = df.rename(columns=rename_map)
         df = df.dropna(how='all')
         logger.info(f'Colunas renomeadas: {len(rename_map)} mapeamentos')
@@ -395,15 +397,16 @@ class PMGZLoader(BaseLoader):
                 except:
                     pass
             new_columns.append(series)
-        df = pd.concat(new_columns, axis=1)
-        df.columns = df.columns.astype(str)
-
+df = pd.concat(new_columns, axis=1)
+        df.columns = [str(c) for c in df.columns]
+        
         seen = set()
         unique_cols = []
         for col in df.columns:
-            if col not in seen:
-                seen.add(col)
-                unique_cols.append(col)
+            col_str = str(col)
+            if col_str not in seen:
+                seen.add(col_str)
+                unique_cols.append(col_str)
         df = df[unique_cols]
 
         for col in df.columns:
