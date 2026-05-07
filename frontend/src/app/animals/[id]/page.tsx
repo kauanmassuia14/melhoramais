@@ -3,11 +3,17 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeftIcon, ArrowPathIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+  CheckBadgeIcon,
+  BeakerIcon,
+} from "@heroicons/react/24/outline";
 import { api } from "@/lib/api";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
-import { StatsCard } from "@/components/ui/StatsCard";
+import { MetricCard } from "@/components/ui/MetricCard";
 
 interface EvaluationMetric {
   dep: number | null;
@@ -18,8 +24,8 @@ interface EvaluationMetric {
 
 interface Evaluation {
   id: string;
-  safra: number;
-  fonte_origem: string;
+  safra: number | null;
+  fonte_origem: string | null;
   iabczg: number | null;
   deca_index: number | null;
   pn: EvaluationMetric | null;
@@ -42,6 +48,7 @@ interface Evaluation {
 interface AnimalV2 {
   id: string;
   rgn: string | null;
+  serie: string | null;
   nome: string | null;
   sexo: string | null;
   nascimento: string | null;
@@ -51,7 +58,19 @@ interface AnimalV2 {
   evaluations: Evaluation[];
 }
 
-export default function AnimalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const fmt = (v: number | null | undefined, d = 2) =>
+  v != null ? Number(v).toFixed(d) : null;
+
+const fmtDate = (d: string | null) => {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString("pt-BR");
+};
+
+export default function AnimalDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [animal, setAnimal] = useState<AnimalV2 | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,27 +95,14 @@ export default function AnimalDetailPage({ params }: { params: Promise<{ id: str
     }
   }, [id]);
 
+  const ev = animal?.evaluations?.[0] ?? null;
+  const decanil = ev?.deca_index ?? ev?.pd?.deca ?? ev?.pn?.deca;
+
   const getSexLabel = (s: string | null) => {
     if (s === "M") return "Macho";
     if (s === "F") return "Fêmea";
     return "—";
   };
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "—";
-    try {
-      return new Date(dateStr).toLocaleDateString("pt-BR");
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const getLatestEvaluation = () => {
-    if (!animal?.evaluations?.length) return null;
-    return animal.evaluations[0];
-  };
-
-  const eval_ = getLatestEvaluation();
 
   return (
     <DashboardLayout>
@@ -115,13 +121,9 @@ export default function AnimalDetailPage({ params }: { params: Promise<{ id: str
                 <span className="inline-block w-48 h-8 bg-white/[0.04] rounded animate-pulse" />
               ) : animal ? (
                 <>
-                  <span className="font-mono text-cyan-glow-400">
-                    {animal.rgn || "—"}
-                  </span>
+                  <span className="font-mono text-cyan-400">{animal.rgn || "—"}</span>
                   {animal.nome && (
-                    <span className="text-text-secondary ml-3 text-2xl">
-                      — {animal.nome}
-                    </span>
+                    <span className="text-text-secondary ml-3 text-2xl">— {animal.nome}</span>
                   )}
                 </>
               ) : (
@@ -130,8 +132,10 @@ export default function AnimalDetailPage({ params }: { params: Promise<{ id: str
             </h1>
             {animal && (
               <p className="text-text-secondary text-sm mt-1">
-                {getSexLabel(animal.sexo)} · {animal.genotipado ? "Genotipado" : "Não genotipado"} ·{" "}
-                Fonte: {eval_?.fonte_origem || "—"}
+                {getSexLabel(animal.sexo)}
+                {animal.nascimento && ` · Nascido em ${fmtDate(animal.nascimento)}`}
+                {ev?.fonte_origem && ` · Fonte: ${ev.fonte_origem}`}
+                {ev?.safra && ` · Safra ${ev.safra}`}
               </p>
             )}
           </div>
@@ -146,9 +150,18 @@ export default function AnimalDetailPage({ params }: { params: Promise<{ id: str
 
         {/* Error */}
         {error && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-neon/[0.06] border border-rose-neon/20">
-            <ExclamationTriangleIcon className="w-5 h-5 text-rose-neon-400 flex-shrink-0" />
-            <span className="text-sm text-rose-neon-400">{error}</span>
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-500/[0.06] border border-rose-500/20">
+            <ExclamationTriangleIcon className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <span className="text-sm text-rose-400">{error}</span>
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-20 rounded-xl bg-white/[0.04] animate-pulse" />
+            ))}
           </div>
         )}
 
@@ -156,221 +169,147 @@ export default function AnimalDetailPage({ params }: { params: Promise<{ id: str
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-8"
           >
-            {/* Identification */}
+            {/* ── Identificação ─────────────────────────────────────────── */}
             <GlassCard className="p-6">
-              <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
+              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-5">
                 Identificação
               </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatsCard label="RGN" value={animal.rgn} />
-                <StatsCard label="Nome" value={animal.nome} />
-                <StatsCard label="Sexo" value={getSexLabel(animal.sexo)} />
-                <StatsCard label="Data Nascimento" value={formatDate(animal.nascimento)} />
-                <StatsCard 
-                  label="Genotipado" 
-                  value={animal.genotipado === true ? "Sim" : animal.genotipado === false ? "Não" : "—"} 
-                />
-                <StatsCard 
-                  label="CSG" 
-                  value={animal.csg === true ? "Sim" : animal.csg === false ? "Não" : "—"} 
-                />
-                <StatsCard label="Fonte" value={eval_?.fonte_origem || "—"} />
-                <StatsCard label="Safra" value={eval_?.safra?.toString() || "—"} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {/* RGN */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">RGN</span>
+                  <span className="font-mono text-lg font-bold text-emerald-400">{animal.rgn || "—"}</span>
+                </div>
+                {/* Série */}
+                {animal.serie && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Série</span>
+                    <span className="font-mono text-lg font-bold text-white">{animal.serie}</span>
+                  </div>
+                )}
+                {/* Nome */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 col-span-2">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Nome</span>
+                  <span className="text-base font-semibold text-white">{animal.nome || "—"}</span>
+                </div>
+                {/* Sexo */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Sexo</span>
+                  <span className={`text-sm font-semibold ${animal.sexo === "M" ? "text-blue-400" : animal.sexo === "F" ? "text-pink-400" : "text-text-muted"}`}>
+                    {getSexLabel(animal.sexo)}
+                  </span>
+                </div>
+                {/* Nascimento */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Nascimento</span>
+                  <span className="text-sm font-semibold text-white">{fmtDate(animal.nascimento) || "—"}</span>
+                </div>
+                {/* Genotipado */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Genotipado</span>
+                  {animal.genotipado ? (
+                    <span className="flex items-center gap-1 text-sm font-semibold text-emerald-400">
+                      <CheckBadgeIcon className="w-4 h-4" /> Sim
+                    </span>
+                  ) : animal.genotipado === false ? (
+                    <span className="text-sm font-semibold text-text-muted">Não</span>
+                  ) : (
+                    <span className="text-sm text-text-muted">—</span>
+                  )}
+                </div>
+                {/* CSG */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">CSG</span>
+                  {animal.csg ? (
+                    <span className="flex items-center gap-1 text-sm font-semibold text-violet-400">
+                      <BeakerIcon className="w-4 h-4" /> Sim
+                    </span>
+                  ) : animal.csg === false ? (
+                    <span className="text-sm font-semibold text-text-muted">Não</span>
+                  ) : (
+                    <span className="text-sm text-text-muted">—</span>
+                  )}
+                </div>
               </div>
             </GlassCard>
 
-            {/* Genetic Indices */}
-            {eval_ && (
+            {/* ── Índices Genéticos ──────────────────────────────────────── */}
+            {ev && (
               <GlassCard className="p-6">
-                <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
-                  Índices Genéticos
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <StatsCard
-                    label="iABCZ — Índice ABCZ"
-                    value={eval_.iabczg?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="DECA"
-                    value={(eval_.deca_index ?? eval_.pd?.deca ?? eval_.pn?.deca)?.toString() ?? null}
-                  />
-                  
-                  {/* PN - Peso Nascimento */}
-                  <StatsCard
-                    label="PN-EDg — Peso Nascimento"
-                    value={eval_.pn?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PN-EDg — AC%"
-                    value={eval_.pn?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-                  <StatsCard
-                    label="PN-EDg — DECA"
-                    value={eval_.pn?.deca?.toString() ?? null}
-                  />
-                  <StatsCard
-                    label="PN-EDg — P%"
-                    value={eval_.pn?.p_percent?.toFixed(1) ?? null}
-                    unit="%"
-                  />
-
-                  {/* PD - Peso Desmama */}
-                  <StatsCard
-                    label="PD-EDg — Peso Desmama"
-                    value={eval_.pd?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PD-EDg — AC%"
-                    value={eval_.pd?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-                  <StatsCard
-                    label="PD-EDg — DECA"
-                    value={eval_.pd?.deca?.toString() ?? null}
-                  />
-                  <StatsCard
-                    label="PD-EDg — P%"
-                    value={eval_.pd?.p_percent?.toFixed(1) ?? null}
-                    unit="%"
-                  />
-
-                  {/* PA - Peso Ano */}
-                  <StatsCard
-                    label="PA-EDg — Peso Ano"
-                    value={eval_.pa?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PA-EDg — AC%"
-                    value={eval_.pa?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* PS - Peso Sobreano */}
-                  <StatsCard
-                    label="PS-EDg — Peso Sobreano"
-                    value={eval_.ps?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PS-EDg — AC%"
-                    value={eval_.ps?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* PM - Peso Materno */}
-                  <StatsCard
-                    label="PM-EMg — Peso Materno"
-                    value={eval_.pm?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PM-EMg — AC%"
-                    value={eval_.pm?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* IPP */}
-                  <StatsCard
-                    label="IPP — Idade Primeiro Parto"
-                    value={eval_.ipp?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="IPP — AC%"
-                    value={eval_.ipp?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* Stayability */}
-                  <StatsCard
-                    label="STAYg — Stayability"
-                    value={eval_.stay?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="STAYg — AC%"
-                    value={eval_.stay?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* PE 365 */}
-                  <StatsCard
-                    label="PE-365g — Perímetro Escrotal"
-                    value={eval_.pe_365?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="PE-365g — AC%"
-                    value={eval_.pe_365?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* AOL - Área Olho de Lombo */}
-                  <StatsCard
-                    label="AOLg — Área Olho de Lombo"
-                    value={eval_.aol?.dep?.toFixed(2) ?? null}
-                    unit="cm²"
-                  />
-                  <StatsCard
-                    label="AOLg — AC%"
-                    value={eval_.aol?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* ACAB - Acabamento */}
-                  <StatsCard
-                    label="ACABg — Acabamento"
-                    value={eval_.acab?.dep?.toFixed(2) ?? null}
-                    unit="mm"
-                  />
-                  <StatsCard
-                    label="ACABg — AC%"
-                    value={eval_.acab?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* Marmoreio */}
-                  <StatsCard
-                    label="MARg — Marmoreio"
-                    value={eval_.marmoreio?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="MARg — AC%"
-                    value={eval_.marmoreio?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* EG - Estrutura Corporal */}
-                  <StatsCard
-                    label="Eg — Estrutura"
-                    value={eval_.eg?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="Eg — AC%"
-                    value={eval_.eg?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* PG - Precocidade */}
-                  <StatsCard
-                    label="Pg — Precocidade"
-                    value={eval_.pg?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="Pg — AC%"
-                    value={eval_.pg?.ac?.toString() ?? null}
-                    unit="%"
-                  />
-
-                  {/* MG - Musculosidade */}
-                  <StatsCard
-                    label="Mg — Musculosidade"
-                    value={eval_.mg?.dep?.toFixed(2) ?? null}
-                  />
-                  <StatsCard
-                    label="Mg — AC%"
-                    value={eval_.mg?.ac?.toString() ?? null}
-                    unit="%"
-                  />
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                    Índices Genéticos
+                  </h2>
+                  <span className="text-xs text-text-muted">
+                    Fonte: <span className="text-white font-medium">{ev.fonte_origem || "—"}</span>
+                    {ev.safra && <> · Safra <span className="text-white font-medium">{ev.safra}</span></>}
+                  </span>
                 </div>
+
+                {/* Global */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <MetricCard metricKey="iabczg" label="iABCZ — Índice Global" value={fmt(ev.iabczg)} />
+                  <MetricCard metricKey="deca" label="DECA — Decil" value={decanil?.toString()} />
+                </div>
+
+                {/* Pesos */}
+                <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Pesos (DEP)</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
+                  <MetricCard metricKey="pn" label="PN — Peso Nascimento" value={fmt(ev.pn?.dep)} unit="kg" />
+                  <MetricCard metricKey="pd" label="PD — Peso Desmama" value={fmt(ev.pd?.dep)} unit="kg" />
+                  <MetricCard metricKey="pa" label="PA — Peso Ano" value={fmt(ev.pa?.dep)} unit="kg" />
+                  <MetricCard metricKey="ps" label="PS — Peso Sobreano" value={fmt(ev.ps?.dep)} unit="kg" />
+                  <MetricCard metricKey="pm" label="PM — Peso Materno" value={fmt(ev.pm?.dep)} unit="kg" />
+                </div>
+
+                {/* Acurácias */}
+                {(ev.pn?.ac || ev.pd?.ac || ev.ps?.ac) && (
+                  <>
+                    <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Acurácias (%)</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+                      {ev.pn?.ac != null && <MetricCard metricKey="pn" label="AC% — PN" value={`${ev.pn.ac}`} unit="%" />}
+                      {ev.pd?.ac != null && <MetricCard metricKey="pd" label="AC% — PD" value={`${ev.pd.ac}`} unit="%" />}
+                      {ev.pa?.ac != null && <MetricCard metricKey="pa" label="AC% — PA" value={`${ev.pa.ac}`} unit="%" />}
+                      {ev.ps?.ac != null && <MetricCard metricKey="ps" label="AC% — PS" value={`${ev.ps.ac}`} unit="%" />}
+                      {ev.pm?.ac != null && <MetricCard metricKey="pm" label="AC% — PM" value={`${ev.pm.ac}`} unit="%" />}
+                    </div>
+                  </>
+                )}
+
+                {/* Reprodução */}
+                <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Reprodução</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
+                  <MetricCard metricKey="ipp" label="IPP — Idade 1º Parto" value={fmt(ev.ipp?.dep)} unit="dias" />
+                  <MetricCard metricKey="stay" label="STAY — Stayability" value={fmt(ev.stay?.dep)} unit="%" />
+                  <MetricCard metricKey="pe_365" label="PE-365 — Perímetro Escrotal" value={fmt(ev.pe_365?.dep)} unit="cm" />
+                </div>
+
+                {/* Carcaça */}
+                <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Carcaça e Qualidade</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
+                  <MetricCard metricKey="aol" label="AOL — Área Olho de Lombo" value={fmt(ev.aol?.dep)} unit="cm²" />
+                  <MetricCard metricKey="acab" label="ACAB — Acabamento" value={fmt(ev.acab?.dep)} unit="mm" />
+                  <MetricCard metricKey="marmoreio" label="MAR — Marmoreio" value={fmt(ev.marmoreio?.dep)} />
+                </div>
+
+                {/* Conformação */}
+                <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Conformação</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  <MetricCard metricKey="eg" label="E — Estrutura Corporal" value={fmt(ev.eg?.dep)} />
+                  <MetricCard metricKey="pg" label="P — Precocidade" value={fmt(ev.pg?.dep)} />
+                  <MetricCard metricKey="mg" label="M — Musculosidade" value={fmt(ev.mg?.dep)} />
+                </div>
+              </GlassCard>
+            )}
+
+            {/* Sem avaliações */}
+            {!ev && (
+              <GlassCard className="p-12 text-center">
+                <p className="text-text-muted text-sm">
+                  Nenhuma avaliação genética encontrada para este animal.
+                </p>
               </GlassCard>
             )}
           </motion.div>
