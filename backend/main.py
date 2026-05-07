@@ -103,6 +103,12 @@ app.include_router(migrate_router)
 from backend.routers.animals_v2 import router as animals_v2_router
 app.include_router(animals_v2_router)
 
+# ============================================
+# Genetics Farms Router (genetics schema)
+# ============================================
+from backend.routers.genetics_farms import router as genetics_farms_router
+app.include_router(genetics_farms_router)
+
 # Run PMGZ migration on startup (auto-add columns if missing)
 # DISABLED - silver.animais was deleted, using genetics schema instead
 # try:
@@ -125,6 +131,7 @@ def startup_event():
             with engine.connect() as conn:
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
+                conn.execute(text("CREATE SCHEMA IF NOT EXISTS genetics"))
                 conn.commit()
         except Exception as e:
             print(f"Erro ao criar schemas: {e}")

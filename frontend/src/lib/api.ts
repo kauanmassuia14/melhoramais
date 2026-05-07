@@ -131,6 +131,13 @@ export interface Farm {
   created_at: string | null;
 }
 
+export interface GeneticsFarm {
+  id: string;
+  nome: string;
+  documento: string | null;
+  created_at: string | null;
+}
+
 export interface Upload {
   upload_id: string;
   nome: string;
@@ -319,6 +326,22 @@ export const api = {
     fetchApi<{ message: string }>(`/farms/${id}`, { method: 'DELETE' }),
   createFarm: (data: { nome_farm: string; cnpj?: string; responsavel?: string; email?: string }) =>
     fetchApi<Farm>('/farms', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Genetics Farms (UUID-based)
+  getGeneticsFarms: () => fetchApi<GeneticsFarm[]>('/genetics/farms'),
+  getGeneticsFarm: (id: string) => fetchApi<GeneticsFarm>(`/genetics/farms/${id}`),
+  updateGeneticsFarm: (id: string, data: { nome?: string; documento?: string }) =>
+    fetchApi<GeneticsFarm>(`/genetics/farms/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteGeneticsFarm: (id: string) =>
+    fetchApi<{ message: string }>(`/genetics/farms/${id}`, { method: 'DELETE' }),
+  createGeneticsFarm: (data: { nome: string; documento?: string }) =>
+    fetchApi<GeneticsFarm>('/genetics/farms', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

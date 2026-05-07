@@ -476,6 +476,29 @@ class NotificationUpdate(BaseModel):
 
 
 # ============================================
+# Genetics Farm Schemas
+# ============================================
+class GeneticsFarmCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+    documento: Optional[str] = None
+
+
+class GeneticsFarmUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=255)
+    documento: Optional[str] = None
+
+
+class GeneticsFarmResponse(BaseModel):
+    id: str
+    nome: Optional[str]
+    documento: Optional[str]
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================
 # Upload Schemas
 # ============================================
 class UploadCreate(BaseModel):

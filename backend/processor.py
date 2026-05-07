@@ -6,7 +6,6 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from backend.models import ColumnMapping, ProcessingLog, Upload, IS_SQLITE, GeneticsAnimal, GeneticsFarm
-from backend.loaders import PMGZLoader
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +15,15 @@ class GeneticDataProcessor:
         self.db = db
         self.farm_id = farm_id
         self.upload_id = upload_id
-        self.upload_log_id = None  # Will be set during processing
+        self.upload_log_id = None
 
     def get_mappings(self, source_system: str) -> Dict[str, str]:
-        """Fetch column mappings from DB for a source system."""
         mappings = self.db.query(ColumnMapping).filter(
             ColumnMapping.source_system == source_system
         ).all()
         return {m.source_column: m.target_column for m in mappings}
 
     def get_required_columns(self, source_system: str) -> List[str]:
-        """Get required column names in source format for validation."""
         mappings = self.db.query(ColumnMapping).filter(
             ColumnMapping.source_system == source_system,
             ColumnMapping.is_required == True,
@@ -36,87 +33,53 @@ class GeneticDataProcessor:
     def _match_columns(
         self, df: pd.DataFrame, col_map: Dict[str, str], required: List[str]
     ) -> Tuple[pd.DataFrame, Dict[str, str]]:
-        """
-        Match file columns to mapping, handling:
-        - Case differences: 'Registro' vs 'REGISTRO'
-        - Whitespace: ' Registro ' vs 'Registro'
-        - Pandas duplicate suffixes: RGN.1, NOME.2, etc.
-        - Underscore/space: 'SERIE / RGD' vs 'serie__rgd'
-        - Parenthesis: 'Peso ao nascimento - efeito direto (PN-EDg) - kg' 
-        - Partial match: match part of name inside parenthesis
-        - PMGZ composite: 'kg DEP' can match 'kg' (DEP is implicit in seed.py)
-        """
         import re
         file_lookup: Dict[str, str] = {}
-        
+
         for col in df.columns:
             col_str = str(col)
             norm = col_str.strip().lower().replace(" ", "_")
             file_lookup[norm] = col_str
-            
+
             parenthetical = re.search(r'\(([^)]+)\)', col_str)
             if parenthetical:
                 file_lookup[parenthetical.group(1).lower().strip()] = col_str
-                short_code = parenthetical.group(1).lower().strip().replace("-", "")
-                if isinstance(file_lookup, dict) and short_code not in file_lookup:
-                    file_lookup[short_code] = col_str
-            file_lookup[norm] = col_str
-            
+
             col_lower = col_str.lower()
             dep_suffixes = [" dep", " ac %", " deca", " p %"]
             for suffix in dep_suffixes:
                 if col_lower.endswith(suffix):
                     base = col_lower[:-len(suffix)].strip()
                     base_underscored = base.replace(" ", "_")
-                    if isinstance(file_lookup, dict) and base not in file_lookup:
+                    if base not in file_lookup:
                         file_lookup[base] = col_str
-                    if isinstance(file_lookup, dict) and base_underscored not in file_lookup:
+                    if base_underscored not in file_lookup:
                         file_lookup[base_underscored] = col_str
-                    base_with_underscore = base.replace(" ", "_")
-                    if isinstance(file_lookup, dict) and base_with_underscore not in file_lookup:
-                        file_lookup[base_with_underscore] = col_str
 
         rename: Dict[str, str] = {}
         missing: List[str] = []
 
         for source_col, target_col in col_map.items():
             norm_source = source_col.strip().lower().replace(" ", "_")
-            
-            # Check if source has explicit suffix
             explicit_suffix = None
             for suff in ["_dep", "_ac%", "_deca", "_p_%"]:
                 if norm_source.endswith(suff):
                     explicit_suffix = suff
                     break
-            
+
             actual = None
-            
+
             if explicit_suffix:
-                # Source has explicit suffix - look up exact match or with underscore variant
                 actual = file_lookup.get(norm_source)
                 if not actual:
-                    # Try: _ac% -> _ac_% (underscore before suffix)
                     alt = norm_source.replace("_ac%", "_ac_%").replace("_p%", "_p_%").replace("_deca", "_deca")
                     actual = file_lookup.get(alt)
             else:
-                # Source has NO suffix (implicit DEP) - use base lookup
                 actual = file_lookup.get(norm_source)
                 if not actual:
-                    # Try lowercase with spaces
                     alt = norm_source.replace("_", "-")
                     actual = file_lookup.get(alt)
-            
-            if actual is not None:
-                rename[actual] = target_col
-            else:
-                # Try PREFIX match: "RGN" should match "ANIMAL RGN"
-                source_lower = source_col.lower()
-                for file_col in df.columns:
-                    if file_col.lower().endswith(source_lower):
-                        actual = file_col
-                        logger.info(f"Prefix match: '{source_col}' -> '{file_col}'")
-                        break
-            
+
             if actual is not None:
                 rename[actual] = target_col
             elif source_col in required:
@@ -124,32 +87,16 @@ class GeneticDataProcessor:
 
         if missing:
             available = list(df.columns)
-            raise ValueError(
-                f"Required columns missing for mapping: {missing}\n"
-                f"Columns found in file ({len(available)} total):\n"
-                f"{available[:50]}...\n"  # Show first 50
-                f"Tip: check the column names in your Excel file match the mapping."
-            )
+            raise ValueError(f"Required columns missing: {missing}")
 
         return df, rename
 
     def process_file(
         self, file_content: bytes, filename: str, source_system: str
     ) -> Tuple[pd.DataFrame, ProcessingLog, Upload]:
-        """Full pipeline: read → map → clean → persist.
-        
-        Uses two separate transactions:
-        1. First creates the ProcessingLog entry (committed immediately)
-        2. Then processes and upserts animals (committed separately)
-        3. Updates Upload record with results
-        
-        This prevents the 'current transaction is aborted' error where
-        a failed animal upsert would leave the log insertion uncommitable.
-        """
         from sqlalchemy.exc import SQLAlchemyError
         from backend.database import SessionLocal
-        
-        # Transaction 1: Create log entry and commit immediately
+
         log = ProcessingLog(
             id_farm=self.farm_id,
             source_system=source_system,
@@ -158,17 +105,12 @@ class GeneticDataProcessor:
             started_at=datetime.utcnow(),
         )
         self.db.add(log)
-        self.db.commit()  # Commit immediately to persist log_id
-        
+        self.db.commit()
         log_id = log.id
-        
-        # Set the log_id for use in processing
         self.upload_log_id = log_id
-        
         upload = None
 
         try:
-            # Transaction 2: Process animals (may fail without affecting log)
             df, inserted, updated, failed = self._process_and_persist(
                 file_content, filename, source_system
             )
@@ -179,8 +121,7 @@ class GeneticDataProcessor:
             log.rows_failed = failed
             log.status = "completed"
             log.completed_at = datetime.utcnow()
-            
-            # Update upload record if provided
+
             if self.upload_id:
                 upload = self.db.query(Upload).filter(
                     Upload.upload_id == self.upload_id
@@ -192,15 +133,13 @@ class GeneticDataProcessor:
                     upload.status = "completed"
                     upload.completed_at = datetime.utcnow()
                     upload.arquivo_nome_original = filename
-            
+
             self.db.commit()
             return df, log, upload
 
         except Exception as e:
-            # Rollback failed animal transaction
             self.db.rollback()
-            
-            # Transaction 3: Update log and upload status in a FRESH session
+
             fresh_db = SessionLocal()
             try:
                 failed_log = fresh_db.query(ProcessingLog).filter(
@@ -211,8 +150,7 @@ class GeneticDataProcessor:
                     failed_log.error_message = str(e)[:1000]
                     failed_log.completed_at = datetime.utcnow()
                     fresh_db.commit()
-                
-                # Update upload status to failed
+
                 if self.upload_id:
                     failed_upload = fresh_db.query(Upload).filter(
                         Upload.upload_id == self.upload_id
@@ -233,54 +171,30 @@ class GeneticDataProcessor:
     def _process_and_persist(
         self, file_content: bytes, filename: str, source_system: str
     ) -> Tuple[pd.DataFrame, int, int, int]:
-        """Process file and persist to genetics schema."""
-        logger.info(f"=== START _process_and_persist ===")
-        logger.info(f"file_content size: {len(file_content)} bytes")
-        logger.info(f"filename: {filename}, source_system: {source_system}")
-        
-        # Read file
-        logger.info(f"Calling _read_file...")
-        try:
-            df = self._read_file(file_content, filename, source_system)
-            logger.info(f"After _read_file: {len(df)} rows, {len(df.columns)} columns")
-        except Exception as e:
-            import traceback
-            logger.error(f"Error in _read_file: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
-        
-        # For PMGZ, use pre-mapped columns
+        df = self._read_file(file_content, filename, source_system)
+
         if source_system == "PMGZ":
             col_map = {}
             required = []
         else:
             col_map = self.get_mappings(source_system)
             required = self.get_required_columns(source_system)
-        
+
         df, rename = self._match_columns(df, col_map, required)
-        logger.info(f"Columns mapped, rename count: {len(rename)}")
         df = df.rename(columns=rename)
-        logger.info(f"Columns after rename: {list(df.columns)[:20]}")
-        
-        # Clean data
         df = self._clean_data(df, source_system)
-        
-        # Add id_farm
+
         df["id_farm"] = self.farm_id
         if self.upload_id:
             df["upload_id"] = self.upload_id
-        
-        # Save to genetics schema
-        logger.info(f"Calling _upsert_genetics_animals with {len(df)} records...")
+
         inserted, updated, failed = self._upsert_genetics_animals(df, source_system)
-        logger.info(f"_upsert_genetics_animals result: inserted={inserted}, updated={updated}, failed={failed}")
-        
+
         return df, inserted, updated, failed
 
-    def _read_file(
-        self, file_content: bytes, filename: str, source_system: str
-    ) -> pd.DataFrame:
-        """Read file into DataFrame. Handles multi-row headers for PMGZ."""
+    def _read_file(self, file_content: bytes, filename: str, source_system: str) -> pd.DataFrame:
+        from backend.loaders import PMGZLoader
+        
         if filename.endswith((".xlsx", ".xls")):
             if source_system == "PMGZ":
                 loader = PMGZLoader(farm_id=self.farm_id)
@@ -290,518 +204,121 @@ class GeneticDataProcessor:
                 df = pd.read_excel(io.BytesIO(file_content))
         elif filename.endswith(".csv"):
             if source_system == "PMGZ":
-                # For PMGZ CSV files - the header is in the first row
                 df = pd.read_csv(io.BytesIO(file_content), sep="\t")
-                # Handle potential semicolon separator
                 if len(df.columns) == 1:
                     df = pd.read_csv(io.BytesIO(file_content), sep=";")
-                # Handle comma separator
                 if len(df.columns) == 1:
                     df = pd.read_csv(io.BytesIO(file_content))
             else:
                 df = pd.read_csv(io.BytesIO(file_content))
         elif filename.endswith(".PAG"):
-            df = pd.read_csv(
-                io.BytesIO(file_content), sep=None, engine="python"
-            )
+            df = pd.read_csv(io.BytesIO(file_content), sep=None, engine="python")
         else:
             raise ValueError(f"Unsupported file format: {filename}")
 
-        # Strip whitespace from column names
         df.columns = [str(c).strip() for c in df.columns]
-
-        # Drop fully empty rows
         df = df.dropna(how="all")
 
         return df
 
-    def _read_pmgz_excel(self, file_content: bytes) -> pd.DataFrame:
-        """
-        PMGZ Excel files have MULTI-ROW headers due to merged cells.
-        
-        Line 5: Group names like "Peso ao nascimento - efeito direto (PN-EDg) - kg"
-        Line 6: Sub-columns like "DEP", "AC%", "DECA", "P%"
-        
-        We use ffill() to propagate group names, then combine with sub-columns.
-        """
-        raw = pd.read_excel(
-            io.BytesIO(file_content), header=None, nrows=20
-        )
-        
-        logger.info(f"_read_pmgz_excel: scanned {len(raw)} rows to find header")
-        
-        best_row = None
-        best_score = 0
-        header_keywords = {
-            "RGN", "NOME", "SEXO", "NASC", "SERIE", "DECA", "iABCZg", "DEP", "FILHOS",
-            "ANIMAL", "PAI", "MÃE", "PESO", "IPP", "STAY", "PE-365", "AOL", "ACAB", "MAR",
-            "Estrutura", "Precocidade", "Musculosidade", "GENOTIPADO", "CSG"
-        }
-
-        for i, row in raw.iterrows():
-            score = 0
-            for val in row.values:
-                val_str = str(val).strip().upper()
-                if val_str in header_keywords:
-                    score += 1
-            if score > best_score:
-                best_score = score
-                best_row = i
-        
-        logger.info(f"_read_pmgz_excel: best_row={best_row}, best_score={best_score}")
-
-        if best_row is None or best_score < 2:
-            rows_info = []
-            for i, row in raw.iterrows():
-                row_str = ", ".join([str(v)[:20] for v in row.values if pd.notna(v)])
-                rows_info.append(f"Row {i}: {row_str[:100]}")
-            
-            raise ValueError(
-                f"Could not find header row in PMGZ file. "
-                f"Scanned {len(raw)} rows, best score was {best_score}. "
-                f"First few rows:\n" + "\n".join(rows_info[:5])
-            )
-
-        group_row = best_row - 1
-        subcol_row = best_row
-
-        group_names_raw = raw.loc[group_row].values
-        subcol_names_raw = raw.loc[subcol_row].values
-
-        group_names_filled = pd.Series(group_names_raw).ffill().values
-        subcol_names = [str(s).strip() if pd.notna(s) else "Unknown" for s in subcol_names_raw]
-
-        composite_names = []
-        for g, s in zip(group_names_filled, subcol_names):
-            g_str = str(g).strip() if pd.notna(g) else ""
-            if g_str and g_str != "nan":
-                composite_names.append(f"{g_str} {s}")
-            else:
-                composite_names.append(s)
-
-        df = pd.read_excel(
-            io.BytesIO(file_content),
-            header=None,
-            skiprows=best_row + 1,
-        )
-        df.columns = composite_names
-        
-        # Rename PMGZ columns to database field names
-        df = self._map_pmgz_columns(df)
-        
-        logger.info(f"_read_pmgz_excel: Final columns created: {len(df.columns)}, first 15: {composite_names[:15]}")
-
-        return df
-
-    def _map_pmgz_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Map PMGZ column names to database field names.
-        
-        PMGZ Excel has sections: ANIMAL, PAI, MÃE, AVÔ PATERNO, AVÔ MATERNO, AVÔ PATERNO DA MÃE, AVÔ MATERNO DA MÃE.
-        Each section has the same sub-columns (NOME, RGN, SERIE/RGD, etc.).
-        We map each to UNIQUE column names to avoid pandas duplicate key error.
-        """
-        
-        rename_map = {}
-        
-        section_map = {
-            "ANIMAL": "animal",
-            "PAI": "pai", 
-            "MÃE": "mae",
-            "AVÔ PATERNO": "avo_paterno",
-            "AVÔ MATERNO": "avo_materno",
-            "AVÔ PATERNO DA MÃE": "avo_paterno_mae",
-            "AVÔ MATERNO DA MÃE": "avo_materno_mae",
-        }
-        
-        field_map = {
-            "NOME": "nome",
-            "RGN": "rgn",
-            "SERIE / RGD": "serie_rgd",
-        }
-        
-        for col in df.columns:
-            col_str = str(col).strip()
-            
-            # Match section prefix
-            for section_prefix, section_key in section_map.items():
-                if col_str.startswith(section_prefix + " "):
-                    subcol = col_str[len(section_prefix) + 1:].strip()
-                    if subcol in field_map:
-                        rename_map[col] = f"{section_key}_{field_map[subcol]}"
-                        break
-            
-            # Animal-level traits (no section prefix)
-            if col_str == "ANIMAL NOME":
-                rename_map[col] = "nome_animal"
-            elif col_str == "ANIMAL SERIE / RGD":
-                rename_map[col] = "pmg_serie_rgd"
-            elif col_str == "ANIMAL RGN":
-                rename_map[col] = "rgn_animal"
-            elif col_str == "ANIMAL SEXO":
-                rename_map[col] = "sexo"
-            elif col_str == "ANIMAL NASC":
-                rename_map[col] = "data_nascimento"
-            elif "iABCZg" in col_str:
-                rename_map[col] = "pmg_iabc"
-            elif "DECA" in col_str:
-                rename_map[col] = "pmg_deca"
-            elif "P %" in col_str:
-                rename_map[col] = "pmg_p_percent"
-            elif "F %" in col_str:
-                rename_map[col] = "pmg_f_percent"
-            elif "GENOTIPADO" in col_str:
-                rename_map[col] = "genotipado"
-            elif "CSG" in col_str:
-                rename_map[col] = "csg"
-            elif "FILHOS" in col_str:
-                rename_map[col] = "pmg_filhos"
-            elif "REBANHOS" in col_str:
-                rename_map[col] = "pmg_rebanhos"
-            elif "NETOS" in col_str:
-                rename_map[col] = "pmg_netos"
-            elif "Peso ao nascimento" in col_str or "PN-EDg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_pn_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_pn_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_pn_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_pn_p_percent"
-            elif "P210" in col_str or "Peso à desmama" in col_str or "PD-EDg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_pd_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_pd_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_pd_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_pd_p_percent"
-            elif "Peso ao ano" in col_str or "P365" in col_str or "PA-EDg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_pa_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_pa_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_pa_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_pa_p_percent"
-            elif "Peso ao sobreano" in col_str or "P450" in col_str or "PS-EDg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_ps_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_ps_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_ps_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_ps_p_percent"
-            elif "Peso maternal" in col_str or "PM-EMg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_pm_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_pm_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_pm_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_pm_p_percent"
-            elif "Idade ao primeiro parto" in col_str or "IPPg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_ipp_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_ipp_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_ipp_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_ipp_p_percent"
-            elif "Stayability" in col_str or "STAYg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_stay_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_stay_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_stay_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_stay_p_percent"
-            elif "PE-365" in col_str or "Perímetro escrotal" in col_str or "PE-365g" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_pe365_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_pe365_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_pe365_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_pe365_p_percent"
-            elif "AOL" in col_str or "Área de olho" in col_str or "AOLg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_aol_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_aol_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_aol_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_aol_p_percent"
-            elif "Acabamento" in col_str or "ACABg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_acab_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_acab_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_acab_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_acab_p_percent"
-            elif "Marmoreio" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_mar_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_mar_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_mar_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_mar_p_percent"
-            elif "Estrutura" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_eg_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_eg_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_eg_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_eg_p_percent"
-            elif "Precocidade sexual" in col_str or "PSNg" in col_str:
-                if "DEP" in col_str:
-                    rename_map[col] = "pmg_psn_dep"
-                elif "AC %" in col_str:
-                    rename_map[col] = "pmg_psn_ac"
-                elif "DECA" in col_str:
-                    rename_map[col] = "pmg_psn_deca"
-                elif "P %" in col_str:
-                    rename_map[col] = "pmg_psn_p_percent"
-        
-        df = df.rename(columns=rename_map)
-        
-        # Remove duplicate columns (keep first occurrence) - CRITICAL to avoid pandas error
-        seen = set()
-        unique_cols = []
-        for col in df.columns:
-            col_str = str(col)
-            if col_str not in seen:
-                unique_cols.append(col_str)
-                seen.add(col_str)
-        if len(unique_cols) < len(df.columns):
-            logger.info(f"Deduplicating columns: {len(df.columns)} -> {len(unique_cols)}")
-            df = df[unique_cols]
-        
-        logger.info(f"_map_pmgz_columns: Mapped {len(rename_map)} columns, final: {list(df.columns)[:30]}")
-        
-        return df
-        
-        # For CSV files with simple headers (one row), use direct mapping
-        # Based on your CSV: NOME, SERIE / RGD, RGN, SEXO, NASC, iABCZg, DECA, P %, F %, etc.
-        simple_rename = {
-            "NOME": "nome_animal",
-            "SERIE / RGD": "pmg_serie_rgd",
-            "RGN": "rgn_animal",
-            "SEXO": "sexo",
-            "NASC": "data_nascimento",
-            "iABCZg": "pmg_iabc",
-            "DECA": "pmg_deca",
-            "P %": "pmg_p_percent",
-            "F %": "pmg_f_percent",
-            "GENOTIPADO": "genotipado",
-            "CSG": "csg",
-            "FILHOS": "pmg_filhos",
-            "REBANHOS": "pmg_rebanhos",
-            "NETOS": "pmg_netos",
-            # Additional PMGZ columns (simple format)
-            "0,87": "pmg_pn_dep",
-            "36": "pmg_pn_ac",
-            "10": "pmg_pn_deca",
-            "15,42": "pmg_pa_dep",
-            "28,64": "pmg_pa_dep",
-            "34,80": "pmg_ps_dep",
-        }
-        
-        # Try multiple rename strategies
-        new_cols = {}
-        for col in df.columns:
-            col_str = str(col).strip()
-            if col_str in rename_map:
-                new_cols[col] = rename_map[col_str]
-            elif col_str in simple_rename:
-                new_cols[col] = simple_rename[col_str]
-            else:
-                # Try partial match
-                for key, value in rename_map.items():
-                    if key.lower() in col_str.lower():
-                        new_cols[col] = value
-                        break
-        
-        # Direct column mappings (these should always work)
-        direct_mappings = {
-            "RGN": "rgn_animal",
-            "NOME": "nome_animal",
-            "SEXO": "sexo",
-            "NASC": "data_nascimento",
-            "iABCZg": "pmg_iabc",
-            "DECA": "pmg_deca",
-            "GENOTIPADO": "genotipado",
-            "CSG": "csg",
-        }
-        
-        for old_name, new_name in direct_mappings.items():
-            old_str = str(old_name)
-            new_str = str(new_name)
-            if old_str in df.columns and new_str not in df.columns:
-                new_cols[old_str] = new_str
-        
-        df = df.rename(columns=new_cols)
-        
-        # Ensure required fields exist
-        if "rgn_animal" not in df.columns and "RGN" in df.columns:
-            df["rgn_animal"] = df["RGN"]
-            
-        logger.info(f"_map_pmgz_columns: Mapped columns, final: {list(df.columns)[:30]}")
-        
-        return df
-
     def _clean_data(self, df: pd.DataFrame, source_system: str) -> pd.DataFrame:
-        """Standardize and clean data fields."""
         if "sexo" in df.columns:
             df["sexo"] = df["sexo"].astype(str).str.upper().str.strip()
-            sex_map = {
-                "MACHO": "M",
-                "FEMEA": "F",
-                "FÊMEA": "F",
-                "1": "M",
-                "2": "F",
-                "M": "M",
-                "F": "F",
-            }
+            sex_map = {"MACHO": "M", "FEMEA": "F", "FÊMEA": "F", "1": "M", "2": "F"}
             df["sexo"] = df["sexo"].replace(sex_map)
             df["sexo"] = df["sexo"].apply(
-                lambda x: x[0]
-                if isinstance(x, str) and len(x) > 0 and x[0] in ["M", "F"]
-                else None
+                lambda x: x[0] if isinstance(x, str) and len(x) > 0 and x[0] in ["M", "F"] else None
             )
 
         if "data_nascimento" in df.columns:
-            df["data_nascimento"] = pd.to_datetime(
-                df["data_nascimento"], errors="coerce"
-            ).dt.date
-        
-        # Default race to Nelore if empty
+            df["data_nascimento"] = pd.to_datetime(df["data_nascimento"], errors="coerce").dt.date
+
         if "raca" in df.columns:
-            df["raca"] = df["raca"].fillna("Nelore")
-            df["raca"] = df["raca"].replace(["", "nan", "None", "-"], "Nelore")
-        
-        fonte_str = str("fonte_origem")
-        if fonte_str not in df.columns:
+            df["raca"] = df["raca"].fillna("Nelore").replace(["", "nan", "None", "-"], "Nelore")
+
+        if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
-        
-        logger.info(f"_clean_data: Columns before cleaning: {list(df.columns)}")
-        
-        # DEBUG: Sample of raw values before conversion
-        if "pmg_serie_rgd" in df.columns:
-            logger.info(f"pmg_serie_rgd BEFORE clean: {df['pmg_serie_rgd'].head(5).tolist()}")
-        
-        for col in list(df.columns)[:15]:
-            try:
-                sample_vals = df[col].head(2).astype(str).tolist()
-                logger.info(f"_clean_data: {col} sample BEFORE: {sample_vals} (type: {df[col].dtype})")
-            except Exception as e:
-                logger.info(f"_clean_data: {col} sample BEFORE: <error: {e}>")
-        
-        # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
-        for col in df.columns:
-            col_dtype = df[col].dtype
-            # Skip if column is a DataFrame (duplicate column issue)
-            if hasattr(col_dtype, 'dtype'):
-                continue
-        
-        # First: convert ALL columns to string to handle Brazilian number format (comma decimal)
+
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip()
             df[col] = df[col].str.replace(",", ".", regex=False)
             df[col] = df[col].replace(["-", "", "nan", "None", "NaN", "nat"], None)
 
-        # Now try to convert each column to appropriate type
-        # Only convert columns that should be numeric (weights, DEP scores, etc.)
-        float_columns = {"p210_peso_desmama", "p365_peso_ano", "p450_peso_sobreano", "peso_nascimento", "peso_final",
-                      "pe_perimetro_escrotal", "a_area_olho_lombo", "eg_espessura_gordura", "altura", "circumference",
-                      "im_idade_primeiro_parto", "intervalo_partos", "dias_gestacao",
-                      "anc_mg", "anc_te", "anc_m", "anc_p", "anc_dp", "anc_sp", "anc_e", "anc_sao", "anc_leg", "anc_sh", "anc_pp30",
-                      "anc_dipp", "anc_d3p", "anc_dstay", "anc_dpn", "anc_dp12", "anc_dpe", "anc_daol", "anc_dacab",
-                      "anc_ac_mg", "anc_ac_te", "anc_ac_m", "anc_ac_p",
-                      "gen_iqg", "gen_pmm", "gen_p", "gen_dp", "gen_sp", "gen_e", "gen_sao", "gen_leg", "gen_sh", "gen_pp30",
-                      "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs",
-                      "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar",
-                      "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
-                      "pmg_iabc", "pmg_zpmm", "pmg_p", "pmg_dp", "pmg_sp", "pmg_e", "pmg_sao", "pmg_leg", "pmg_sh",
-                      "pmg_pp30", "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol",
-                      "pmg_acab", "pmg_mar", "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay",
-                      "pmg_deca_pe", "pmg_deca_aol", "pmg_meta_p", "pmg_meta_m", "pmg_meta_t",
-                      "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m",
-                      "pmg_p_percent", "pmg_f_percent",
-                      "pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent",
-                      "pmg_pd_dep", "pmg_pd_ac", "pmg_pd_deca", "pmg_pd_p_percent",
-                      "pmg_pa_dep", "pmg_pa_ac", "pmg_pa_deca", "pmg_pa_p_percent",
-                      "pmg_ps_dep", "pmg_ps_ac", "pmg_ps_deca", "pmg_ps_p_percent",
-                      "pmg_pm_dep", "pmg_pm_ac", "pmg_pm_deca", "pmg_pm_p_percent",
-                      "pmg_ipp_dep", "pmg_ipp_ac", "pmg_ipp_deca", "pmg_ipp_p_percent",
-                      "pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent",
-                      "pmg_pe365_dep", "pmg_pe365_ac", "pmg_pe365_deca", "pmg_pe365_p_percent",
-                      "pmg_psn_dep", "pmg_psn_ac", "pmg_psn_deca", "pmg_psn_p_percent",
-                      "pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent",
-                      "pmg_acab_dep", "pmg_acab_ac", "pmg_acab_deca", "pmg_acab_p_percent",
-                      "pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent",
-                      "pmg_eg_dep", "pmg_eg_ac", "pmg_eg_deca", "pmg_eg_p_percent",
-                      "pmg_p_dep", "pmg_p_ac", "pmg_p_deca", "pmg_p_p_percent",
-                      "pmg_m_dep", "pmg_m_ac", "pmg_m_deca", "pmg_m_p_percent",
-                      "p120_peso_120"}
-        
+        float_columns = {
+            "p210_peso_desmama", "p365_peso_ano", "p450_peso_sobreano", "peso_nascimento", "peso_final",
+            "pe_perimetro_escrotal", "a_area_olho_lombo", "eg_espessura_gordura", "altura", "circumference",
+            "im_idade_primeiro_parto", "intervalo_partos", "dias_gestacao",
+            "anc_mg", "anc_te", "anc_m", "anc_p", "anc_dp", "anc_sp", "anc_e", "anc_sao", "anc_leg", "anc_sh", "anc_pp30",
+            "anc_dipp", "anc_d3p", "anc_dstay", "anc_dpn", "anc_dp12", "anc_dpe", "anc_daol", "anc_dacab",
+            "anc_ac_mg", "anc_ac_te", "anc_ac_m", "anc_ac_p",
+            "gen_iqg", "gen_pmm", "gen_p", "gen_dp", "gen_sp", "gen_e", "gen_sao", "gen_leg", "gen_sh", "gen_pp30",
+            "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs",
+            "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar",
+            "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
+            "pmg_iabc", "pmg_zpmm", "pmg_p", "pmg_dp", "pmg_sp", "pmg_e", "pmg_sao", "pmg_leg", "pmg_sh",
+            "pmg_pp30", "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol",
+            "pmg_acab", "pmg_mar", "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay",
+            "pmg_deca_pe", "pmg_deca_aol", "pmg_meta_p", "pmg_meta_m", "pmg_meta_t",
+            "pmg_ac_iabc", "pmg_ac_p", "pmg_ac_m",
+            "pmg_p_percent", "pmg_f_percent",
+            "pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent",
+            "pmg_pd_dep", "pmg_pd_ac", "pmg_pd_deca", "pmg_pd_p_percent",
+            "pmg_pa_dep", "pmg_pa_ac", "pmg_pa_deca", "pmg_pa_p_percent",
+            "pmg_ps_dep", "pmg_ps_ac", "pmg_ps_deca", "pmg_ps_p_percent",
+            "pmg_pm_dep", "pmg_pm_ac", "pmg_pm_deca", "pmg_pm_p_percent",
+            "pmg_ipp_dep", "pmg_ipp_ac", "pmg_ipp_deca", "pmg_ipp_p_percent",
+            "pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent",
+            "pmg_pe365_dep", "pmg_pe365_ac", "pmg_pe365_deca", "pmg_pe365_p_percent",
+            "pmg_psn_dep", "pmg_psn_ac", "pmg_psn_deca", "pmg_psn_p_percent",
+            "pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent",
+            "pmg_acab_dep", "pmg_acab_ac", "pmg_acab_deca", "pmg_acab_p_percent",
+            "pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent",
+            "pmg_eg_dep", "pmg_eg_ac", "pmg_eg_deca", "pmg_eg_p_percent",
+            "pmg_p_dep", "pmg_p_ac", "pmg_p_deca", "pmg_p_p_percent",
+            "pmg_m_dep", "pmg_m_ac", "pmg_m_deca", "pmg_m_p_percent",
+            "p120_peso_120"
+        }
+
         for col in df.columns:
             if col in float_columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
                 except:
                     pass
-        
-        # DEBUG: Sample after conversion
-        for col in df.columns:
-            sample_vals = df[col].head(2).tolist()
-            logger.info(f"_clean_data: {col} sample AFTER: {sample_vals} (type: {df[col].dtype})")
-        
+
         return df
 
     def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
-        """Upsert animals using batch processing for better performance."""
         from sqlalchemy import text
         import uuid
-        
-        inserted = 0
-        updated = 0
-        failed = 0
-        
-        BATCH_SIZE = 100
-        
-        if len(df) > 0:
-            first_record = df.iloc[0].to_dict()
-            logger.info(f"First record: rgn={first_record.get('rgn_animal')}, pmg_iabc={first_record.get('pmg_iabc')}")
-        
+
+        if len(df) == 0:
+            return 0, 0, 0
+
         farm = self.db.query(GeneticsFarm).first()
         if not farm:
             logger.error("No farm found in genetics.farms")
             return 0, 0, len(df)
-        
+
         genetics_farm_id = farm.id
-        logger.info(f"Using genetics farm: {farm.nome}")
-        
+        upload_id_val = self.upload_id if self.upload_id else None
+
         def safe_str(val):
             if pd.isna(val):
                 return None
             s = str(val).strip()
             return s if s and s.lower() not in ['nan', 'none', ''] else None
-        
+
+        def safe_bool(val):
+            if pd.isna(val):
+                return None
+            v = str(val).upper().strip()
+            if v == 'SIM':
+                return True
+            elif v in ['NÃO', 'NAO', 'N', '']:
+                return False
+            return None
+
         def to_tuple(dep_val, ac_val, deca_val, p_val):
             def clean_val(v):
                 if pd.isna(v):
@@ -816,59 +333,47 @@ class GeneticDataProcessor:
                 clean_val(deca_val) if deca_val and not pd.isna(deca_val) else None,
                 clean_val(p_val)
             )
-        
-        upload_id_val = self.upload_id if self.upload_id else None
-        
-        # Batch processing
+
+        BATCH_SIZE = 2000
+        inserted = 0
+        updated = 0
+        failed = 0
         total_rows = len(df)
+
         for batch_start in range(0, total_rows, BATCH_SIZE):
             batch_end = min(batch_start + BATCH_SIZE, total_rows)
             batch_df = df.iloc[batch_start:batch_end]
-            
-            logger.info(f"Processing batch {batch_start}-{batch_end} of {total_rows}")
-            
-            # Get existing RGNs in this batch
-            batch_rgns = [str(r).strip() for r in batch_df['rgn_animal'].tolist() if r and str(r).strip()]
-            
+
+            batch_rgns = batch_df['rgn_animal'].dropna().astype(str).str.strip().tolist()
+            batch_rgns = [r for r in batch_rgns if r]
+
+            existing_map = {}
             if batch_rgns:
-                existing_ids = {
-                    row.rgn: row.id 
-                    for row in self.db.query(GeneticsAnimal.rgn, GeneticsAnimal.id).filter(
-                        GeneticsAnimal.rgn.in_(batch_rgns),
-                        GeneticsAnimal.farm_id == genetics_farm_id
-                    ).all()
-                }
-            else:
-                existing_ids = {}
-            
-            # Prepare batch data
+                existing = self.db.execute(
+                    text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgds) AND farm_id = :fid"),
+                    {"rgds": batch_rgns, "fid": str(genetics_farm_id)}
+                ).fetchall()
+                existing_map = {r: uid for r, uid in existing}
+
+            animal_ids_map = {}
             animals_to_insert = []
-            animals_to_update = []
-            rgn_to_id = {}
-            
+            animals_to_update_ids = []
+
             for _, row in batch_df.iterrows():
                 rgn = row.get('rgn_animal')
-                if not rgn or str(rgn).strip() == '':
+                if not rgn or not str(rgn).strip():
                     failed += 1
                     continue
-                
+
                 rgn_str = str(rgn).strip()
-                
-                if rgn_str in existing_ids:
-                    animal_id = existing_ids[rgn_str]
-                    animals_to_update.append({
-                        'id': str(animal_id),
-                        'nome': safe_str(row.get('nome_animal')),
-                        'serie': safe_str(row.get('pmg_serie_rgd')),
-                        'sexo': safe_str(row.get('sexo')),
-                        'nascimento': safe_str(row.get('data_nascimento')),
-                        'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
-                        'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
-                        'upload_id': upload_id_val,
-                    })
+
+                if rgn_str in existing_map:
+                    animal_id = existing_map[rgn_str]
+                    animal_ids_map[rgn_str] = animal_id
+                    animals_to_update_ids.append(animal_id)
                 else:
                     animal_id = uuid.uuid4()
-                    rgn_to_id[rgn_str] = animal_id
+                    animal_ids_map[rgn_str] = animal_id
                     animals_to_insert.append({
                         'id': str(animal_id),
                         'farm_id': str(genetics_farm_id),
@@ -877,12 +382,11 @@ class GeneticDataProcessor:
                         'serie': safe_str(row.get('pmg_serie_rgd')),
                         'sexo': safe_str(row.get('sexo')),
                         'nascimento': safe_str(row.get('data_nascimento')),
-                        'genotipado': True if str(row.get('genotipado', '')).upper() == 'SIM' else (False if str(row.get('genotipado', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
-                        'csg': True if str(row.get('csg', '')).upper() == 'SIM' else (False if str(row.get('csg', '')).upper() in ['NÃO', 'NAO', 'N', ''] else None),
+                        'genotipado': safe_bool(row.get('genotipado')),
+                        'csg': safe_bool(row.get('csg')),
                         'upload_id': upload_id_val,
                     })
-            
-            # Batch insert
+
             if animals_to_insert:
                 self.db.execute(
                     text("""
@@ -892,74 +396,84 @@ class GeneticDataProcessor:
                     animals_to_insert
                 )
                 inserted += len(animals_to_insert)
-            
-            # Batch update
-            if animals_to_update:
-                for data in animals_to_update:
-                    self.db.execute(
-                        text("""
-                            UPDATE genetics.animals 
-                            SET nome = :nome, serie = :serie, sexo = :sexo, 
-                                nascimento = :nascimento, genotipado = :genotipado, csg = :csg,
-                                upload_id = :upload_id
-                            WHERE id = :id
-                        """),
-                        data
-                    )
-                updated += len(animals_to_update)
-            
-            # Process genetic evaluations for this batch
-            evaluations_to_insert = []
+
+            if animals_to_update_ids:
+                self.db.execute(
+                    text("""
+                        UPDATE genetics.animals SET
+                            nome = CASE WHEN :nome IS NOT NULL THEN :nome ELSE nome END,
+                            serie = CASE WHEN :serie IS NOT NULL THEN :serie ELSE serie END,
+                            sexo = CASE WHEN :sexo IS NOT NULL THEN :sexo ELSE sexo END,
+                            nascimento = CASE WHEN :nascimento IS NOT NULL THEN :nascimento ELSE nascimento END,
+                            genotipado = CASE WHEN :genotipado IS NOT NULL THEN :genotipado ELSE genotipado END,
+                            csg = CASE WHEN :csg IS NOT NULL THEN :csg ELSE csg END,
+                            upload_id = COALESCE(:upload_id, upload_id)
+                        WHERE id = ANY(:ids)
+                    """),
+                    {
+                        'ids': animals_to_update_ids,
+                        'nome': safe_str(batch_df.iloc[0].get('nome_animal')),
+                        'serie': safe_str(batch_df.iloc[0].get('pmg_serie_rgd')),
+                        'sexo': safe_str(batch_df.iloc[0].get('sexo')),
+                        'nascimento': safe_str(batch_df.iloc[0].get('data_nascimento')),
+                        'genotipado': safe_bool(batch_df.iloc[0].get('genotipado')),
+                        'csg': safe_bool(batch_df.iloc[0].get('csg')),
+                        'upload_id': upload_id_val,
+                    }
+                )
+                updated += len(animals_to_update_ids)
+
+            eval_to_insert = []
             for _, row in batch_df.iterrows():
                 rgn = row.get('rgn_animal')
-                if not rgn or str(rgn).strip() == '':
+                if not rgn or not str(rgn).strip():
                     continue
-                
+
                 rgn_str = str(rgn).strip()
-                animal_id = rgn_to_id.get(rgn_str) or existing_ids.get(rgn_str)
-                
-                iabc_val = row.get('pmg_iabc')
-                if iabc_val and str(iabc_val).strip() and animal_id:
-                    evaluations_to_insert.append({
-                        'id': str(uuid.uuid4()),
-                        'animal_id': str(animal_id),
-                        'farm_id': str(genetics_farm_id),
-                        'safra': 2026,
-                        'fonte_origem': source_system,
-                        'iabczg': float(iabc_val) if iabc_val else None,
-                        'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
-                        'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
-                        'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
-                        'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
-                        'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
-                        'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
-                        'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
-                        'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
-                        'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
-                        'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
-                        'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
-                        'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
-                        'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
-                        'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
-                    })
-            
-            if evaluations_to_insert:
+                animal_id = animal_ids_map.get(rgn_str)
+
+                if not animal_id:
+                    continue
+
+                eval_to_insert.append({
+                    'id': str(uuid.uuid4()),
+                    'animal_id': str(animal_id),
+                    'farm_id': str(genetics_farm_id),
+                    'safra': 2026,
+                    'fonte_origem': source_system,
+                    'iabczg': float(row.get('pmg_iabc')) if row.get('pmg_iabc') and not pd.isna(row.get('pmg_iabc')) else None,
+                    'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
+                    'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
+                    'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
+                    'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
+                    'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
+                    'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
+                    'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
+                    'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
+                    'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
+                    'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
+                    'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
+                    'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
+                    'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
+                    'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
+                })
+
+            if eval_to_insert:
                 self.db.execute(
                     text("""
                         INSERT INTO genetics.genetic_evaluations 
                         (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
                         VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_em, :ipp, :stay, :pe_365, :psn, :aol, :acab, :marmoreio, :eg, :pg, :mg)
                     """),
-                    evaluations_to_insert
+                    eval_to_insert
                 )
-            
+
             self.db.commit()
-        
+
         logger.info(f"Genetics upsert: inserted={inserted}, updated={updated}, failed={failed}")
         return inserted, updated, failed
 
     def generate_formatted_excel(self, df: pd.DataFrame) -> bytes:
-        """Export cleaned DataFrame to formatted Excel."""
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Melhora+_Clean")
