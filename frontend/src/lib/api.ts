@@ -123,7 +123,7 @@ export interface Notification {
 }
 
 export interface Farm {
-  id_farm: number;
+  id_farm: string;
   nome_farm: string;
   cnpj: string | null;
   responsavel: string | null;
@@ -141,7 +141,7 @@ export interface GeneticsFarm {
 export interface Upload {
   upload_id: string;
   nome: string;
-  id_farm: number;
+  id_farm: string;
   fonte_origem: string;
   arquivo_nome_original: string | null;
   arquivo_hash: string | null;
@@ -164,7 +164,7 @@ export interface UploadWithAnimals {
 
 export interface UploadCreate {
   nome: string;
-  id_farm: number;
+  id_farm: string;
   fonte_origem: string;
   arquivo_nome_original?: string;
   arquivo_hash?: string;
@@ -316,13 +316,13 @@ export const api = {
   getAnimal: (id: number) => fetchApi<Animal>(`/animals/${id}`),
 
   getFarms: () => fetchApi<Farm[]>('/farms'),
-  getFarm: (id: number) => fetchApi<Farm>(`/farms/${id}`),
-  updateFarm: (id: number, data: { nome_farm?: string; cnpj?: string; responsavel?: string; email?: string }) =>
+  getFarm: (id: string) => fetchApi<Farm>(`/farms/${id}`),
+  updateFarm: (id: string, data: { nome_farm?: string; cnpj?: string; responsavel?: string; email?: string }) =>
     fetchApi<Farm>(`/farms/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  deleteFarm: (id: number) =>
+  deleteFarm: (id: string) =>
     fetchApi<{ message: string }>(`/farms/${id}`, { method: 'DELETE' }),
   createFarm: (data: { nome_farm: string; cnpj?: string; responsavel?: string; email?: string }) =>
     fetchApi<Farm>('/farms', {
@@ -512,7 +512,7 @@ export const api = {
     return res.blob();
   },
 
-  downloadBenchmarkReport: async (platformCode: string, characteristic: string, farmId?: number): Promise<Blob> => {
+  downloadBenchmarkReport: async (platformCode: string, characteristic: string, farmId?: string): Promise<Blob> => {
     const token = getAccessToken();
     const params = new URLSearchParams({ platform_code: platformCode, characteristic });
     if (farmId) params.set('farm_id', String(farmId));
@@ -565,7 +565,7 @@ export const api = {
     fetchApi<{ message: string }>('/notifications/read-all', { method: 'PUT' }),
 
   // Uploads API
-  getUploads: (opts?: { farmId?: number; fonteOrigem?: string; status?: string; limit?: number; offset?: number }) => {
+  getUploads: (opts?: { farmId?: string; fonteOrigem?: string; status?: string; limit?: number; offset?: number }) => {
     const params = new URLSearchParams();
     if (opts?.farmId) params.set('farm_id', String(opts.farmId));
     if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
@@ -623,7 +623,7 @@ export const api = {
     return fetchApi<any[]>(`/v2/animals/stats/ranking?${params.toString()}`);
   },
 
-  uploadFileWithUpload: async (file: File, sourceSystem: string, farmId: number, uploadId: string): Promise<Blob> => {
+  uploadFileWithUpload: async (file: File, sourceSystem: string, farmId: string, uploadId: string): Promise<Blob> => {
     const token = getAccessToken();
     const formData = new FormData();
     formData.append('file', file);

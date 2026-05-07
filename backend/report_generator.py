@@ -786,7 +786,8 @@ class ReportGenerator:
         platform_code: str,
         platform_name: str,
         characteristic: dict,
-        animals: list,
+        evaluations: list = None,
+        animals: list = None,
         farm_name: str = None,
     ) -> bytes:
         buffer = io.BytesIO()
@@ -813,7 +814,12 @@ class ReportGenerator:
         story.append(Paragraph("Resumo Estatístico", self.styles["SectionTitle"]))
         story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
         
-        values = [getattr(a, characteristic["column"]) for a in animals if getattr(a, characteristic["column"]) is not None]
+        if evaluations:
+            values = [getattr(e, characteristic["column"]) for e in evaluations if getattr(e, characteristic["column"]) is not None]
+        elif animals:
+            values = [getattr(a, characteristic["column"]) for a in animals if getattr(a, characteristic["column"]) is not None]
+        else:
+            values = []
         
         import statistics
         mean_val = statistics.mean(values) if values else 0
@@ -846,45 +852,49 @@ class ReportGenerator:
         ]))
         story.append(stats_table)
         
-        story.append(Spacer(1, 8 * mm))
-        story.append(Paragraph("Distribuição por Sexo", self.styles["SectionTitle"]))
-        story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
+        data_source = evaluations if evaluations else animals
+        
+        if not data_source:
+            data_source = []
         
         sex_dist = {}
-        for a in animals:
-            sex = a.sexo or "Desconhecido"
-            val = getattr(a, characteristic["column"])
+        for item in data_source:
+            sex = getattr(item, 'sexo', None) or "Desconhecido"
+            val = getattr(item, characteristic["column"])
             if val is not None:
                 if sex not in sex_dist:
                     sex_dist[sex] = []
                 sex_dist[sex].append(val)
         
-        sex_means = {k: statistics.mean(v) for k, v in sex_dist.items()}
-        story.append(self._build_bar_chart_data(sex_means, "Sexo"))
-        
-        if len(animals) > 0:
+        if sex_dist:
             story.append(Spacer(1, 8 * mm))
-            story.append(Paragraph("Top 20 Animais", self.styles["SectionTitle"]))
+            story.append(Paragraph("Distribuição por Sexo", self.styles["SectionTitle"]))
+            story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
+            
+            sex_means = {k: statistics.mean(v) for k, v in sex_dist.items()}
+            story.append(self._build_bar_chart_data(sex_means, "Sexo"))
+        
+        if len(data_source) > 0:
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph("Top 20 Avaliações", self.styles["SectionTitle"]))
             story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
             
             sorted_animals = sorted(
-                [(a, getattr(a, characteristic["column"])) for a in animals if getattr(a, characteristic["column"]) is not None],
+                [(a, getattr(a, characteristic["column"])) for a in data_source if getattr(a, characteristic["column"]) is not None],
                 key=lambda x: x[1],
                 reverse=True
             )[:20]
             
             top_animals_data = [
-                [Paragraph("RGN", self.styles["TableHeader"]), Paragraph("Nome", self.styles["TableHeader"]), Paragraph("Sexo", self.styles["TableHeader"]), Paragraph("Valor", self.styles["TableHeader"])]
+                [Paragraph("ID", self.styles["TableHeader"]), Paragraph("Valor", self.styles["TableHeader"])]
             ]
             for a, val in sorted_animals:
                 top_animals_data.append([
-                    Paragraph(a.rgn_animal or "—", self.styles["TableCellLeft"]),
-                    Paragraph(a.nome_animal or "—", self.styles["TableCellLeft"]),
-                    Paragraph("M" if a.sexo == "M" else "F", self.styles["TableCell"]),
+                    Paragraph(str(getattr(a, 'animal_id', '—'))[:8], self.styles["TableCellLeft"]),
                     Paragraph(f"{val:.4f}", self.styles["TableCell"]),
                 ])
             
-            top_table = Table(top_animals_data, colWidths=[30 * mm, 50 * mm, 20 * mm, 40 * mm])
+            top_table = Table(top_animals_data, colWidths=[80 * mm, 80 * mm])
             top_table.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), PRIMARY_DARK),
                 ("TEXTCOLOR", (0, 0), (-1, 0), white),

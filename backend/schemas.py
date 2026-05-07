@@ -32,6 +32,17 @@ class FarmResponse(BaseModel):
         from_attributes = True
 
 
+class FarmResponseFromGenetics(BaseModel):
+    id_farm: str
+    nome_farm: str
+    cnpj: Optional[str] = None
+    responsavel: Optional[str] = None
+    email: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
 # ============================================
 # Animal Schemas
 # ============================================
@@ -507,7 +518,7 @@ class GeneticsFarmResponse(BaseModel):
 # ============================================
 class UploadCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=255)
-    id_farm: int
+    id_farm: str
     fonte_origem: str = Field(..., pattern="^(ANCP|PMGZ|GENEPLUS|PMG)$")
     arquivo_nome_original: Optional[str] = None
     arquivo_hash: Optional[str] = None
@@ -516,7 +527,7 @@ class UploadCreate(BaseModel):
 class UploadResponse(BaseModel):
     upload_id: str
     nome: str
-    id_farm: int
+    id_farm: str
     fonte_origem: str
     arquivo_nome_original: Optional[str]
     arquivo_hash: Optional[str]

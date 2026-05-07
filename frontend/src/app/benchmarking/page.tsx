@@ -86,7 +86,7 @@ interface AuctionAnimal {
 }
 
 interface Farm {
-  id_farm: number;
+  id_farm: string;
   nome_farm: string;
 }
 
@@ -124,7 +124,7 @@ function BenchmarkingContent() {
     setDownloading(true);
     try {
       const char = Array.from(selectedCharacteristics)[0];
-      const blob = await api.downloadBenchmarkReport(selectedPlatform, char, farmId ? Number(farmId) : undefined);
+      const blob = await api.downloadBenchmarkReport(selectedPlatform, char, farmId || undefined);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

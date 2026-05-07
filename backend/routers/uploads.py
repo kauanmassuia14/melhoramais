@@ -5,8 +5,9 @@ from sqlalchemy import text
 from typing import Optional, List
 import io
 import asyncio
+import uuid
 
-from backend.models import Upload, User, Farm, Animal
+from backend.models import Upload, User, GeneticsFarm, Animal
 from backend.database import get_db
 from backend.schemas import (
     UploadCreate, UploadResponse, UploadWithAnimalsResponse,
@@ -24,10 +25,15 @@ def create_upload(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "admin" and current_user.id_farm != upload.id_farm:
+    try:
+        farm_uuid = uuid.UUID(upload.id_farm)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid farm ID format")
+    
+    if current_user.role != "admin" and str(current_user.id_farm) != upload.id_farm:
         raise HTTPException(status_code=403, detail="Access denied to this farm")
     
-    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
     if not farm:
         raise HTTPException(status_code=404, detail="Farm not found")
     
@@ -48,7 +54,7 @@ def create_upload(
 
 @router.get("", response_model=List[UploadResponse])
 def list_uploads(
-    farm_id: Optional[int] = Query(None),
+    farm_id: Optional[str] = Query(None),
     fonte_origem: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
@@ -59,7 +65,7 @@ def list_uploads(
     query = db.query(Upload)
     
     if current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(Upload.id_farm == current_user.id_farm)
+        query = query.filter(Upload.id_farm == str(current_user.id_farm))
     elif farm_id:
         query = query.filter(Upload.id_farm == farm_id)
     
@@ -81,12 +87,21 @@ def get_upload(
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
     
-    if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
+    if current_user.role != "admin" and str(current_user.id_farm) != upload.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
-    farm_nome = farm.nome_farm if farm else "Unknown"
+    farm = None
+    farm_nome = "Unknown"
+    if upload.id_farm:
+        try:
+            farm_uuid = uuid.UUID(upload.id_farm)
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            if farm:
+                farm_nome = farm.nome
+        except ValueError:
+            pass
     
+    from backend.models import Animal
     animais = (
         db.query(Animal)
         .filter(Animal.upload_id == upload_id)
@@ -116,10 +131,10 @@ def delete_upload(
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
     
-    if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
+    if current_user.role != "admin" and str(current_user.id_farm) != upload.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    from backend.models import RawAnimalData
+    from backend.models import Animal, RawAnimalData
     
     # Get animal IDs before deletion
     animais_ids = [a.id_animal for a in db.query(Animal.id_animal).filter(Animal.upload_id == upload_id).all()]

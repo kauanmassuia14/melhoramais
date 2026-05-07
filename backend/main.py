@@ -104,6 +104,12 @@ from backend.routers.animals_v2 import router as animals_v2_router
 app.include_router(animals_v2_router)
 
 # ============================================
+# Farms Router (genetics schema - new)
+# ============================================
+from backend.routers.farms import router as farms_router
+app.include_router(farms_router)
+
+# ============================================
 # Genetics Farms Router (genetics schema)
 # ============================================
 from backend.routers.genetics_farms import router as genetics_farms_router
@@ -320,105 +326,6 @@ def env_debug():
 
 
 # ============================================
-# Farms CRUD (protected)
-# ============================================
-@app.post("/farms", response_model=FarmResponse, status_code=201)
-def create_farm(
-    farm: FarmCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
-):
-    db_farm = Farm(**farm.model_dump())
-    db.add(db_farm)
-    db.commit()
-    db.refresh(db_farm)
-    return db_farm
-
-
-@app.get("/farms", response_model=List[FarmResponse])
-def list_farms(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if current_user.role == "admin":
-        return db.query(Farm).all()
-    if current_user.id_farm:
-        return db.query(Farm).filter(Farm.id_farm == current_user.id_farm).all()
-    return []
-
-
-@app.get("/farms/{farm_id}", response_model=FarmResponse)
-def get_farm(
-    farm_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
-    if not farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
-    if current_user.role != "admin" and current_user.id_farm != farm_id:
-        raise HTTPException(status_code=403, detail="Access denied to this farm")
-    return farm
-
-
-@app.put("/farms/{farm_id}", response_model=FarmResponse)
-def update_farm(
-    farm_id: int,
-    farm: FarmUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Update farm - admin only or farm owner can edit their own farm."""
-    if current_user.role != "admin" and current_user.id_farm != farm_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
-    if not db_farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
-    
-    update_data = farm.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_farm, key, value)
-    
-    db.commit()
-    db.refresh(db_farm)
-    return db_farm
-
-
-@app.delete("/farms/{farm_id}")
-def delete_farm(
-    farm_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
-):
-    """Delete farm - admin only. Deletes all related animals, uploads, and processing logs."""
-    db_farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
-    if not db_farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
-    
-    logs = db.query(ProcessingLog).filter(ProcessingLog.id_farm == farm_id).all()
-    for log in logs:
-        log_id = log.id
-        # Delete raw animal data by processing_log_id
-        db.query(RawAnimalData).filter(
-            RawAnimalData.processing_log_id == log_id
-        ).delete(synchronize_session=False)
-    
-    # Delete all animals
-    db.query(Animal).filter(Animal.id_farm == farm_id).delete(synchronize_session=False)
-    
-    # Delete all uploads
-    db.query(Upload).filter(Upload.id_farm == farm_id).delete(synchronize_session=False)
-    
-    # Delete all processing logs
-    db.query(ProcessingLog).filter(ProcessingLog.id_farm == farm_id).delete(synchronize_session=False)
-    
-    db.delete(db_farm)
-    db.commit()
-    return {"message": "Farm deleted successfully"}
-
-
-# ============================================
 # Animals CRUD (protected)
 # ============================================
 @app.get("/animals", response_model=List[AnimalResponse])
@@ -477,17 +384,15 @@ def get_animal(
 async def process_genetic_data(
     source_system: str = Form(...),
     file: UploadFile = File(...),
-    farm_id: int = Form(default=1),
+    farm_id: str = Form(default=None),
     upload_id: str = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "user")),
 ):
-    # Non-admin can only upload to their own farm
     effective_farm_id = farm_id
     if current_user.role != "admin" and current_user.id_farm:
-        effective_farm_id = current_user.id_farm
+        effective_farm_id = str(current_user.id_farm)
     
-    # Validate upload_id if provided
     if upload_id:
         upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
         if not upload:
@@ -496,6 +401,9 @@ async def process_genetic_data(
             raise HTTPException(status_code=403, detail="Upload does not belong to this farm")
         if upload.status == "completed":
             raise HTTPException(status_code=400, detail="Upload already processed")
+
+    if not effective_farm_id:
+        raise HTTPException(status_code=400, detail="farm_id is required")
 
     try:
         import asyncio
@@ -1284,7 +1192,7 @@ def generate_animal_report(
 def generate_benchmark_report(
     platform_code: str = Query(..., description="Platform code (ANCP, GENEPLUS, PMGZ)"),
     characteristic: str = Query(..., description="Characteristic code"),
-    farm_id: Optional[int] = Query(None),
+    farm_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1305,30 +1213,41 @@ def generate_benchmark_report(
     
     column_name = char_info["column"]
     
-    query = db.query(Animal)
+    query = db.query(GeneticsGeneticEvaluation).join(GeneticsAnimal).filter(
+        GeneticsGeneticEvaluation.fonte_origem == platform_code
+    )
     if farm_id:
-        query = query.filter(Animal.id_farm == farm_id)
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
     elif current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(Animal.id_farm == current_user.id_farm)
+        query = query.filter(GeneticsAnimal.farm_id == str(current_user.id_farm))
     
-    query = query.filter(getattr(Animal, column_name).isnot(None))
-    animals = query.all()
+    query = query.filter(getattr(GeneticsGeneticEvaluation, column_name).isnot(None))
+    evaluations = query.all()
     
-    farm = None
     farm_name = None
     if farm_id:
-        farm = db.query(Farm).filter(Farm.id_farm == farm_id).first()
-        farm_name = farm.nome_farm if farm else None
+        try:
+            import uuid
+            farm_uuid = uuid.UUID(farm_id)
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            farm_name = farm.nome if farm else None
+        except ValueError:
+            pass
     elif current_user.id_farm:
-        farm = db.query(Farm).filter(Farm.id_farm == current_user.id_farm).first()
-        farm_name = farm.nome_farm if farm else None
+        try:
+            import uuid
+            farm_uuid = uuid.UUID(str(current_user.id_farm))
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            farm_name = farm.nome if farm else None
+        except ValueError:
+            pass
     
     generator = ReportGenerator()
     pdf_bytes = generator.generate_benchmark_report(
         platform_code=platform_code,
         platform_name=platform["name"],
         characteristic=char_info,
-        animals=animals,
+        evaluations=evaluations,
         farm_name=farm_name,
     )
     

@@ -7,7 +7,7 @@ import { GlowButton } from "@/components/ui/glow-button";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { motion } from "framer-motion";
-import { api, Upload, Farm } from "@/lib/api";
+import { api, Upload, GeneticsFarm } from "@/lib/api";
 import {
   ArrowUpTrayIcon,
   DocumentTextIcon,
@@ -47,9 +47,9 @@ const PLATFORM_NAMES: Record<string, string> = {
 
 export default function UploadsPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [farms, setFarms] = useState<Record<number, Farm>>({});
+  const [farms, setFarms] = useState<Record<string, GeneticsFarm>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [filterFarm, setFilterFarm] = useState<number | null>(null);
+  const [filterFarm, setFilterFarm] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const { showToast } = useToast();
   const { confirm, dialog } = useConfirm();
@@ -67,14 +67,14 @@ export default function UploadsPage() {
           status: filterStatus || undefined,
           limit: 100,
         }),
-        api.getFarms(),
+        api.getGeneticsFarms(),
       ]);
 
       setUploads(uploadsData);
       
-      const farmsMap: Record<number, Farm> = {};
+      const farmsMap: Record<string, GeneticsFarm> = {};
       farmsData.forEach((farm) => {
-        farmsMap[farm.id_farm] = farm;
+        farmsMap[farm.id] = farm;
       });
       setFarms(farmsMap);
     } catch (err) {
@@ -146,13 +146,13 @@ export default function UploadsPage() {
               <label className="block text-sm text-text-secondary mb-2">Fazenda</label>
               <select
                 value={filterFarm || ""}
-                onChange={(e) => setFilterFarm(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setFilterFarm(e.target.value || null)}
                 className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
               >
                 <option value="">Todas as fazendas</option>
                 {Object.values(farms).map((farm) => (
-                  <option key={farm.id_farm} value={farm.id_farm}>
-                    {farm.nome_farm}
+                  <option key={farm.id} value={farm.id}>
+                    {farm.nome}
                   </option>
                 ))}
               </select>
@@ -240,7 +240,7 @@ export default function UploadsPage() {
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">
                             <span className="flex items-center gap-1">
                               <BuildingOfficeIcon className="w-4 h-4" />
-                              {farm?.nome_farm || `Fazenda ${upload.id_farm}`}
+                              {farm?.nome || `Fazenda ${upload.id_farm}`}
                             </span>
                             <span className="flex items-center gap-1">
                               <ArrowUpTrayIcon className="w-4 h-4" />

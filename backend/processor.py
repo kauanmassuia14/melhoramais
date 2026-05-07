@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeneticDataProcessor:
-    def __init__(self, db: Session, farm_id: int = 1, upload_id: str = None):
+    def __init__(self, db: Session, farm_id: str = None, upload_id: str = None):
         self.db = db
         self.farm_id = farm_id
         self.upload_id = upload_id
@@ -97,30 +97,13 @@ class GeneticDataProcessor:
         from sqlalchemy.exc import SQLAlchemyError
         from backend.database import SessionLocal
 
-        log = ProcessingLog(
-            id_farm=self.farm_id,
-            source_system=source_system,
-            filename=filename,
-            status="processing",
-            started_at=datetime.utcnow(),
-        )
-        self.db.add(log)
-        self.db.commit()
-        log_id = log.id
-        self.upload_log_id = log_id
+        log = None
         upload = None
 
         try:
             df, inserted, updated, failed = self._process_and_persist(
                 file_content, filename, source_system
             )
-
-            log.total_rows = len(df)
-            log.rows_inserted = inserted
-            log.rows_updated = updated
-            log.rows_failed = failed
-            log.status = "completed"
-            log.completed_at = datetime.utcnow()
 
             if self.upload_id:
                 upload = self.db.query(Upload).filter(
@@ -135,7 +118,7 @@ class GeneticDataProcessor:
                     upload.arquivo_nome_original = filename
 
             self.db.commit()
-            return df, log, upload
+            return df, None, upload
 
         except Exception as e:
             self.db.rollback()

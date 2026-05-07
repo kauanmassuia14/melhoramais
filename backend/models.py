@@ -45,20 +45,18 @@ class Upload(Base):
 
     upload_id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(255), nullable=False)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
+    id_farm = Column(String(36), nullable=False, index=True)
     fonte_origem = Column(String(50), nullable=False)
     arquivo_nome_original = Column(String(255))
     arquivo_hash = Column(String(64))
     total_registros = Column(Integer, default=0)
     rows_inserted = Column(Integer, default=0)
     rows_updated = Column(Integer, default=0)
-    status = Column(String(20), default="processing")  # processing, completed, failed
+    status = Column(String(20), default="processing")
     error_message = Column(Text)
     usuario_id = Column(Integer, _fk("silver.usuarios.id"), nullable=True)
     data_upload = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
-
-    farm = relationship("Farm", back_populates="uploads")
     usuario = relationship("User", back_populates="uploads")
     animais = relationship("Animal", back_populates="upload")
 
