@@ -232,30 +232,30 @@ def get_stats_v2(
         # pois p210_info/p365_info/p450_info ainda não estão populados
         p210 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from pd_ed), ',', 1), '')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from pd_ed::text), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND pd_ed IS NOT NULL AND pd_ed != ''
+                AND pd_ed IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()
 
         p365 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from ps_ed), ',', 1), '')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from ps_ed::text), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND ps_ed IS NOT NULL AND ps_ed != ''
+                AND ps_ed IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()
 
         p450 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from psn), ',', 1), '')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from psn::text), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND psn IS NOT NULL AND psn != ''
+                AND psn IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()
