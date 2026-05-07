@@ -692,8 +692,13 @@ def create_upload(
     if current_user.role != "admin" and current_user.id_farm != upload.id_farm:
         raise HTTPException(status_code=403, detail="Access denied to this farm")
     
-    # Verify farm exists
-    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
+    # Verify farm exists in genetics.farms
+    import uuid as _uuid
+    try:
+        farm_uuid = _uuid.UUID(upload.id_farm)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid farm ID format")
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
     if not farm:
         raise HTTPException(status_code=404, detail="Farm not found")
     
@@ -754,9 +759,15 @@ def get_upload(
     if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Get farm name
-    farm = db.query(Farm).filter(Farm.id_farm == upload.id_farm).first()
-    farm_nome = farm.nome_farm if farm else "Unknown"
+    # Get farm name from genetics.farms
+    import uuid as _uuid
+    farm_nome = "Unknown"
+    try:
+        farm_uuid = _uuid.UUID(upload.id_farm)
+        farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+        farm_nome = farm.nome if farm else "Unknown"
+    except (ValueError, AttributeError):
+        pass
     
     # Get animal preview (first 100)
     animais = (
@@ -909,7 +920,7 @@ def get_dashboard_stats(
     total_animals = query.count()
 
     if current_user.role == "admin":
-        total_farms = db.query(Farm).count()
+        total_farms = db.query(GeneticsFarm).count()
     else:
         total_farms = 1 if current_user.id_farm else 0
 
@@ -975,7 +986,7 @@ def generate_dashboard_report(
     total_animals = animal_query.count()
 
     if current_user.role == "admin":
-        total_farms = db.query(Farm).count()
+        total_farms = db.query(GeneticsFarm).count()
     else:
         total_farms = 1 if current_user.id_farm else 0
 
@@ -1054,12 +1065,17 @@ def generate_dashboard_report(
             for l in logs
         ]
 
-    # Get farm name
+    # Get farm name from genetics.farms
     farm_name = None
     if current_user.id_farm:
-        farm = db.query(Farm).filter(Farm.id_farm == current_user.id_farm).first()
-        if farm:
-            farm_name = farm.nome_farm
+        import uuid as _uuid
+        try:
+            farm_uuid = _uuid.UUID(str(current_user.id_farm))
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            if farm:
+                farm_name = farm.nome
+        except (ValueError, AttributeError):
+            pass
 
     # Generate PDF
     generator = ReportGenerator()
@@ -1132,8 +1148,8 @@ def generate_upload_report(
         .all()
     )
     
-    farm = db.query(Farm).filter(Farm.id_farm == log.id_farm).first()
-    farm_name = farm.nome_farm if farm else None
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == log.id_farm).first() if log.id_farm else None
+    farm_name = farm.nome if farm else None
     
     generator = ReportGenerator()
     pdf_bytes = generator.generate_upload_report(
@@ -1168,12 +1184,19 @@ def generate_animal_report(
     if current_user.role != "admin" and animal.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    farm = db.query(Farm).filter(Farm.id_farm == animal.id_farm).first()
+    import uuid as _uuid
+    farm_name = None
+    try:
+        farm_uuid = _uuid.UUID(str(animal.id_farm))
+        farm_g = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+        farm_name = farm_g.nome if farm_g else None
+    except (ValueError, AttributeError):
+        pass
     
     generator = ReportGenerator()
     pdf_bytes = generator.generate_animal_report(
         animal=animal,
-        farm_name=farm.nome_farm if farm else None,
+        farm_name=farm_name,
     )
     
     return StreamingResponse(

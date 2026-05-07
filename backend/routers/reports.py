@@ -97,16 +97,21 @@ def get_report_options(
 ):
     """Retorna todas as opções disponíveis para customizar o relatório."""
     
-    # Listar fazendas доступíveis
-    farms_query = db.query(Farm)
+    # Listar fazendas disponíveis (genetics.farms)
+    farms_query = db.query(GeneticsFarm)
     if current_user.role != "admin" and current_user.id_farm:
-        farms_query = farms_query.filter(Farm.id_farm == current_user.id_farm)
+        import uuid as _uuid
+        try:
+            farm_uuid = _uuid.UUID(str(current_user.id_farm))
+            farms_query = farms_query.filter(GeneticsFarm.id == farm_uuid)
+        except (ValueError, AttributeError):
+            farms_query = farms_query.filter(False)  # retorna vazio se id inválido
     
     farms = farms_query.all()
     
     return {
         "farms": [
-            {"id": f.id_farm, "name": f.nome_farm, "cnpj": f.cnpj}
+            {"id": str(f.id), "name": f.nome, "cnpj": f.documento}
             for f in farms
         ],
         "platforms": PLATFORMS,

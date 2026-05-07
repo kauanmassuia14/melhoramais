@@ -36,7 +36,6 @@ class Farm(Base):
 
     # Removido: animais - não usamos mais silver.animais
     processing_logs = relationship("ProcessingLog", back_populates="farm")
-    uploads = relationship("Upload", back_populates="farm")
 
 
 class Upload(Base):
