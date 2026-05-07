@@ -309,7 +309,7 @@ export default function AnimalsPage() {
 
                         {/* Deca */}
                         <td className="px-4 py-3">
-                          {getDecaBadge(ev?.deca_index)}
+                          {getDecaBadge(ev?.deca_index ?? ev?.pd?.deca ?? ev?.pn?.deca)}
                         </td>
 
                         {/* DEP Desmama (pd) */}

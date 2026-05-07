@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeftIcon, ArrowPathIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
@@ -51,7 +51,8 @@ interface AnimalV2 {
   evaluations: Evaluation[];
 }
 
-export default function AnimalDetailPage({ params }: { params: { id: string } }) {
+export default function AnimalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [animal, setAnimal] = useState<AnimalV2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export default function AnimalDetailPage({ params }: { params: { id: string } })
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getAnimalV2(params.id);
+      const data = await api.getAnimalV2(id);
       setAnimal(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar animal");
@@ -70,8 +71,10 @@ export default function AnimalDetailPage({ params }: { params: { id: string } })
   };
 
   useEffect(() => {
-    if (params.id) fetchAnimal();
-  }, [params.id]);
+    if (id && typeof window !== "undefined" && localStorage.getItem("access_token")) {
+      fetchAnimal();
+    }
+  }, [id]);
 
   const getSexLabel = (s: string | null) => {
     if (s === "M") return "Macho";
@@ -191,7 +194,7 @@ export default function AnimalDetailPage({ params }: { params: { id: string } })
                   />
                   <StatsCard
                     label="DECA"
-                    value={eval_.deca_index?.toString() ?? null}
+                    value={(eval_.deca_index ?? eval_.pd?.deca ?? eval_.pn?.deca)?.toString() ?? null}
                   />
                   
                   {/* PN - Peso Nascimento */}
