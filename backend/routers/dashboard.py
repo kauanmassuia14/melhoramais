@@ -26,18 +26,17 @@ def get_dashboard_stats(
     # Usar genetics.animals + genetic_evaluations
     query = db.query(GeneticsAnimal)
 
-    # Filtrar por farm se necessário (buscar farm_id do silver.fazendas)
+    # Filtrar por farm usando id_farm UUID diretamente (genetics schema)
+    genetics_farm = None
     if current_user.role != "admin" and current_user.id_farm:
-        # Mapear id_farm integer para farm_id UUID do genetics
-        from backend.models import Farm as SilverFarm
-        silver_farm = db.query(SilverFarm).filter(SilverFarm.id_farm == current_user.id_farm).first()
-        if silver_farm:
-            # Procura farm no genetics pelo nome
-            genetics_farm = db.query(GeneticsFarm).filter(
-                GeneticsFarm.nome.ilike(f"%{silver_farm.nome_farm}%")
-            ).first()
+        import uuid as _uuid
+        try:
+            farm_uuid = _uuid.UUID(str(current_user.id_farm))
+            genetics_farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
             if genetics_farm:
                 query = query.filter(GeneticsAnimal.farm_id == genetics_farm.id)
+        except (ValueError, AttributeError):
+            pass
 
     total_animals = query.count()
 
@@ -73,7 +72,7 @@ def get_dashboard_stats(
     from backend.models import Upload
     log_query = db.query(Upload).filter(Upload.data_upload >= thirty_days_ago)
     if current_user.role != "admin" and current_user.id_farm:
-        log_query = log_query.filter(Upload.id_farm == current_user.id_farm)
+        log_query = log_query.filter(Upload.id_farm == str(current_user.id_farm))
     recent_uploads = log_query.count()
 
     # Peshos médios das avaliações

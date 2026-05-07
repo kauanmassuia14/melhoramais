@@ -240,7 +240,7 @@ def db_test():
                 res = conn.execute(text("""
                     SELECT schemaname, tablename 
                     FROM pg_catalog.pg_tables 
-                    WHERE schemaname IN ('silver', 'audit')
+                    WHERE schemaname IN ('genetics')
                 """))
                 tables = [f"{r[0]}.{r[1]}" for r in res]
             except:
@@ -248,7 +248,7 @@ def db_test():
 
             # Try to count users
             try:
-                result = conn.execute(text("SELECT COUNT(*) FROM silver.usuarios"))
+                result = conn.execute(text("SELECT COUNT(*) FROM genetics.users"))
                 user_count = result.scalar()
             except Exception as e:
                 user_count = f"error: {str(e)}"
@@ -256,7 +256,7 @@ def db_test():
             # Get columns for animals
             animal_columns = []
             try:
-                animal_columns = [c["name"] for c in inspector.get_columns("animais", schema="silver")]
+                animal_columns = [c["name"] for c in inspector.get_columns("animals", schema="genetics")]
             except:
                 pass
     except Exception as e:

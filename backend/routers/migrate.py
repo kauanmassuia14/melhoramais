@@ -146,7 +146,7 @@ def run_migration_on_startup():
                     """))
                     if not result.fetchone():
                         conn.execute(text(f"""
-                            ALTER TABLE silver.animais ADD COLUMN {col_name} {col_type}
+                            ALTER TABLE genetics.animais ADD COLUMN {col_name} {col_type}
                         """))
                         logger.info(f"[MIGRATION] Added column: {col_name}")
                     else:

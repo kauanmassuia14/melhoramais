@@ -36,7 +36,6 @@ if not IS_SQLITE:
     else:
         connect_args = {
             "connect_timeout": 5,
-            "options": "-c statement_timeout=30000",
             "sslmode": "require",
         }
     pool_settings["poolclass"] = QueuePool

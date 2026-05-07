@@ -38,12 +38,12 @@ class AnimalBase(Base):
     __tablename__ = "animal_base"
     __table_args__ = (
         UniqueConstraint("id_farm", "rgn_animal", name="uix_farm_rgn_base"),
-        {"schema": "silver"} if not IS_SQLITE else {},
+        {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
-    upload_id = Column(String(36), _fk("silver.uploads.upload_id"), nullable=True, index=True)
+    id_farm = Column(Integer, _fk("genetics.farms.id_farm"), nullable=False, index=True)
+    upload_id = Column(String(36), _fk("genetics.uploads.upload_id"), nullable=True, index=True)
     
     # Identificação
     rgn_animal = Column(String(50), nullable=False)
@@ -111,11 +111,11 @@ class AnimalPlatformData(Base):
     __tablename__ = "animal_platform_data"
     __table_args__ = (
         UniqueConstraint("animal_base_id", "platform", name="uix_animal_platform"),
-        {"schema": "silver"} if not IS_SQLITE else {},
+        {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    animal_base_id = Column(Integer, _fk("silver.animal_base.id"), nullable=False, index=True)
+    animal_base_id = Column(Integer, _fk("genetics.animal_base.id"), nullable=False, index=True)
     platform = Column(String(20), nullable=False)  # ANCP, GENEPLUS, PMGZ
     
     # Fonte original do dado
@@ -230,22 +230,22 @@ class AnimalSnapshot(Base):
     Usado para audit e para rollback se necessário.
     """
     __tablename__ = "animal_snapshot"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
-    animal_base_id = Column(Integer, _fk("silver.animal_base.id"), nullable=False, index=True)
+    animal_base_id = Column(Integer, _fk("genetics.animal_base.id"), nullable=False, index=True)
     platform = Column(String(20))  # Se null, é snapshot base
     
     version = Column(Integer, nullable=False)
     snapshot_data = Column(JSON, nullable=False)  # Dados completos nessa versão
     
     created_at = Column(DateTime, default=datetime.utcnow)
-    upload_id = Column(String(36), _fk("silver.uploads.upload_id"))
+    upload_id = Column(String(36), _fk("genetics.uploads.upload_id"))
     motivo = Column(String(255))  # "import", "correcao", "manual", etc
     
     __table_args__ = (
         UniqueConstraint("animal_base_id", "version", name="uix_animal_version"),
-        {"schema": "silver"} if not IS_SQLITE else {},
+        {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
 
@@ -255,17 +255,17 @@ class AnimalAudit(Base):
    tracking de mudanças específicas (não apenas snapshot full).
     """
     __tablename__ = "animal_audit"
-    __table_args__ = ({"schema": "audit"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
-    animal_base_id = Column(Integer, _fk("silver.animal_base.id"), nullable=False, index=True)
+    animal_base_id = Column(Integer, _fk("genetics.animal_base.id"), nullable=False, index=True)
     platform = Column(String(20))  # null se change é na base
     
     campo = Column(String(100), nullable=False)
     valor_anterior = Column(JSON)
     valor_novo = Column(JSON)
     
-    user_id = Column(Integer, _fk("silver.usuarios.id"))
-    upload_id = Column(String(36), _fk("silver.uploads.upload_id"))
+    user_id = Column(Integer, _fk("genetics.users.id"))
+    upload_id = Column(String(36), _fk("genetics.uploads.upload_id"))
     
     created_at = Column(DateTime, default=datetime.utcnow, index=True)

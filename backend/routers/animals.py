@@ -36,25 +36,22 @@ def list_animals(
     
     query = db.query(GeneticsAnimal)
 
-    # Mapear id_farm para genetics se necessário
+    # Filtrar por farm usando UUID diretamente (genetics schema)
     if current_user.role != "admin" and current_user.id_farm:
-        from backend.models import Farm as SilverFarm
-        silver_farm = db.query(SilverFarm).filter(SilverFarm.id_farm == current_user.id_farm).first()
-        if silver_farm:
-            genetics_farm = db.query(GeneticsFarm).filter(
-                GeneticsFarm.nome.ilike(f"%{silver_farm.nome_farm}%")
-            ).first()
-            if genetics_farm:
-                query = query.filter(GeneticsAnimal.farm_id == genetics_farm.id)
+        import uuid as _uuid
+        try:
+            farm_uuid = _uuid.UUID(str(current_user.id_farm))
+            query = query.filter(GeneticsAnimal.farm_id == farm_uuid)
+        except (ValueError, AttributeError):
+            pass
     elif farm_id is not None:
-        from backend.models import Farm as SilverFarm
-        silver_farm = db.query(SilverFarm).filter(SilverFarm.id_farm == farm_id).first()
-        if silver_farm:
-            genetics_farm = db.query(GeneticsFarm).filter(
-                GeneticsFarm.nome.ilike(f"%{silver_farm.nome_farm}%")
-            ).first()
-            if genetics_farm:
-                query = query.filter(GeneticsAnimal.farm_id == genetics_farm.id)
+        # farm_id pode ser passado como UUID string na query param
+        import uuid as _uuid
+        try:
+            farm_uuid = _uuid.UUID(str(farm_id))
+            query = query.filter(GeneticsAnimal.farm_id == farm_uuid)
+        except (ValueError, AttributeError):
+            pass
 
     if sexo:
         query = query.filter(GeneticsAnimal.sexo == sexo)

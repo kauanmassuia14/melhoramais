@@ -35,12 +35,12 @@ class Farm(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Removido: animais - não usamos mais silver.animais
-    processing_logs = relationship("ProcessingLog", back_populates="farm")
+    # Relacionamentos legados removidos (schema silver em descontinuação)
 
 
 class Upload(Base):
     __tablename__ = "uploads"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     upload_id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     nome = Column(String(255), nullable=False)
@@ -53,7 +53,7 @@ class Upload(Base):
     rows_updated = Column(Integer, default=0)
     status = Column(String(20), default="processing")
     error_message = Column(Text)
-    usuario_id = Column(Integer, _fk("silver.usuarios.id"), nullable=True)
+    usuario_id = Column(Integer, _fk("genetics.users.id"), nullable=True)
     data_upload = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
     usuario = relationship("User", back_populates="uploads")
@@ -64,13 +64,13 @@ class Animal(Base):
     __tablename__ = "animais"
     __table_args__ = (
         UniqueConstraint("id_farm", "rgn_animal", name="uix_farm_rgn"),
-        {"schema": "silver"} if not IS_SQLITE else {},
+        {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
     id_animal = Column(Integer, primary_key=True, index=True)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
-    upload_id = Column(String(36), _fk("silver.uploads.upload_id"), nullable=True, index=True)
-    processing_log_id = Column(Integer, _fk("audit.processing_log.id"), nullable=True, index=True)
+    id_farm = Column(String(36), nullable=False, index=True)  # UUID do genetics.farms
+    upload_id = Column(String(36), nullable=True, index=True)
+    processing_log_id = Column(Integer, index=True)  # ref para genetics.processing_log.id
     rgn_animal = Column(String(50), nullable=False)
     nome_animal = Column(String(255))
     raca = Column(String(50))
@@ -400,7 +400,7 @@ class ColumnMapping(Base):
     __tablename__ = "column_mapping"
     __table_args__ = (
         UniqueConstraint("source_system", "source_column", name="uix_source_system_column"),
-        {"schema": "silver"} if not IS_SQLITE else {},
+        {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -413,10 +413,10 @@ class ColumnMapping(Base):
 
 class ProcessingLog(Base):
     __tablename__ = "processing_log"
-    __table_args__ = ({"schema": "audit"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), index=True)
+    id_farm = Column(String(36), index=True)  # UUID do genetics.farms
     source_system = Column(String(50), nullable=False)
     filename = Column(String(255))
     total_rows = Column(Integer, default=0)
@@ -428,7 +428,7 @@ class ProcessingLog(Base):
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
 
-    farm = relationship("Farm", back_populates="processing_logs")
+    # farm relationship removido: ProcessingLog agora em genetics, Farm em silver (descontinuando)
 
 
 class RawAnimalData(Base):
@@ -437,20 +437,20 @@ class RawAnimalData(Base):
     This is the single source of truth — nothing is discarded.
     """
     __tablename__ = "raw_animal_data"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
-    id_animal = Column(Integer, _fk("silver.animais.id_animal"), index=True)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), nullable=False, index=True)
+    id_animal = Column(Integer, index=True)  # referência sem FK cross-schema
+    id_farm = Column(String(36), nullable=False, index=True)  # UUID do genetics.farms
     source_system = Column(String(50), nullable=False)
-    processing_log_id = Column(Integer, _fk("audit.processing_log.id"))
+    processing_log_id = Column(Integer, index=True)
     raw_data = Column(JSON, nullable=False)  # ALL columns as JSON dict
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Cliente(Base):
     __tablename__ = "clientes"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
     proprietario = Column(String(255), nullable=False, index=True)
@@ -482,29 +482,29 @@ class Cliente(Base):
 
 
 class User(Base):
-    __tablename__ = "usuarios"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __tablename__ = "users"
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     senha_hash = Column(String(255), nullable=False)
-    id_farm = Column(Integer, _fk("silver.fazendas.id_farm"), index=True)
+    id_farm = Column(String(36), index=True) # UUID da fazenda no genetics
     role = Column(String(20), default="user")  # admin, user, viewer
     ativo = Column(Boolean, default=True)
     ultimo_login = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    farm = relationship("Farm", foreign_keys=[id_farm])
+    # Relacionamentos
     uploads = relationship("Upload", back_populates="usuario")
 
 
 class Notification(Base):
     __tablename__ = "notifications"
-    __table_args__ = ({"schema": "silver"} if not IS_SQLITE else {})
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
 
     id = Column(Integer, primary_key=True, index=True)
-    id_user = Column(Integer, _fk("silver.usuarios.id"), nullable=False, index=True)
+    id_user = Column(Integer, _fk("genetics.users.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     type = Column(String(50), default="info")  # info, success, warning, error
