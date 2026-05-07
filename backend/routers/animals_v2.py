@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from typing import Optional
@@ -332,6 +332,42 @@ def list_animals(
         results.append(animal_to_dict(a, latest_eval))
 
     return {"total": total, "limit": limit, "offset": offset, "data": results}
+
+
+@router.delete("/bulk", status_code=204)
+def bulk_delete_animals(
+    animal_ids: list[str] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exclui múltiplos animais e suas avaliações genéticas."""
+    if not animal_ids:
+        raise HTTPException(status_code=400, detail="Nenhum ID de animal fornecido")
+    
+    import uuid as _uuid
+    try:
+        uuids = [_uuid.UUID(aid) for aid in animal_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Um ou mais IDs são inválidos")
+    
+    # Buscar animais para verificar permissão
+    animals = db.query(GeneticsAnimal).filter(GeneticsAnimal.id.in_(uuids)).all()
+    if not animals:
+        raise HTTPException(status_code=404, detail="Animais não encontrados")
+    
+    # Verificar permissão
+    for animal in animals:
+        if current_user.role != "admin" and str(animal.farm_id) != str(current_user.id_farm):
+            raise HTTPException(status_code=403, detail=f"Acesso negado para o animal {animal.rgn}")
+    
+    # Excluir avaliações primeiro
+    db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id.in_(uuids)).delete(synchronize_session=False)
+    
+    # Excluir animais
+    db.query(GeneticsAnimal).filter(GeneticsAnimal.id.in_(uuids)).delete(synchronize_session=False)
+    
+    db.commit()
+    return None
 
 
 # ============================================================

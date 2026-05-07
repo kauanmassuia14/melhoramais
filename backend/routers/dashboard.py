@@ -59,13 +59,16 @@ def get_dashboard_stats(
     )
     animals_by_source = {s or "unknown": c for s, c in source_counts}
 
-    # Animals by sex
+    # Animals by sex - Improved mapping
     sex_counts = (
         db.query(GeneticsAnimal.sexo, func.count(GeneticsAnimal.id))
         .group_by(GeneticsAnimal.sexo)
         .all()
     )
-    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
+    animals_by_sex = {}
+    for s, c in sex_counts:
+        label = "Macho" if s == "M" else "Fêmea" if s == "F" else "Indefinido"
+        animals_by_sex[label] = animals_by_sex.get(label, 0) + c
 
     # Recent uploads (de silver.uploads)
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
@@ -75,12 +78,13 @@ def get_dashboard_stats(
         log_query = log_query.filter(Upload.id_farm == str(current_user.id_farm))
     recent_uploads = log_query.count()
 
-    # Peshos médios das avaliações
+    # Pesos médios das avaliações
     # Buscar últimas avaliações e extrair PD (peso desmama) e PS (peso sobreano)
     latest_evals = db.query(
         GeneticsGeneticEvaluation.animal_id,
         GeneticsGeneticEvaluation.pd_ed,
-        GeneticsGeneticEvaluation.ps_ed
+        GeneticsGeneticEvaluation.ps_ed,
+        GeneticsGeneticEvaluation.pa_ed
     ).join(
         GeneticsAnimal, GeneticsAnimal.id == GeneticsGeneticEvaluation.animal_id
     )
@@ -92,25 +96,35 @@ def get_dashboard_stats(
     
     import json
     pd_values = []
+    pa_values = []
     ps_values = []
     for e in evals:
+        # PD (Desmama ~210d)
         if e.pd_ed:
             try:
                 pd = json.loads(e.pd_ed)
-                if pd and pd.get('dep'):
+                if pd and pd.get('dep') is not None:
                     pd_values.append(float(pd['dep']))
-            except:
-                pass
+            except: pass
+            
+        # PA (Ano ~365d)
+        if e.pa_ed:
+            try:
+                pa = json.loads(e.pa_ed)
+                if pa and pa.get('dep') is not None:
+                    pa_values.append(float(pa['dep']))
+            except: pass
+            
+        # PS (Sobreano ~450d)
         if e.ps_ed:
             try:
                 ps = json.loads(e.ps_ed)
-                if ps and ps.get('dep'):
+                if ps and ps.get('dep') is not None:
                     ps_values.append(float(ps['dep']))
-            except:
-                pass
+            except: pass
     
     avg_p210 = sum(pd_values) / len(pd_values) if pd_values else None
-    avg_p365 = None  # Não temos P365 direto, usar PS como proxy
+    avg_p365 = sum(pa_values) / len(pa_values) if pa_values else None
     avg_p450 = sum(ps_values) / len(ps_values) if ps_values else None
 
     return DashboardStats(

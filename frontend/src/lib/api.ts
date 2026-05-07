@@ -623,6 +623,12 @@ export const api = {
     return fetchApi<any[]>(`/v2/animals/stats/ranking?${params.toString()}`);
   },
 
+  deleteAnimalsV2: (animalIds: string[]) =>
+    fetchApi<void>(`/v2/animals/bulk`, {
+      method: 'DELETE',
+      body: JSON.stringify(animalIds),
+    }),
+
   uploadFileWithUpload: async (file: File, sourceSystem: string, farmId: string, uploadId: string): Promise<Blob> => {
     const token = getAccessToken();
     const formData = new FormData();

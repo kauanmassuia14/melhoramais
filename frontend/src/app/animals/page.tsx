@@ -12,10 +12,14 @@ import {
   ExclamationTriangleIcon,
   CheckBadgeIcon,
   BeakerIcon,
+  TrashIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { api } from "@/lib/api";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 
 interface MetricBlock {
   dep: number | null;
@@ -65,6 +69,9 @@ export default function AnimalsPage() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { confirm, dialog } = useConfirm();
+  const { showToast } = useToast();
 
   const fetchAnimals = useCallback(async () => {
     setLoading(true);
@@ -79,6 +86,7 @@ export default function AnimalsPage() {
       setAnimals(data.data);
       setTotal(data.total);
       setHasMore(data.data.length === PAGE_SIZE);
+      setSelectedIds(new Set()); // Limpar seleção ao atualizar
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar animais");
     } finally {
@@ -90,12 +98,72 @@ export default function AnimalsPage() {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
       fetchAnimals();
     }
-  }, [page, sexo]);
+  }, [page, sexo, fetchAnimals]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
     fetchAnimals();
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === animals.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(animals.map((a) => a.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleDeleteSelected = async () => {
+    const confirmed = await confirm({
+      title: "Excluir animais",
+      message: `Tem certeza que deseja excluir ${selectedIds.size} animais selecionados? Esta ação não pode ser desfeita e removerá todas as avaliações associadas.`,
+      type: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await api.deleteAnimalsV2(Array.from(selectedIds));
+      showToast(`${selectedIds.size} animais excluídos com sucesso`, "success");
+      fetchAnimals();
+    } catch (err: any) {
+      showToast(err.message || "Erro ao excluir animais", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      showToast("Gerando PDF...", "info");
+      const farms = await api.getGeneticsFarms();
+      if (farms.length === 0) throw new Error("Nenhuma fazenda encontrada");
+      
+      const blob = await api.downloadDashboardReport({ 
+        farmId: Number(farms[0].id), 
+        includeAnimals: true 
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_animais_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast("PDF baixado com sucesso", "success");
+    } catch (err: any) {
+      showToast(err.message || "Erro ao gerar PDF", "error");
+    }
   };
 
   const getSexBadge = (s: string | null) => {
@@ -124,7 +192,7 @@ export default function AnimalsPage() {
   };
 
   const columns = [
-    "RGN", "Nome", "Sexo", "Nascimento", "Genotipado", "CSG",
+    "", "RGN", "Nome", "Sexo", "Nascimento", "Genotipado", "CSG",
     "Índice (IABCZG)", "Deca", "DEP Desmama", "DEP Sobreano", "Fonte", "",
   ];
 
@@ -139,13 +207,31 @@ export default function AnimalsPage() {
               {total > 0 ? `${total.toLocaleString("pt-BR")} animais encontrados` : "Busque e visualize os dados genéticos dos animais"}
             </p>
           </div>
-          <button
-            onClick={fetchAnimals}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-text-secondary hover:bg-white/10 transition-all"
-          >
-            <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </button>
+          <div className="flex items-center gap-3">
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-neon/10 border border-rose-neon/20 text-rose-neon-400 text-sm font-medium hover:bg-rose-neon/20 transition-all animate-in fade-in zoom-in duration-300"
+              >
+                <TrashIcon className="w-4 h-4" />
+                Excluir ({selectedIds.size})
+              </button>
+            )}
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-text-secondary hover:bg-white/10 transition-all"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              Exportar PDF
+            </button>
+            <button
+              onClick={fetchAnimals}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-text-secondary hover:bg-white/10 transition-all"
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -207,16 +293,23 @@ export default function AnimalsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/[0.04]">
-                  {columns.map((col) => (
+                  {columns.map((col, idx) => (
                     <th
-                      key={col}
+                      key={idx}
                       className={`px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold ${
                         ["Índice (IABCZG)", "DEP Desmama", "DEP Sobreano"].includes(col)
                           ? "text-right"
                           : "text-left"
                       }`}
                     >
-                      {col}
+                      {idx === 0 ? (
+                        <input
+                          type="checkbox"
+                          checked={animals.length > 0 && selectedIds.size === animals.length}
+                          onChange={toggleSelectAll}
+                          className="rounded border-white/10 bg-white/5 text-emerald-glow focus:ring-emerald-glow/30"
+                        />
+                      ) : col}
                     </th>
                   ))}
                 </tr>
@@ -225,6 +318,9 @@ export default function AnimalsPage() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="border-b border-white/[0.02]">
+                      <td className="px-4 py-3">
+                         <div className="h-4 w-4 bg-white/[0.04] rounded animate-pulse" />
+                      </td>
                       {Array.from({ length: 12 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 bg-white/[0.04] rounded animate-pulse" />
@@ -234,21 +330,31 @@ export default function AnimalsPage() {
                   ))
                 ) : animals.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-4 py-12 text-center">
+                    <td colSpan={13} className="px-4 py-12 text-center">
                       <p className="text-text-muted text-sm">Nenhum animal encontrado</p>
                     </td>
                   </tr>
                 ) : (
                   animals.map((animal, i) => {
                     const ev = animal.evaluations?.[0];
+                    const isSelected = selectedIds.has(animal.id);
                     return (
                       <motion.tr
                         key={animal.id}
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.015 }}
-                        className="border-b border-white/[0.02] hover:bg-white/[0.025] transition-colors group"
+                        className={`border-b border-white/[0.02] hover:bg-white/[0.025] transition-colors group ${isSelected ? 'bg-emerald-glow/[0.04]' : ''}`}
                       >
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(animal.id)}
+                            className="rounded border-white/10 bg-white/5 text-emerald-glow focus:ring-emerald-glow/30"
+                          />
+                        </td>
+
                         {/* RGN */}
                         <td className="px-4 py-3">
                           <span className="font-mono text-sm font-semibold text-emerald-glow-400">
@@ -389,6 +495,7 @@ export default function AnimalsPage() {
           )}
         </GlassCard>
       </div>
+      {dialog}
     </DashboardLayout>
   );
 }

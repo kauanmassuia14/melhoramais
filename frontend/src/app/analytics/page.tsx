@@ -13,6 +13,7 @@ import {
   BeakerIcon,
   ArrowRightIcon,
   SparklesIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline';
 
 function AnalyticsContent() {
@@ -148,14 +149,17 @@ function AnalyticsContent() {
                   {Object.entries(stats.animals_by_source).map(([source, count], i) => {
                     const maxCount = Math.max(...Object.values(stats.animals_by_source));
                     const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                    const colors = ['from-blue-600 to-blue-400', 'from-emerald-600 to-emerald-400', 'from-violet-600 to-violet-400', 'from-amber-600 to-amber-400'];
                     return (
                       <div key={source} className="flex-1 flex flex-col items-center gap-2">
                         <span className="text-xs text-slate-400 font-bold">{count}</span>
-                        <div className="w-full bg-slate-800/50 rounded-t-xl overflow-hidden" style={{ height: '200px' }}>
+                        <div className="w-full bg-slate-800/50 rounded-t-xl overflow-hidden relative group" style={{ height: '200px' }}>
                           <div
-                            className="w-full bg-gradient-to-t from-blue-600 to-blue-400 transition-all duration-1000"
+                            className={`w-full bg-gradient-to-t ${colors[i % colors.length]} transition-all duration-1000 group-hover:brightness-125`}
                             style={{ height: `${height}%`, marginTop: 'auto', display: 'flex', alignItems: 'flex-end' }}
-                          ></div>
+                          >
+                            <div className="w-full h-full absolute top-0 left-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
                         </div>
                         <span className="text-xs text-slate-500 font-medium">{source}</span>
                       </div>
@@ -164,25 +168,103 @@ function AnalyticsContent() {
                 </div>
               </Card>
 
-              <Card variant="bento" className="lg:col-span-4 space-y-6">
-                <h3 className="text-xl font-bold text-white">Distribuição por Plataforma</h3>
-                <div className="space-y-4">
-                  {Object.entries(stats.animals_by_source).map(([source, count]) => {
-                    const pct = sourceTotal > 0 ? Math.round((count / sourceTotal) * 100) : 0;
-                    const colors: Record<string, string> = {
-                      ANCP: 'bg-blue-500',
-                      PMGZ: 'bg-emerald-500',
-                      Geneplus: 'bg-amber-500',
-                    };
+              <Card variant="bento" className="lg:col-span-4 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Distribuição por Sexo</h3>
+                  <p className="text-slate-500 text-sm">Composição do rebanho</p>
+                </div>
+                
+                <div className="flex-1 flex items-center justify-center py-6">
+                  <div className="relative w-40 h-40">
+                    <svg className="w-full h-full" viewBox="0 0 36 36">
+                      {(() => {
+                        let offset = 0;
+                        const total = Object.values(stats.animals_by_sex).reduce((a, b) => a + b, 0);
+                        const colors = ['#3b82f6', '#10b981', '#8b5cf6'];
+                        return Object.entries(stats.animals_by_sex).map(([sex, count], i) => {
+                          const pct = total > 0 ? (count / total) * 100 : 0;
+                          const strokeDash = `${pct} ${100 - pct}`;
+                          const strokeOffset = -offset;
+                          offset += pct;
+                          return (
+                            <circle
+                              key={sex}
+                              cx="18" cy="18" r="16"
+                              fill="none"
+                              stroke={colors[i % colors.length]}
+                              strokeWidth="3.5"
+                              strokeDasharray={strokeDash}
+                              strokeDashoffset={strokeOffset}
+                              className="transition-all duration-1000"
+                            />
+                          );
+                        });
+                      })()}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold text-white">{stats.total_animals}</span>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-4">
+                  {Object.entries(stats.animals_by_sex).map(([sex, count], i) => {
+                    const total = Object.values(stats.animals_by_sex).reduce((a, b) => a + b, 0);
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500'];
                     return (
-                      <DistributionRow
-                        key={source}
-                        label={source}
-                        percentage={pct}
-                        color={colors[source] || 'bg-slate-500'}
-                      />
+                      <div key={sex} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${colors[i % colors.length]}`} />
+                          <span className="text-xs text-slate-400">{sex}</span>
+                        </div>
+                        <span className="text-xs font-bold text-white">{count} ({pct}%)</span>
+                      </div>
                     );
                   })}
+                </div>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <Card variant="bento" className="p-6">
+                 <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Métricas de Peso</h4>
+                 <div className="space-y-6">
+                    <MetricRow label="Desmama (210d)" value={stats.avg_p210} color="text-blue-400" bg="bg-blue-400/10" />
+                    <MetricRow label="Ano (365d)" value={stats.avg_p365} color="text-emerald-400" bg="bg-emerald-400/10" />
+                    <MetricRow label="Sobreano (450d)" value={stats.avg_p450} color="text-violet-400" bg="bg-violet-400/10" />
+                 </div>
+              </Card>
+              
+              <Card variant="bento" className="lg:col-span-2 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Performance de Dados</h3>
+                    <p className="text-slate-500 text-sm">Uploads recentes e integridade</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-emerald-400">{stats.recent_uploads}</span>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">Uploads / 30d</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Top Fontes</p>
+                    {Object.entries(stats.animals_by_source).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([source, count]) => (
+                      <div key={source} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-white/5">
+                        <span className="text-sm text-white font-medium">{source}</span>
+                        <span className="text-sm font-bold text-cyan-400">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-center p-6 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700">
+                    <div className="text-center">
+                       <CheckBadgeIcon className="w-12 h-12 text-emerald-500/20 mx-auto mb-2" />
+                       <p className="text-xs text-slate-500 italic">"Sincronização ativa e dados validados para o ciclo 2026."</p>
+                    </div>
+                  </div>
                 </div>
               </Card>
             </div>
@@ -236,6 +318,19 @@ function DistributionRow({ label, percentage, color }: any) {
       </div>
       <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${percentage}%` }}></div>
+      </div>
+    </div>
+  );
+}
+
+function MetricRow({ label, value, color, bg }: any) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-slate-500 font-medium">{label}</span>
+      <div className={`px-3 py-1 rounded-lg ${bg} border border-white/5`}>
+        <span className={`text-sm font-bold ${color}`}>
+          {value ? `${value.toFixed(1)} kg` : '—'}
+        </span>
       </div>
     </div>
   );

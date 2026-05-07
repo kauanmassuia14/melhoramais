@@ -125,30 +125,44 @@ class ReportGeneratorV2:
         
         # Header bar
         canvas_obj.setFillColor(PRIMARY_DARK)
-        canvas_obj.rect(0, A4[1] - 20 * mm, A4[0], 20 * mm, fill=1, stroke=0)
+        canvas_obj.rect(0, A4[1] - 25 * mm, A4[0], 25 * mm, fill=1, stroke=0)
+        
+        # Logo
+        logo_path = "backend/static/logo.png"
+        try:
+            canvas_obj.drawImage(logo_path, 15 * mm, A4[1] - 20 * mm, width=15 * mm, height=15 * mm, mask='auto')
+        except:
+            # Fallback if logo not found
+            canvas_obj.setFillColor(white)
+            canvas_obj.setFont("Helvetica-Bold", 14)
+            canvas_obj.drawString(15 * mm, A4[1] - 15 * mm, "M+")
         
         # Title
         canvas_obj.setFillColor(white)
-        canvas_obj.setFont("Helvetica-Bold", 12)
-        canvas_obj.drawString(15 * mm, A4[1] - 12 * mm, "Melhora+")
-        canvas_obj.setFont("Helvetica", 8)
-        canvas_obj.drawString(15 * mm, A4[1] - 16 * mm, "Relatório Genético")
+        canvas_obj.setFont("Helvetica-Bold", 14)
+        canvas_obj.drawString(35 * mm, A4[1] - 13 * mm, "Melhora+")
+        canvas_obj.setFont("Helvetica", 9)
+        canvas_obj.drawString(35 * mm, A4[1] - 18 * mm, "Inteligência Genética Aplicada")
         
-        # Date
+        # Date and Page
         canvas_obj.setFont("Helvetica", 8)
         canvas_obj.drawRightString(
-            A4[0] - 15 * mm, A4[1] - 12 * mm,
-            datetime.now().strftime("%d/%m/%Y")
+            A4[0] - 15 * mm, A4[1] - 13 * mm,
+            f"Gerado em: {datetime.now().strftime('%d/%m/%Y')}"
+        )
+        canvas_obj.drawRightString(
+            A4[0] - 15 * mm, A4[1] - 18 * mm,
+            f"Página {doc.page}"
         )
         
         # Footer bar
-        canvas_obj.setFillColor(PRINT_BORDER)
-        canvas_obj.rect(0, 0, A4[0], 10 * mm, fill=1, stroke=0)
+        canvas_obj.setFillColor(HexColor("#f1f5f9"))
+        canvas_obj.rect(0, 0, A4[0], 12 * mm, fill=1, stroke=0)
         canvas_obj.setFillColor(PRINT_TEXT_SEC)
-        canvas_obj.setFont("Helvetica", 6)
+        canvas_obj.setFont("Helvetica-Oblique", 7)
         canvas_obj.drawCentredString(
-            A4[0] / 2, 4 * mm,
-            f"Melhora+ • Página {doc.page}"
+            A4[0] / 2, 5 * mm,
+            "Melhora+ • Sistema de Melhoramento Genético e Unificação de Dados • www.melhoramais.com.br"
         )
         
         canvas_obj.restoreState()
