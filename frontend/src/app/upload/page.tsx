@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { GlowButton } from "@/components/ui/glow-button";
 import { motion, AnimatePresence } from "framer-motion";
-import { api, Farm, Upload } from "@/lib/api";
+import { api, GeneticsFarm as Farm, Upload } from "@/lib/api";
 import {
   DocumentArrowUpIcon,
   CheckCircleIcon,
@@ -154,7 +154,7 @@ export default function UploadPage() {
 
   const loadFarms = async () => {
     try {
-      const farmsData = await api.getFarms();
+      const farmsData = await api.getGeneticsFarms();
       setFarms(farmsData);
       if (farmsData.length > 0 && !selectedFarm) {
         setSelectedFarm(farmsData[0]);
@@ -209,7 +209,7 @@ export default function UploadPage() {
       // Step 1: Create upload record
       const upload = await api.createUpload({
         nome: uploadName.trim(),
-        id_farm: selectedFarm.id_farm,
+        id_farm: selectedFarm.id,
         fonte_origem: platform,
         arquivo_nome_original: file.name,
         arquivo_hash: fileHash,
@@ -219,7 +219,7 @@ export default function UploadPage() {
       setStatus("processing");
 
       // Step 2: Process file with upload_id
-      const blob = await api.uploadFileWithUpload(file, platform, selectedFarm.id_farm, upload.upload_id);
+      const blob = await api.uploadFileWithUpload(file, platform, selectedFarm.id, upload.upload_id);
       
       // Download the processed file
       const url = window.URL.createObjectURL(blob);
@@ -235,7 +235,7 @@ export default function UploadPage() {
       try {
         await api.createNotification({
           title: "Upload concluído",
-          message: `"${uploadName}" - ${file.name} processado com sucesso na fazenda ${selectedFarm.nome_farm}.`,
+          message: `"${uploadName}" - ${file.name} processado com sucesso na fazenda ${selectedFarm.nome}.`,
           type: "success",
         });
       } catch {
@@ -306,7 +306,7 @@ export default function UploadPage() {
               <div className="flex items-center gap-3">
                 <BuildingOfficeIcon className="w-5 h-5 text-text-muted" />
                 <span className="text-white">
-                  {selectedFarm ? selectedFarm.nome_farm : "Selecione uma fazenda..."}
+                  {selectedFarm ? selectedFarm.nome : "Selecione uma fazenda..."}
                 </span>
               </div>
               {farmDropdownOpen ? (
@@ -327,7 +327,7 @@ export default function UploadPage() {
                   <div className="max-h-60 overflow-y-auto py-1">
                     {farms.map((farm) => (
                       <button
-                        key={farm.id_farm}
+                        key={farm.id}
                         onClick={() => {
                           setSelectedFarm(farm);
                           setFarmDropdownOpen(false);
@@ -335,9 +335,9 @@ export default function UploadPage() {
                         className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3"
                       >
                         <BuildingOfficeIcon className="w-4 h-4 text-text-muted" />
-                        <span className="text-white">{farm.nome_farm}</span>
-                        {farm.cnpj && (
-                          <span className="text-xs text-text-muted">{farm.cnpj}</span>
+                        <span className="text-white">{farm.nome}</span>
+                        {farm.documento && (
+                          <span className="text-xs text-text-muted">{farm.documento}</span>
                         )}
                       </button>
                     ))}
@@ -350,8 +350,8 @@ export default function UploadPage() {
                       }}
                       className="w-full px-4 py-2.5 rounded-lg bg-emerald-glow/10 border border-emerald-glow/20 text-emerald-glow-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-emerald-glow/15 transition-colors"
                     >
-                      <PlusIcon className="w-4 h-4" />
-                      Criar Nova Fazenda
+                      {/* Botão desativado temporariamente para o novo schema genetics */}
+                      Criar Nova Fazenda (Desativado)
                     </button>
                   </div>
                 </motion.div>
@@ -509,7 +509,7 @@ export default function UploadPage() {
                   Pronto para processar
                 </p>
                 <p className="text-xs text-text-muted">
-                  {selectedFarm?.nome_farm} · {platform} · {uploadName}
+                  {selectedFarm?.nome} · {platform} · {uploadName}
                 </p>
               </div>
               <GlowButton onClick={handleUpload}>Processar Dados</GlowButton>

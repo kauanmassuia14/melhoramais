@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
-import { api } from '@/lib/api';
+import { api, type GeneticsFarm as Farm } from '@/lib/api';
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -85,10 +85,7 @@ interface AuctionAnimal {
   characteristics: Record<string, number>;
 }
 
-interface Farm {
-  id_farm: string;
-  nome_farm: string;
-}
+// Interface Farm local removida pois estamos usando a do lib/api agora
 
 function BenchmarkingContent() {
   const searchParams = useSearchParams();
@@ -169,7 +166,7 @@ function BenchmarkingContent() {
   useEffect(() => {
     const loadFarms = async () => {
       try {
-        const farmsData = await api.getFarms();
+        const farmsData = await api.getGeneticsFarms();
         setFarms(Array.isArray(farmsData) ? farmsData : []);
       } catch (err) {
         console.error('Falha ao carregar fazendas', err);
@@ -452,8 +449,8 @@ function BenchmarkingContent() {
               >
                 <option value="">Todas as Fazendas</option>
                 {farms.map(farm => (
-                  <option key={farm.id_farm} value={String(farm.id_farm)}>
-                    {farm.nome_farm}
+                  <option key={farm.id} value={String(farm.id)}>
+                    {farm.nome}
                   </option>
                 ))}
               </select>

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
-import { api, type DashboardStats, type Farm } from '@/lib/api';
+import { api, type DashboardStats, type GeneticsFarm as Farm } from '@/lib/api';
 import {
   ChartBarSquareIcon,
   CubeTransparentIcon,
@@ -26,7 +26,7 @@ function AnalyticsContent() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
-      const farmId = farmIdParam ? Number(farmIdParam) : undefined;
+      const farmId = farmIdParam || undefined;
       api.getStats(farmId)
         .then(setStats)
         .catch((e) => setError(e.message))
@@ -36,11 +36,11 @@ function AnalyticsContent() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
-      api.getFarms()
+      api.getGeneticsFarms()
         .then((data) => {
           setFarms(data);
           if (farmIdParam) {
-            const farm = data.find((f) => String(f.id_farm) === farmIdParam);
+            const farm = data.find((f) => String(f.id) === farmIdParam);
             if (farm) setSelectedFarm(farm);
           }
         })
@@ -60,14 +60,14 @@ function AnalyticsContent() {
             <h1 className="text-4xl font-bold text-white tracking-tight">Análises Genéticas</h1>
             {selectedFarm && (
               <p className="text-cyan-400 text-lg">
-                Fazenda: {selectedFarm.nome_farm}
+                Fazenda: {selectedFarm.nome}
               </p>
             )}
             <p className="text-slate-400 text-lg">Insights avançados sobre o seu rebanho e performance de dados.</p>
           </div>
           {selectedFarm && (
             <Link
-              href={`/benchmarking?farm_id=${selectedFarm.id_farm}`}
+              href={`/benchmarking?farm_id=${selectedFarm.id}`}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-glow/10 border border-violet-glow/20 text-violet-glow-400 text-sm font-medium hover:bg-violet-glow/20 transition-all"
             >
               <SparklesIcon className="w-5 h-5" />
@@ -91,8 +91,8 @@ function AnalyticsContent() {
               >
                 <option value="">Todas as fazendas</option>
                 {farms.map((farm) => (
-                  <option key={farm.id_farm} value={farm.id_farm}>
-                    {farm.nome_farm}
+                  <option key={farm.id} value={farm.id}>
+                    {farm.nome}
                   </option>
                 ))}
               </select>
