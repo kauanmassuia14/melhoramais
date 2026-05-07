@@ -497,6 +497,13 @@ class GeneticsFarmResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if hasattr(v, '__iter__'):
+            return str(v)
+        return v
+
 
 # ============================================
 # Upload Schemas
