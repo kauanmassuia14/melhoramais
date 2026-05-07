@@ -22,7 +22,7 @@ def create_farm(
     db_farm = GeneticsFarm(
         id=uuid.uuid4(),
         nome=farm.nome,
-        documento=farm.documento,
+        dono_fazenda=farm.dono_fazenda,
     )
     db.add(db_farm)
     db.commit()

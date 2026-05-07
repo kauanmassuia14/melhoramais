@@ -526,7 +526,7 @@ class GeneticsFarm(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True)
     nome = Column(String(255))
-    documento = Column(String(50))
+    dono_fazenda = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     animals = relationship("GeneticsAnimal", back_populates="farm")

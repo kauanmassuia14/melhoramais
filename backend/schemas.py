@@ -480,18 +480,18 @@ class NotificationUpdate(BaseModel):
 # ============================================
 class GeneticsFarmCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=255)
-    documento: Optional[str] = None
+    dono_fazenda: Optional[str] = Field(None, max_length=255)
 
 
 class GeneticsFarmUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=255)
-    documento: Optional[str] = None
+    dono_fazenda: Optional[str] = Field(None, max_length=255)
 
 
 class GeneticsFarmResponse(BaseModel):
     id: str
     nome: Optional[str]
-    documento: Optional[str]
+    dono_fazenda: Optional[str]
     created_at: Optional[datetime]
 
     model_config = {"from_attributes": True}
