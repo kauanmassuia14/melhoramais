@@ -76,44 +76,59 @@ def animal_to_dict(a: GeneticsAnimal, latest_eval: Optional[GeneticsGeneticEvalu
     }
 
     if latest_eval:
-        result["p210_info"] = parse_metric_block(latest_eval.p210_info)
-        result["p365_info"] = parse_metric_block(latest_eval.p365_info)
-        result["p450_info"] = parse_metric_block(latest_eval.p450_info)
-        result["evaluations"] = [eval_to_dict(latest_eval)]
+        eval_dict = eval_to_dict(latest_eval)
+        result["evaluations"] = [eval_dict]
+        # Helper fields for the list view
+        result["latest_eval"] = eval_dict
     else:
-        result["p210_info"] = None
-        result["p365_info"] = None
-        result["p450_info"] = None
+        result["latest_eval"] = None
 
     return result
 
 
 def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
+    # Basic metrics mapping for frontend backward compatibility
+    metrics = e.metrics if isinstance(e.metrics, dict) else {}
+    if isinstance(e.metrics, str):
+        try:
+            metrics = json.loads(e.metrics)
+        except:
+            metrics = {}
+
+    # Compatibility mapping: map platform-specific names to standard frontend fields
+    pn = None
+    pd = None
+    ps = None
+    
+    if e.fonte_origem == "PMGZ":
+        pn = metrics.get("PN-EDg")
+        pd = metrics.get("PD-EDg")
+        ps = metrics.get("PS-EDg")
+    elif e.fonte_origem == "ANCP":
+        pn = metrics.get("DPN")
+        pd = metrics.get("DP210")
+        ps = metrics.get("DP450")
+    elif e.fonte_origem == "GENEPLUS":
+        pn = metrics.get("PN")
+        pd = metrics.get("PD")
+        ps = metrics.get("PS")
+
     return {
         "id": str(e.id),
         "safra": e.safra,
         "fonte_origem": e.fonte_origem,
-        "iabczg": float(e.iabczg) if e.iabczg else None,
-        "deca_index": e.deca_index,
-        "pn": parse_metric_block(e.pn_ed),
-        "pd": parse_metric_block(e.pd_ed),
-        "pa": parse_metric_block(e.pa_ed),
-        "ps": parse_metric_block(e.ps_ed),
-        "pm": parse_metric_block(e.pm_em),
-        "ipp": parse_metric_block(e.ipp),
-        "stay": parse_metric_block(e.stay),
-        "pe_365": parse_metric_block(e.pe_365),
-        "psn": parse_metric_block(e.psn),
-        "aol": parse_metric_block(e.aol),
-        "acab": parse_metric_block(e.acab),
-        "marmoreio": parse_metric_block(e.marmoreio),
-        "eg": parse_metric_block(e.eg),
-        "pg": parse_metric_block(e.pg),
-        "mg": parse_metric_block(e.mg),
-        "p120_info": parse_metric_block(e.p120_info),
-        "p210_info": parse_metric_block(e.p210_info),
-        "p365_info": parse_metric_block(e.p365_info),
-        "p450_info": parse_metric_block(e.p450_info),
+        "iabczg": float(e.indice_principal) if e.indice_principal else (float(e.iabczg) if hasattr(e, 'iabczg') and e.iabczg else None),
+        "deca_index": e.rank_principal if e.rank_principal else (e.deca_index if hasattr(e, 'deca_index') else None),
+        "metrics": metrics,
+        "pn": pn,
+        "pd": pd,
+        "ps": ps,
+        # Legacy fields (returning None or mapping if possible)
+        "pa": metrics.get("PA-EDg") if e.fonte_origem == "PMGZ" else None,
+        "pm": metrics.get("PM-EMg") if e.fonte_origem == "PMGZ" else None,
+        "ipp": metrics.get("IPPg"),
+        "stay": metrics.get("STAYg"),
+        "pe_365": metrics.get("PE-365g"),
     }
 
 
@@ -228,34 +243,51 @@ def get_stats_v2(
         )
         source_counts = {s or "unknown": c for s, c in eval_counts}
 
-        # Médias de pesos: usa pd_ed (P210/desmama) e ps_ed (P450/sobreano)
-        # pois p210_info/p365_info/p450_info ainda não estão populados
+        # Médias de pesos: usa o campo metrics (JSONB)
+        # Tenta pegar PD (Desmama) e PS (Sobreano) dependendo da fonte
         p210 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from pd_ed::text), ',', 1), '')::numeric)
+                SELECT AVG(
+                    CASE 
+                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
+                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
+                        ELSE NULL
+                    END
+                )
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND pd_ed IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()
-
+        
+        # P365 (Ano)
         p365 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from ps_ed::text), ',', 1), '')::numeric)
+                SELECT AVG(
+                    CASE 
+                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
+                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
+                        ELSE NULL
+                    END
+                )
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND ps_ed IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()
 
+        # P450 (Sobreano)
         p450 = db.execute(
             text("""
-                SELECT AVG(NULLIF(split_part(trim(both '()' from psn::text), ',', 1), '')::numeric)
+                SELECT AVG(
+                    CASE 
+                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
+                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
+                        ELSE NULL
+                    END
+                )
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND psn IS NOT NULL
             """),
             {"ids": animal_ids}
         ).scalar()

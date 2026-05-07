@@ -274,6 +274,7 @@ class GeneticDataProcessor:
     def _upsert_genetics_animals(self, df: pd.DataFrame, source_system: str) -> Tuple[int, int, int]:
         from sqlalchemy import text
         import uuid
+        import json
 
         if len(df) == 0:
             return 0, 0, 0
@@ -302,20 +303,13 @@ class GeneticDataProcessor:
                 return False
             return None
 
-        def to_tuple(dep_val, ac_val, deca_val, p_val):
-            def clean_val(v):
-                if pd.isna(v):
-                    return None
-                try:
-                    return float(v)
-                except:
-                    return None
-            return (
-                clean_val(dep_val),
-                clean_val(ac_val),
-                clean_val(deca_val) if deca_val and not pd.isna(deca_val) else None,
-                clean_val(p_val)
-            )
+        def safe_float(v):
+            if pd.isna(v):
+                return None
+            try:
+                return float(v)
+            except:
+                return None
 
         BATCH_SIZE = 2000
         inserted = 0
@@ -381,15 +375,16 @@ class GeneticDataProcessor:
                 inserted += len(animals_to_insert)
 
             if animals_to_update_ids:
+                # Update logic (simplified to update non-null values)
                 self.db.execute(
                     text("""
                         UPDATE genetics.animals SET
-                            nome = CASE WHEN :nome IS NOT NULL THEN :nome ELSE nome END,
-                            serie = CASE WHEN :serie IS NOT NULL THEN :serie ELSE serie END,
-                            sexo = CASE WHEN :sexo IS NOT NULL THEN :sexo ELSE sexo END,
-                            nascimento = CASE WHEN :nascimento IS NOT NULL THEN :nascimento ELSE nascimento END,
-                            genotipado = CASE WHEN :genotipado IS NOT NULL THEN :genotipado ELSE genotipado END,
-                            csg = CASE WHEN :csg IS NOT NULL THEN :csg ELSE csg END,
+                            nome = COALESCE(:nome, nome),
+                            serie = COALESCE(:serie, serie),
+                            sexo = COALESCE(:sexo, sexo),
+                            nascimento = COALESCE(:nascimento, nascimento),
+                            genotipado = COALESCE(:genotipado, genotipado),
+                            csg = COALESCE(:csg, csg),
                             upload_id = COALESCE(:upload_id, upload_id)
                         WHERE id = ANY(:ids)
                     """),
@@ -418,35 +413,107 @@ class GeneticDataProcessor:
                 if not animal_id:
                     continue
 
+                # Build Metrics JSON
+                metrics_data = {}
+                
+                # Dynamic metrics handling (could be expanded)
+                if source_system == "PMGZ":
+                    dep_map = {
+                        "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
+                        "PD-EDg": ("pmg_pd_dep", "pmg_pd_ac", "pmg_pd_deca", "pmg_pd_p_percent"),
+                        "PS-EDg": ("pmg_ps_dep", "pmg_ps_ac", "pmg_ps_deca", "pmg_ps_p_percent"),
+                        "IPPg": ("pmg_ipp_dep", "pmg_ipp_ac", "pmg_ipp_deca", "pmg_ipp_p_percent"),
+                        "STAYg": ("pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent"),
+                        "AOLg": ("pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent"),
+                    }
+                    for metric_name, cols in dep_map.items():
+                        dep, ac, deca, perc = cols
+                        val_dep = safe_float(row.get(dep))
+                        if val_dep is not None:
+                            metrics_data[metric_name] = {
+                                "dep": val_dep,
+                                "acc": safe_float(row.get(ac)),
+                                "rank": safe_float(row.get(deca)),
+                                "perc": safe_float(row.get(perc))
+                            }
+                elif source_system == "ANCP":
+                    # Mapeamento ANCP (usando nomes comuns ou mapeados)
+                    dep_map = {
+                        "MGTe": ("MGTe", "ACC_MGTe", "TOP_MGTe", None),
+                        "D3P": ("D3P", "ACC_D3P", "TOP_D3P", None),
+                        "DIPP": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
+                        "DPE365": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        "DPE450": ("DPE450", "ACC_DPE450", "TOP_DPE450", None),
+                        "DPN": ("DPN", "ACC_DPN", "TOP_DPN", None),
+                        "DSTAY": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
+                        "MP120": ("MP120", "ACC_MP120", "TOP_MP120", None),
+                        "MP210": ("MP210", "ACC_MP210", "TOP_MP210", None),
+                        "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
+                        "DP365": ("DP365", "ACC_DP365", "TOP_DP365", None),
+                        "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
+                    }
+                    for metric_name, cols in dep_map.items():
+                        dep, ac, rank, perc = cols
+                        val_dep = safe_float(row.get(dep))
+                        if val_dep is not None:
+                            metrics_data[metric_name] = {
+                                "dep": val_dep,
+                                "acc": safe_float(row.get(ac)),
+                                "top": safe_float(row.get(rank)),
+                                "perc": safe_float(row.get(perc)) if perc else None
+                            }
+                elif source_system == "GENEPLUS":
+                    dep_map = {
+                        "IQG": ("gen_iqg", "gen_ac_iqg", None, None),
+                        "PN": ("gen_pn", None, None, None),
+                        "P120": ("gen_p120", None, None, None),
+                        "PD": ("gen_pd", None, None, None),
+                        "PS": ("gen_ps", None, None, None),
+                    }
+                    for metric_name, cols in dep_map.items():
+                        dep, ac, rank, perc = cols
+                        val_dep = safe_float(row.get(dep))
+                        if val_dep is not None:
+                            metrics_data[metric_name] = {
+                                "dep": val_dep,
+                                "acc": safe_float(row.get(ac)),
+                                "rank": safe_float(row.get(rank)),
+                                "perc": safe_float(row.get(perc))
+                            }
+                
+                # Default indices
+                indice_val = None
+                rank_val = None
+                
+                if source_system == "PMGZ":
+                    indice_val = safe_float(row.get('pmg_iabc'))
+                    rank_val = safe_float(row.get('pmg_deca'))
+                elif source_system == "ANCP":
+                    indice_val = safe_float(row.get('MGTe'))
+                    rank_val = safe_float(row.get('TOP_MGTe'))
+                elif source_system == "GENEPLUS":
+                    indice_val = safe_float(row.get('gen_iqg'))
+
                 eval_to_insert.append({
                     'id': str(uuid.uuid4()),
                     'animal_id': str(animal_id),
                     'farm_id': str(genetics_farm_id),
                     'safra': 2026,
                     'fonte_origem': source_system,
-                    'iabczg': float(row.get('pmg_iabc')) if row.get('pmg_iabc') and not pd.isna(row.get('pmg_iabc')) else None,
-                    'pn_ed': to_tuple(row.get('pmg_pn_dep'), row.get('pmg_pn_ac'), row.get('pmg_pn_deca'), row.get('pmg_pn_p_percent')),
-                    'pd_ed': to_tuple(row.get('pmg_pd_dep'), row.get('pmg_pd_ac'), row.get('pmg_pd_deca'), row.get('pmg_pd_p_percent')),
-                    'ps_ed': to_tuple(row.get('pmg_ps_dep'), row.get('pmg_ps_ac'), row.get('pmg_ps_deca'), row.get('pmg_ps_p_percent')),
-                    'pm_em': to_tuple(row.get('pmg_pm_dep'), row.get('pmg_pm_ac'), row.get('pmg_pm_deca'), row.get('pmg_pm_p_percent')),
-                    'ipp': to_tuple(row.get('pmg_ipp_dep'), row.get('pmg_ipp_ac'), row.get('pmg_ipp_deca'), row.get('pmg_ipp_p_percent')),
-                    'stay': to_tuple(row.get('pmg_stay_dep'), row.get('pmg_stay_ac'), row.get('pmg_stay_deca'), row.get('pmg_stay_p_percent')),
-                    'pe_365': to_tuple(row.get('pmg_pe365_dep'), row.get('pmg_pe365_ac'), row.get('pmg_pe365_deca'), row.get('pmg_pe365_p_percent')),
-                    'psn': to_tuple(row.get('pmg_psn_dep'), row.get('pmg_psn_ac'), row.get('pmg_psn_deca'), row.get('pmg_psn_p_percent')),
-                    'aol': to_tuple(row.get('pmg_aol_dep'), row.get('pmg_aol_ac'), row.get('pmg_aol_deca'), row.get('pmg_aol_p_percent')),
-                    'acab': to_tuple(row.get('pmg_acab_dep'), row.get('pmg_acab_ac'), row.get('pmg_acab_deca'), row.get('pmg_acab_p_percent')),
-                    'marmoreio': to_tuple(row.get('pmg_mar_dep'), row.get('pmg_mar_ac'), row.get('pmg_mar_deca'), row.get('pmg_mar_p_percent')),
-                    'eg': to_tuple(row.get('pmg_eg_dep'), row.get('pmg_eg_ac'), row.get('pmg_eg_deca'), row.get('pmg_eg_p_percent')),
-                    'pg': to_tuple(row.get('pmg_p_dep'), row.get('pmg_p_ac'), row.get('pmg_p_deca'), row.get('pmg_p_p_percent')),
-                    'mg': to_tuple(row.get('pmg_m_dep'), row.get('pmg_m_ac'), row.get('pmg_m_deca'), row.get('pmg_m_p_percent')),
+                    'indice_principal': indice_val,
+                    'rank_principal': rank_val,
+                    'metrics': json.dumps(metrics_data),
+                    'progeny_stats': json.dumps({}),
+                    'phenotypes': json.dumps({}),
+                    'upload_id': upload_id_val,
                 })
 
             if eval_to_insert:
                 self.db.execute(
                     text("""
                         INSERT INTO genetics.genetic_evaluations 
-                        (id, animal_id, farm_id, safra, fonte_origem, iabczg, pn_ed, pd_ed, ps_ed, pm_em, ipp, stay, pe_365, psn, aol, acab, marmoreio, eg, pg, mg)
-                        VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :iabczg, :pn_ed, :pd_ed, :ps_ed, :pm_em, :ipp, :stay, :pe_365, :psn, :aol, :acab, :marmoreio, :eg, :pg, :mg)
+                        (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, metrics, progeny_stats, phenotypes, upload_id)
+                        VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :indice_principal, :rank_principal, :metrics, :progeny_stats, :phenotypes, :upload_id)
                     """),
                     eval_to_insert
                 )

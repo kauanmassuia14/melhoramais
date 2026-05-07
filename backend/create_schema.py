@@ -8,6 +8,7 @@ print("Creating schemas...")
 with engine.connect() as conn:
     conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
     conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
+    conn.execute(text("CREATE SCHEMA IF NOT EXISTS genetics"))
     conn.commit()
 print("Schemas created.")
 

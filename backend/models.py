@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, UniqueConstraint, Text, JSON, Enum, func, Numeric
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import os
 import uuid
 from datetime import datetime
@@ -63,7 +63,7 @@ class Upload(Base):
 class Animal(Base):
     __tablename__ = "animais"
     __table_args__ = (
-        UniqueConstraint("id_farm", "rgn_animal", name="uix_farm_rgn"),
+        UniqueConstraint("id_farm", "rgn_animal", name="uix_farm_rgn_legacy"),
         {"schema": "genetics"} if not IS_SQLITE else {},
     )
 
@@ -531,19 +531,22 @@ class GeneticsFarm(Base):
 
 class GeneticsAnimal(Base):
     __tablename__ = "animals"
-    __table_args__ = {"schema": "genetics"} if not IS_SQLITE else {}
+    __table_args__ = (
+        UniqueConstraint("farm_id", "rgn", name="uix_genetics_animal_rgn"),
+        {"schema": "genetics"} if not IS_SQLITE else {},
+    )
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     farm_id = Column(UUID(as_uuid=True), _fk("genetics.farms.id"), nullable=False)
     nome = Column(String(255))
     serie = Column(String(50))
     rgn = Column(String(50), nullable=False)
     sexo = Column(String(1))
     nascimento = Column(Date)
-    genotipado = Column(Boolean)
-    csg = Column(Boolean)
-    sire_id = Column(UUID(as_uuid=True))
-    dam_id = Column(UUID(as_uuid=True))
+    genotipado = Column(Boolean, default=False)
+    csg = Column(Boolean, default=False)
+    sire_id = Column(UUID(as_uuid=True), nullable=True)
+    dam_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -555,41 +558,28 @@ class GeneticsGeneticEvaluation(Base):
     __tablename__ = "genetic_evaluations"
     __table_args__ = {"schema": "genetics"} if not IS_SQLITE else {}
 
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     animal_id = Column(UUID(as_uuid=True), _fk("genetics.animals.id"), nullable=False)
     farm_id = Column(UUID(as_uuid=True), _fk("genetics.farms.id"), nullable=False)
     safra = Column(Integer)
-    fonte_origem = Column(String(50))
-    iabczg = Column(Numeric(10, 4))
-    deca_index = Column(Integer)
+    fonte_origem = Column(String(50))  # 'PMGZ', 'ANCP', 'GENEPLUS'
+    data_referencia = Column(Date)
 
-    # DEP armazenar como JSON string
-    pn_ed = Column(Text)
-    pd_ed = Column(Text)
-    pa_ed = Column(Text)
-    ps_ed = Column(Text)
-    pm_em = Column(Text)
-    ipp = Column(Text)
-    stay = Column(Text)
-    pe_365 = Column(Text)
-    psn = Column(Text)
-    aol = Column(Text)
-    acab = Column(Text)
-    marmoreio = Column(Text)
-    eg = Column(Text)
-    pg = Column(Text)
-    mg = Column(Text)
+    # Main Indices
+    indice_principal = Column(Numeric(10, 4))
+    rank_principal = Column(Integer)
+    percentil_principal = Column(Numeric(10, 4))
 
-    fenotipo_aol = Column(Numeric(10, 4))
-    fenotipo_acab = Column(Numeric(10, 4))
-    fenotipo_ipp = Column(Numeric(10, 4))
-    fenotipo_stay = Column(Numeric(10, 4))
+    # Metrics JSONB: { "PN-EDg": { "dep": 0.5, "acc": 80, "rank": 1, "perc": 2.5 } }
+    metrics = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
 
-    p120_info = Column(Text)
-    p210_info = Column(Text)
-    p365_info = Column(Text)
-    p450_info = Column(Text)
+    # Progeny Stats: { "NF120": 10, "NR120": 2 }
+    progeny_stats = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
 
+    # Phenotypes: { "peso_desmama": 210.5 }
+    phenotypes = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
+
+    upload_id = Column(String(36))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
