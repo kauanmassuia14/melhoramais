@@ -57,7 +57,12 @@ class Upload(Base):
     data_upload = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
     usuario = relationship("User", back_populates="uploads")
-    animais = relationship("Animal", back_populates="upload")
+    animais = relationship(
+        "Animal",
+        primaryjoin="Upload.upload_id == foreign(Animal.upload_id)",
+        back_populates="upload",
+        viewonly=True,
+    )
 
 
 class Animal(Base):
@@ -393,7 +398,12 @@ class Animal(Base):
     fonte_origem = Column(String(50))
     data_processamento = Column(DateTime, default=datetime.utcnow)
 
-    upload = relationship("Upload", back_populates="animais")
+    upload = relationship(
+        "Upload",
+        primaryjoin="Animal.upload_id == foreign(Upload.upload_id)",
+        back_populates="animais",
+        viewonly=True,
+    )
 
 
 class ColumnMapping(Base):
