@@ -38,7 +38,7 @@ export default function FarmsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     nome: "",
-    documento: "",
+    dono_fazenda: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { showToast } = useToast();
@@ -66,7 +66,7 @@ export default function FarmsPage() {
     const s = search.toLowerCase();
     return (
       farm.nome?.toLowerCase().includes(s) ||
-      farm.documento?.toLowerCase().includes(s)
+      farm.dono_fazenda?.toLowerCase().includes(s)
     );
   });
 
@@ -84,10 +84,10 @@ export default function FarmsPage() {
     try {
       await api.createGeneticsFarm({
         nome: form.nome,
-        documento: form.documento || undefined,
+        dono_fazenda: form.dono_fazenda || undefined,
       });
       setShowCreate(false);
-      setForm({ nome: "", documento: "" });
+      setForm({ nome: "", dono_fazenda: "" });
       fetchFarms();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao criar fazenda";
@@ -219,11 +219,11 @@ export default function FarmsPage() {
                   />
 
                   <AnimatedInput
-                    label="Documento (CNPJ/CPF)"
-                    placeholder="00.000.000/0000-00"
+                    label="Dono da Fazenda"
+                    placeholder="Nome do responsável"
                     icon={<IdentificationIcon className="w-5 h-5" />}
-                    value={form.documento}
-                    onChange={(e) => setForm((p) => ({ ...p, documento: e.target.value }))}
+                    value={form.dono_fazenda}
+                    onChange={(e) => setForm((p) => ({ ...p, dono_fazenda: e.target.value }))}
                   />
 
                   <GlowButton
@@ -344,10 +344,10 @@ export default function FarmsPage() {
                       </h3>
 
                       <div className="space-y-1 mb-3">
-                        {farm.documento && (
-                          <div className="flex items-center gap-2 text-sm text-text-secondary font-mono">
+                        {farm.dono_fazenda && (
+                          <div className="flex items-center gap-2 text-sm text-text-secondary">
                             <IdentificationIcon className="w-3.5 h-3.5 text-text-muted" />
-                            {farm.documento}
+                            {farm.dono_fazenda}
                           </div>
                         )}
                       </div>

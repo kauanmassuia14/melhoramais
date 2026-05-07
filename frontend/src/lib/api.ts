@@ -134,7 +134,7 @@ export interface Farm {
 export interface GeneticsFarm {
   id: string;
   nome: string;
-  documento: string | null;
+  dono_fazenda: string | null;
   created_at: string | null;
 }
 
@@ -333,14 +333,14 @@ export const api = {
   // Genetics Farms (UUID-based)
   getGeneticsFarms: () => fetchApi<GeneticsFarm[]>('/genetics/farms'),
   getGeneticsFarm: (id: string) => fetchApi<GeneticsFarm>(`/genetics/farms/${id}`),
-  updateGeneticsFarm: (id: string, data: { nome?: string; documento?: string }) =>
+  updateGeneticsFarm: (id: string, data: { nome?: string; dono_fazenda?: string }) =>
     fetchApi<GeneticsFarm>(`/genetics/farms/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   deleteGeneticsFarm: (id: string) =>
     fetchApi<{ message: string }>(`/genetics/farms/${id}`, { method: 'DELETE' }),
-  createGeneticsFarm: (data: { nome: string; documento?: string }) =>
+  createGeneticsFarm: (data: { nome: string; dono_fazenda?: string }) =>
     fetchApi<GeneticsFarm>('/genetics/farms', {
       method: 'POST',
       body: JSON.stringify(data),
