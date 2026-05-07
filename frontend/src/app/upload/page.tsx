@@ -221,15 +221,8 @@ export default function UploadPage() {
       // Step 2: Process file with upload_id
       const blob = await api.uploadFileWithUpload(file, platform, selectedFarm.id, upload.upload_id);
       
-      // Download the processed file
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `melhora_plus_tratado_${platform}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      
+      // Arquivo processado — não baixar automaticamente
+      // O upload foi salvo no banco e pode ser acessado via histórico
       setStatus("success");
       
       try {

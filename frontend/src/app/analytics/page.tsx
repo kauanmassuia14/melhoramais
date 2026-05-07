@@ -27,7 +27,7 @@ function AnalyticsContent() {
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
       const farmId = farmIdParam || undefined;
-      api.getStats(farmId)
+      api.getStatsV2(farmId)
         .then(setStats)
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
@@ -101,7 +101,7 @@ function AnalyticsContent() {
         )}
 
         {loading && <p className="text-slate-400">Carregando estatísticas...</p>}
-        {error && <p className="text-red-400">Erro: {error}</p>}
+        {error && <p className="text-red-400">Erro: {typeof error === 'string' ? error : JSON.stringify(error)}</p>}
 
         {stats && (
           <>

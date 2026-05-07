@@ -16,23 +16,46 @@ router = APIRouter(prefix="/v2/animals", tags=["Animals V2"])
 
 
 def parse_metric_block(mb_value) -> Optional[dict]:
-    """Parse metric_block from database (tuple or JSON text) to dict."""
-    if mb_value is None or mb_value == "":
+    """Parse metric_block: suporta JSON, tuple PostgreSQL '(dep,ac,deca,p_pct)' e None."""
+    if mb_value is None:
         return None
-    try:
-        if isinstance(mb_value, tuple):
+    if isinstance(mb_value, str):
+        mb_value = mb_value.strip()
+        if not mb_value:
+            return None
+        # Formato tuple PostgreSQL: '(0.87,36.0,10,)'
+        if mb_value.startswith('(') and mb_value.endswith(')'):
+            try:
+                inner = mb_value[1:-1]  # remove parênteses
+                parts = inner.split(',')
+                return {
+                    "dep": float(parts[0]) if parts[0].strip() else None,
+                    "ac": float(parts[1]) if len(parts) > 1 and parts[1].strip() else None,
+                    "deca": int(float(parts[2])) if len(parts) > 2 and parts[2].strip() else None,
+                    "p_percent": float(parts[3]) if len(parts) > 3 and parts[3].strip() else None,
+                }
+            except Exception as e:
+                logger.warning(f"Error parsing tuple metric_block '{mb_value}': {e}")
+                return None
+        # Formato JSON
+        try:
+            return json.loads(mb_value)
+        except Exception as e:
+            logger.warning(f"Error parsing JSON metric_block '{mb_value[:30]}': {e}")
+            return None
+    # Tuple Python já parsed
+    if isinstance(mb_value, tuple):
+        try:
             return {
                 "dep": float(mb_value[0]) if mb_value[0] is not None else None,
-                "ac": float(mb_value[1]) if mb_value[1] is not None else None,
-                "deca": int(mb_value[2]) if mb_value[2] is not None else None,
-                "p_percent": float(mb_value[3]) if mb_value[3] is not None else None,
+                "ac": float(mb_value[1]) if len(mb_value) > 1 and mb_value[1] is not None else None,
+                "deca": int(mb_value[2]) if len(mb_value) > 2 and mb_value[2] is not None else None,
+                "p_percent": float(mb_value[3]) if len(mb_value) > 3 and mb_value[3] is not None else None,
             }
-        if isinstance(mb_value, str):
-            return json.loads(mb_value)
-        return None
-    except Exception as e:
-        logger.warning(f"Error parsing metric_block: {e}")
-        return None
+        except Exception as e:
+            logger.warning(f"Error parsing tuple: {e}")
+            return None
+    return None
 
 
 def animal_to_dict(a: GeneticsAnimal, latest_eval: Optional[GeneticsGeneticEvaluation] = None) -> dict:
@@ -205,36 +228,34 @@ def get_stats_v2(
         )
         source_counts = {s or "unknown": c for s, c in eval_counts}
 
-        # Médias de pesos via JSON fields
+        # Médias de pesos: usa pd_ed (P210/desmama) e ps_ed (P450/sobreano)
+        # pois p210_info/p365_info/p450_info ainda não estão populados
         p210 = db.execute(
             text("""
-                SELECT AVG((p210_info->>'dep')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from pd_ed), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND p210_info IS NOT NULL
-                AND (p210_info->>'dep') IS NOT NULL
+                AND pd_ed IS NOT NULL AND pd_ed != ''
             """),
             {"ids": animal_ids}
         ).scalar()
 
         p365 = db.execute(
             text("""
-                SELECT AVG((p365_info->>'dep')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from ps_ed), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND p365_info IS NOT NULL
-                AND (p365_info->>'dep') IS NOT NULL
+                AND ps_ed IS NOT NULL AND ps_ed != ''
             """),
             {"ids": animal_ids}
         ).scalar()
 
         p450 = db.execute(
             text("""
-                SELECT AVG((p450_info->>'dep')::numeric)
+                SELECT AVG(NULLIF(split_part(trim(both '()' from psn), ',', 1), '')::numeric)
                 FROM genetics.genetic_evaluations
                 WHERE animal_id = ANY(:ids)
-                AND p450_info IS NOT NULL
-                AND (p450_info->>'dep') IS NOT NULL
+                AND psn IS NOT NULL AND psn != ''
             """),
             {"ids": animal_ids}
         ).scalar()
@@ -243,8 +264,23 @@ def get_stats_v2(
         avg_p365 = round(float(p365), 2) if p365 else None
         avg_p450 = round(float(p450), 2) if p450 else None
 
+    if current_user.role == "admin":
+        total_farms = db.query(GeneticsFarm).count()
+    else:
+        total_farms = 1 if current_user.id_farm else 0
+
+    from backend.models import Upload
+    from datetime import timedelta, timezone
+    thirty_days_ago = __import__('datetime').datetime.now(timezone.utc) - timedelta(days=30)
+    uploads_query = db.query(Upload).filter(Upload.data_upload >= thirty_days_ago)
+    if current_user.role != "admin" and current_user.id_farm:
+        uploads_query = uploads_query.filter(Upload.id_farm == str(current_user.id_farm))
+    recent_uploads = uploads_query.count()
+
     return {
         "total_animals": total_animals,
+        "total_farms": total_farms,
+        "recent_uploads": recent_uploads,
         "animals_by_sex": animals_by_sex,
         "animals_by_source": source_counts,
         "avg_p210": avg_p210,

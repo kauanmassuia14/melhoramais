@@ -274,7 +274,7 @@ export const api = {
     fetchApi<DashboardStats>(`/stats${farmId ? `?farm_id=${farmId}` : ''}`),
 
   getStatsV2: (farmId?: string) =>
-    fetchApi<{total_animals: number; animals_by_sex: Record<string, number>; animals_by_source: Record<string, number>}>(`/v2/animals/stats${farmId ? `?farm_id=${farmId}` : ''}`),
+    fetchApi<DashboardStats>(`/v2/animals/stats${farmId ? `?farm_id=${farmId}` : ''}`),
 
   getLogs: (farmId?: number, source?: string, limit = 50) => {
     const params = new URLSearchParams();
