@@ -494,15 +494,12 @@ class GeneticsFarmResponse(BaseModel):
     documento: Optional[str]
     created_at: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
     @field_validator('id', mode='before')
     @classmethod
     def convert_uuid_to_str(cls, v):
-        if hasattr(v, '__iter__'):
-            return str(v)
-        return v
+        return str(v) if v is not None else v
 
 
 # ============================================
