@@ -75,6 +75,16 @@ def list_animals(
         
         latest_eval = eval_query.order_by(GeneticsGeneticEvaluation.safra.desc()).first()
         
+        metrics = latest_eval.metrics or {}
+        if isinstance(metrics, str):
+            try: metrics = json.loads(metrics)
+            except: metrics = {}
+
+        # Helper para extrair DEP de blocos PMGZ ou ANCP
+        def get_dep(key_pmgz, key_ancp):
+            m = metrics.get(key_pmgz) or metrics.get(key_ancp)
+            return m.get("dep") if m else None
+
         result = {
             "id_animal": 0,  # Legacy field
             "id_farm": current_user.id_farm or 0,
@@ -85,15 +95,15 @@ def list_animals(
             "fonte_origem": latest_eval.fonte_origem if latest_eval else None,
             "genotipado": a.genotipado,
             "csg": a.csg,
-            # DEP do genetics
-            "pmg_iabc": float(latest_eval.iabczg) if latest_eval and latest_eval.iabczg else None,
-            "pmg_pn_dep": parse_metric_block(latest_eval.pn_ed)["dep"] if latest_eval and latest_eval.pn_ed else None,
-            "pmg_pd_dep": parse_metric_block(latest_eval.pd_ed)["dep"] if latest_eval and latest_eval.pd_ed else None,
-            "pmg_ps_dep": parse_metric_block(latest_eval.ps_ed)["dep"] if latest_eval and latest_eval.ps_ed else None,
-            "pmg_aol_dep": parse_metric_block(latest_eval.aol)["dep"] if latest_eval and latest_eval.aol else None,
-            "pmg_acab_dep": parse_metric_block(latest_eval.acab)["dep"] if latest_eval and latest_eval.acab else None,
-            "pmg_ipp_dep": parse_metric_block(latest_eval.ipp)["dep"] if latest_eval and latest_eval.ipp else None,
-            "pmg_stay_dep": parse_metric_block(latest_eval.stay)["dep"] if latest_eval and latest_eval.stay else None,
+            # DEP do genetics (Mapeia para os campos esperados pelo front legado)
+            "pmg_iabc": float(latest_eval.indice_principal) if latest_eval and latest_eval.indice_principal else None,
+            "pmg_pn_dep": get_dep("PN-EDg", "DPN"),
+            "pmg_pd_dep": get_dep("PD-EDg", "DP210"),
+            "pmg_ps_dep": get_dep("PS-EDg", "DP450"),
+            "pmg_aol_dep": get_dep("AOLg", "DAOL"),
+            "pmg_acab_dep": get_dep("ACABg", "DACAB"),
+            "pmg_ipp_dep": get_dep("IPPg", "DIPP"),
+            "pmg_stay_dep": get_dep("STAYg", "DSTAY"),
         }
         results.append(result)
 

@@ -193,17 +193,24 @@ def generate_custom_report(
             latest = db.query(GeneticsGeneticEvaluation).filter(
                 GeneticsGeneticEvaluation.animal_id == a.id
             ).order_by(GeneticsGeneticEvaluation.safra.desc()).first()
-            if latest and latest.pd_ed:
-                try:
-                    pd = json.loads(latest.pd_ed)
-                    pd_val = float(pd.get('dep', 0)) if pd.get('dep') else 0
-                    if min_p210 and pd_val < min_p210:
-                        continue
-                    if max_p210 and pd_val > max_p210:
-                        continue
-                    filtered_ids.append(a.id)
-                except:
-                    pass
+            if latest:
+                metrics = latest.metrics or {}
+                if isinstance(metrics, str):
+                    try: metrics = json.loads(metrics)
+                    except: metrics = {}
+                
+                # Procura PD em PMGZ ou ANCP
+                pd = metrics.get('PD-EDg') or metrics.get('DP210') or metrics.get('DP120')
+                if pd:
+                    try:
+                        pd_val = float(pd.get('dep', 0)) if pd.get('dep') else 0
+                        if min_p210 and pd_val < min_p210:
+                            continue
+                        if max_p210 and pd_val > max_p210:
+                            continue
+                        filtered_ids.append(a.id)
+                    except:
+                        pass
         query = query.filter(GeneticsAnimal.id.in_(filtered_ids))
     
     # Filtrar por plataforma - verificar se tem avaliações
@@ -243,16 +250,21 @@ def generate_custom_report(
         
         if latest:
             data["fonte_origem"] = latest.fonte_origem
-            data["iabczg"] = float(latest.iabczg) if latest.iabczg else None
-            for field in ['pn_ed', 'pd_ed', 'pa_ed', 'ps_ed', 'pm_em', 'ipp', 'stay', 'pe_365', 'aol', 'acab', 'marmoreio', 'eg', 'pg', 'mg']:
-                val = getattr(latest, field)
-                if val:
-                    try:
-                        parsed = json.loads(val)
-                        for k, v in parsed.items():
-                            data[f"pmg_{field[:5]}_{k}"] = v
-                    except:
-                        pass
+            data["iabczg"] = float(latest.indice_principal) if latest.indice_principal else None
+            
+            metrics = latest.metrics or {}
+            if isinstance(metrics, str):
+                try: metrics = json.loads(metrics)
+                except: metrics = {}
+                
+            # Mapeia métricas para o formato esperado pelo gerador de PDF
+            for key, val in metrics.items():
+                if isinstance(val, dict):
+                    # Simplifica o nome para compatibilidade com templates antigos
+                    # e.g. PN-EDg -> pmg_pn_ed_dep
+                    clean_key = key.lower().replace("-", "_").replace("_g", "")
+                    for k, v in val.items():
+                        data[f"pmg_{clean_key}_{k}"] = v
         
         animal_data.append(data)
     

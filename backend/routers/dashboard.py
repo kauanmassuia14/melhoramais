@@ -79,12 +79,10 @@ def get_dashboard_stats(
     recent_uploads = log_query.count()
 
     # Pesos médios das avaliações
-    # Buscar últimas avaliações e extrair PD (peso desmama) e PS (peso sobreano)
+    # Buscar últimas avaliações e extrair métricas do bloco JSONB
     latest_evals = db.query(
         GeneticsGeneticEvaluation.animal_id,
-        GeneticsGeneticEvaluation.pd_ed,
-        GeneticsGeneticEvaluation.ps_ed,
-        GeneticsGeneticEvaluation.pa_ed
+        GeneticsGeneticEvaluation.metrics
     ).join(
         GeneticsAnimal, GeneticsAnimal.id == GeneticsGeneticEvaluation.animal_id
     )
@@ -99,29 +97,26 @@ def get_dashboard_stats(
     pa_values = []
     ps_values = []
     for e in evals:
-        # PD (Desmama ~210d)
-        if e.pd_ed:
-            try:
-                pd = json.loads(e.pd_ed)
-                if pd and pd.get('dep') is not None:
-                    pd_values.append(float(pd['dep']))
-            except: pass
+        metrics = e.metrics or {}
+        # Se for string (SQLite fallback), tenta carregar como JSON
+        if isinstance(metrics, str):
+            try: metrics = json.loads(metrics)
+            except: metrics = {}
+
+        # PD (Desmama ~210d): PMGZ (PD-EDg) ou ANCP (DP210/DP120)
+        pd = metrics.get('PD-EDg') or metrics.get('DP210') or metrics.get('DP120')
+        if pd and pd.get('dep') is not None:
+            pd_values.append(float(pd['dep']))
             
-        # PA (Ano ~365d)
-        if e.pa_ed:
-            try:
-                pa = json.loads(e.pa_ed)
-                if pa and pa.get('dep') is not None:
-                    pa_values.append(float(pa['dep']))
-            except: pass
+        # PA (Ano ~365d): PMGZ (PA-EDg) ou ANCP (DP365)
+        pa = metrics.get('PA-EDg') or metrics.get('DP365')
+        if pa and pa.get('dep') is not None:
+            pa_values.append(float(pa['dep']))
             
-        # PS (Sobreano ~450d)
-        if e.ps_ed:
-            try:
-                ps = json.loads(e.ps_ed)
-                if ps and ps.get('dep') is not None:
-                    ps_values.append(float(ps['dep']))
-            except: pass
+        # PS (Sobreano ~450d): PMGZ (PS-EDg) ou ANCP (DP450)
+        ps = metrics.get('PS-EDg') or metrics.get('DP450')
+        if ps and ps.get('dep') is not None:
+            ps_values.append(float(ps['dep']))
     
     avg_p210 = sum(pd_values) / len(pd_values) if pd_values else None
     avg_p365 = sum(pa_values) / len(pa_values) if pa_values else None
