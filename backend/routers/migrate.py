@@ -145,6 +145,7 @@ def fix_sequences():
                 ("indice_principal", "NUMERIC(10,4)"),
                 ("rank_principal", "INTEGER"),
                 ("percentil_principal", "NUMERIC(10,4)"),
+                ("data_referencia", "DATE"),
                 ("metrics", "JSONB"),
                 ("progeny_stats", "JSONB"),
                 ("phenotypes", "JSONB"),
