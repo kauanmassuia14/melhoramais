@@ -368,8 +368,8 @@ class GeneticDataProcessor:
             except:
                 return None
 
-        # BATCH_SIZE maior para performance
-        BATCH_SIZE = 1000
+        # BATCH_SIZE menor para estabilidade em produção
+        BATCH_SIZE = 500
         inserted = 0
         updated = 0
         failed = 0

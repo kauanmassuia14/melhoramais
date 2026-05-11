@@ -168,8 +168,23 @@ def fix_sequences():
                 except Exception as e:
                     logger.warning(f"Skipping col {col_name}: {e}")
 
+            # 3. Add unique constraint for upserts if not exists
+            try:
+                conn.execute(text("""
+                    DO $$ 
+                    BEGIN 
+                        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_animal_safra_fonte') THEN
+                            ALTER TABLE genetics.genetic_evaluations 
+                            ADD CONSTRAINT uix_animal_safra_fonte UNIQUE (animal_id, safra, fonte_origem);
+                        END IF;
+                    END $$;
+                """))
+                logger.info("Migration: added unique constraint uix_animal_safra_fonte")
+            except Exception as e:
+                logger.warning(f"Could not add constraint: {e}")
+
             conn.commit()
-        return {"status": "success", "message": "Sequences and Schema synchronized successfully"}
+        return {"status": "success", "message": "Sequences, Schema and Constraints synchronized successfully"}
     except Exception as e:
         logger.error(f"Error fixing sequences: {e}")
         return {"status": "error", "message": str(e)}
