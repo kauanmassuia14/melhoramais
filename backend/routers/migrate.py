@@ -171,29 +171,24 @@ def fix_sequences():
 
             # 3. Cleanup and fix constraints for genetic_evaluations
             try:
-                # Remove a restrição antiga que impede múltiplas plataformas
+                # Remove a restrição antiga
                 conn.execute(text("ALTER TABLE genetics.genetic_evaluations DROP CONSTRAINT IF EXISTS uix_farm_animal_safra"))
-                logger.info("Migration: dropped old constraint uix_farm_animal_safra")
+                
+                # Cria índices de performance para busca rápida
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_animals_farm_rgn ON genetics.animals (farm_id, rgn)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_eval_animal_id ON genetics.genetic_evaluations (animal_id)"))
                 
                 # Garante que a nova restrição exista
                 conn.execute(text("""
                     DO $$ 
                     BEGIN 
                         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_animal_safra_fonte') THEN
-                            -- Remove duplicados antes de criar a restrição para não dar erro
-                            DELETE FROM genetics.genetic_evaluations a USING (
-                                SELECT MIN(ctid) as ctid, animal_id, safra, fonte_origem
-                                FROM genetics.genetic_evaluations 
-                                GROUP BY animal_id, safra, fonte_origem HAVING COUNT(*) > 1
-                            ) b WHERE a.animal_id = b.animal_id AND a.safra = b.safra 
-                            AND a.fonte_origem = b.fonte_origem AND a.ctid <> b.ctid;
-
                             ALTER TABLE genetics.genetic_evaluations 
                             ADD CONSTRAINT uix_animal_safra_fonte UNIQUE (animal_id, safra, fonte_origem);
                         END IF;
                     END $$;
                 """))
-                logger.info("Migration: added unique constraint uix_animal_safra_fonte")
+                logger.info("Migration: performance indexes and constraints ensured")
             except Exception as e:
                 logger.warning(f"Constraint migration warning: {e}")
 

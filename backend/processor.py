@@ -375,19 +375,22 @@ class GeneticDataProcessor:
                 return None
 
         # BATCH_SIZE menor para estabilidade em produção
-        BATCH_SIZE = 500
+        BATCH_SIZE = 100
         inserted = 0
         updated = 0
         failed = 0
         total_rows = len(df)
 
+        logger.info(f"Iniciando processamento de {total_rows} registros em lotes de {BATCH_SIZE}...")
+
         for batch_start in range(0, total_rows, BATCH_SIZE):
             batch_end = min(batch_start + BATCH_SIZE, total_rows)
             batch_df = df.iloc[batch_start:batch_end]
-            logger.info(f"Processando lote {batch_start} até {batch_end} de {total_rows}...")
+            logger.info(f">>> Lote {batch_start} até {batch_end} de {total_rows}...")
             
             animals_data = []
             for _, row in batch_df.iterrows():
+                # ... (resto do parsing de animal)
                 rgn = row.get('rgn_animal')
                 if not rgn or str(rgn).strip().lower() in ['nan', 'none', '']:
                     failed += 1
@@ -395,7 +398,6 @@ class GeneticDataProcessor:
                 
                 rgn_str = str(rgn).strip()
                 
-                # Parsing de data mais robusto
                 nasc = row.get('data_nascimento')
                 if pd.isna(nasc):
                     nasc_val = None
@@ -420,28 +422,26 @@ class GeneticDataProcessor:
                     'upload_id': upload_id_val,
                 })
 
-            if not animals_data:
-                continue
+            if animals_data:
+                logger.info(f"  - Fazendo upsert de {len(animals_data)} animais...")
+                self.db.execute(
+                    text("""
+                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
+                        VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
+                        ON CONFLICT (farm_id, rgn) DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
+                            sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
+                            nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
+                            genotipado = COALESCE(EXCLUDED.genotipado, genetics.animals.genotipado),
+                            csg = COALESCE(EXCLUDED.csg, genetics.animals.csg),
+                            upload_id = EXCLUDED.upload_id
+                    """),
+                    animals_data
+                )
+                inserted += len(animals_data)
 
-            # Upsert Animals
-            self.db.execute(
-                text("""
-                    INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
-                    VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
-                    ON CONFLICT (farm_id, rgn) DO UPDATE SET
-                        nome = EXCLUDED.nome,
-                        serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
-                        sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
-                        nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
-                        genotipado = COALESCE(EXCLUDED.genotipado, genetics.animals.genotipado),
-                        csg = COALESCE(EXCLUDED.csg, genetics.animals.csg),
-                        upload_id = EXCLUDED.upload_id
-                """),
-                animals_data
-            )
-            inserted += len(animals_data)
-
-            # Get IDs of animals for evaluations
+            # Get IDs
             rgns_in_batch = [a['rgn'] for a in animals_data]
             animal_id_map = {r: uid for r, uid in self.db.execute(
                 text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
@@ -455,6 +455,7 @@ class GeneticDataProcessor:
                 if not animal_id: continue
 
                 metrics_data = {}
+                # ... (mapa de métricas)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -474,8 +475,7 @@ class GeneticDataProcessor:
                         "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
                         "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
                     }
-                else:
-                    dep_map = {}
+                else: dep_map = {}
 
                 for metric_name, cols in dep_map.items():
                     dep, ac, rank, perc = cols
@@ -506,6 +506,7 @@ class GeneticDataProcessor:
                 })
 
             if eval_to_insert:
+                logger.info(f"  - Fazendo upsert de {len(eval_to_insert)} avaliações...")
                 self.db.execute(
                     text("""
                         INSERT INTO genetics.genetic_evaluations 
@@ -521,6 +522,7 @@ class GeneticDataProcessor:
                 )
             
             self.db.commit()
+            logger.info(f"  - Lote finalizado.")
 
         logger.info(f"Genetics upsert bulk: total={total_rows}, failed={failed}")
         return inserted, 0, failed
