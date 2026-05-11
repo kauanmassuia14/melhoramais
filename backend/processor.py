@@ -423,11 +423,16 @@ class GeneticDataProcessor:
                 })
 
             if animals_data:
-                logger.info(f"  - Fazendo upsert de {len(animals_data)} animais...")
-                self.db.execute(
-                    text("""
+                logger.info(f"  - [TURBO] Fazendo upsert de {len(animals_data)} animais...")
+                from psycopg2.extras import execute_values
+                
+                # Obtém a conexão bruta do Psycopg2
+                raw_conn = self.db.connection().connection
+                with raw_conn.cursor() as cur:
+                    # Upsert Animals
+                    animal_sql = """
                         INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
-                        VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
+                        VALUES %s
                         ON CONFLICT (farm_id, rgn) DO UPDATE SET
                             nome = EXCLUDED.nome,
                             serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
@@ -436,12 +441,17 @@ class GeneticDataProcessor:
                             genotipado = COALESCE(EXCLUDED.genotipado, genetics.animals.genotipado),
                             csg = COALESCE(EXCLUDED.csg, genetics.animals.csg),
                             upload_id = EXCLUDED.upload_id
-                    """),
-                    animals_data
-                )
+                    """
+                    # Transforma dict em tupla para o execute_values
+                    animal_tuples = [(
+                        a['id'], a['farm_id'], a['rgn'], a['nome'], a['serie'],
+                        a['sexo'], a['nascimento'], a['genotipado'], a['csg'], a['upload_id']
+                    ) for a in animals_data]
+                    
+                    execute_values(cur, animal_sql, animal_tuples)
                 inserted += len(animals_data)
 
-            # Get IDs
+            # Get IDs (ainda via SQLAlchemy para conveniência, mas com índice é rápido)
             rgns_in_batch = [a['rgn'] for a in animals_data]
             animal_id_map = {r: uid for r, uid in self.db.execute(
                 text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
@@ -455,7 +465,7 @@ class GeneticDataProcessor:
                 if not animal_id: continue
 
                 metrics_data = {}
-                # ... (mapa de métricas)
+                # ... (mapa de métricas simplificado para o prompt)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -491,35 +501,27 @@ class GeneticDataProcessor:
                 indice_val = safe_float(row.get('MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_iabc'))
                 rank_val = safe_float(row.get('TOP_MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_deca'))
 
-                eval_to_insert.append({
-                    'id': str(uuid.uuid4()),
-                    'animal_id': str(animal_id),
-                    'farm_id': str(genetics_farm_id),
-                    'safra': 2026,
-                    'fonte_origem': source_system,
-                    'indice_principal': indice_val,
-                    'rank_principal': rank_val,
-                    'metrics': json.dumps(metrics_data),
-                    'progeny_stats': json.dumps({}),
-                    'phenotypes': json.dumps({}),
-                    'upload_id': upload_id_val,
-                })
+                eval_to_insert.append((
+                    str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
+                    2026, source_system, indice_val, rank_val, json.dumps(metrics_data),
+                    json.dumps({}), json.dumps({}), upload_id_val
+                ))
 
             if eval_to_insert:
-                logger.info(f"  - Fazendo upsert de {len(eval_to_insert)} avaliações...")
-                self.db.execute(
-                    text("""
+                logger.info(f"  - [TURBO] Fazendo upsert de {len(eval_to_insert)} avaliações...")
+                raw_conn = self.db.connection().connection
+                with raw_conn.cursor() as cur:
+                    eval_sql = """
                         INSERT INTO genetics.genetic_evaluations 
                         (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, metrics, progeny_stats, phenotypes, upload_id)
-                        VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :indice_principal, :rank_principal, :metrics, :progeny_stats, :phenotypes, :upload_id)
+                        VALUES %s
                         ON CONFLICT (animal_id, safra, fonte_origem) DO UPDATE SET
                             indice_principal = EXCLUDED.indice_principal,
                             rank_principal = EXCLUDED.rank_principal,
                             metrics = EXCLUDED.metrics,
                             upload_id = EXCLUDED.upload_id
-                    """),
-                    eval_to_insert
-                )
+                    """
+                    execute_values(cur, eval_sql, eval_to_insert)
             
             self.db.commit()
             logger.info(f"  - Lote finalizado.")
