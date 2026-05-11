@@ -358,7 +358,18 @@ class GeneticDataProcessor:
             except:
                 return None
 
-        BATCH_SIZE = 2000
+        def safe_date(v):
+            if pd.isna(v) or not v:
+                return None
+            try:
+                if isinstance(v, datetime):
+                    return v.date()
+                return pd.to_datetime(v).date()
+            except:
+                return None
+
+        # BATCH_SIZE maior para performance
+        BATCH_SIZE = 1000
         inserted = 0
         updated = 0
         failed = 0
@@ -367,114 +378,63 @@ class GeneticDataProcessor:
         for batch_start in range(0, total_rows, BATCH_SIZE):
             batch_end = min(batch_start + BATCH_SIZE, total_rows)
             batch_df = df.iloc[batch_start:batch_end]
-
-            batch_rgns = batch_df['rgn_animal'].dropna().astype(str).str.strip().tolist()
-            batch_rgns = [r for r in batch_rgns if r]
-
-            existing_map = {}
-            if batch_rgns:
-                existing = self.db.execute(
-                    text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgds) AND farm_id = :fid"),
-                    {"rgds": batch_rgns, "fid": str(genetics_farm_id)}
-                ).fetchall()
-                existing_map = {r: uid for r, uid in existing}
-
-            animal_ids_map = {}
-            animals_to_insert = []
-            animals_to_update_ids = []
-
+            
+            animals_data = []
             for _, row in batch_df.iterrows():
                 rgn = row.get('rgn_animal')
                 if not rgn or not str(rgn).strip():
                     failed += 1
                     continue
-
+                
                 rgn_str = str(rgn).strip()
+                animals_data.append({
+                    'id': str(uuid.uuid4()),
+                    'farm_id': str(genetics_farm_id),
+                    'rgn': rgn_str,
+                    'nome': safe_str(row.get('nome_animal')),
+                    'serie': safe_str(row.get('serie_animal') or row.get('pmg_serie_rgd')),
+                    'sexo': safe_str(row.get('sexo')),
+                    'nascimento': safe_date(row.get('data_nascimento')),
+                    'genotipado': safe_bool(row.get('genotipado')),
+                    'csg': safe_bool(row.get('csg')),
+                    'upload_id': upload_id_val,
+                })
 
-                if rgn_str in existing_map:
-                    animal_id = existing_map[rgn_str]
-                    animal_ids_map[rgn_str] = animal_id
-                    animals_to_update_ids.append(animal_id)
-                else:
-                    animal_id = uuid.uuid4()
-                    animal_ids_map[rgn_str] = animal_id
-                    animals_to_insert.append({
-                        'id': str(animal_id),
-                        'farm_id': str(genetics_farm_id),
-                        'rgn': rgn_str,
-                        'nome': safe_str(row.get('nome_animal')),
-                        'serie': safe_str(row.get('pmg_serie_rgd')),
-                        'sexo': safe_str(row.get('sexo')),
-                        'nascimento': safe_str(row.get('data_nascimento')),
-                        'genotipado': safe_bool(row.get('genotipado')),
-                        'csg': safe_bool(row.get('csg')),
-                        'upload_id': upload_id_val,
-                    })
+            if not animals_data:
+                continue
 
-            if animals_to_insert:
-                self.db.execute(
-                    text("""
-                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
-                        VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
-                    """),
-                    animals_to_insert
-                )
-                inserted += len(animals_to_insert)
+            # Upsert Animals
+            self.db.execute(
+                text("""
+                    INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
+                    VALUES (:id, :farm_id, :rgn, :nome, :serie, :sexo, :nascimento, :genotipado, :csg, :upload_id)
+                    ON CONFLICT (farm_id, rgn) DO UPDATE SET
+                        nome = EXCLUDED.nome,
+                        serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
+                        sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
+                        nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
+                        genotipado = COALESCE(EXCLUDED.genotipado, genetics.animals.genotipado),
+                        csg = COALESCE(EXCLUDED.csg, genetics.animals.csg),
+                        upload_id = EXCLUDED.upload_id
+                """),
+                animals_data
+            )
+            inserted += len(animals_data)
 
-            if animals_to_update_ids:
-                for _, row in batch_df.iterrows():
-                    rgn = row.get('rgn_animal')
-                    if rgn and str(rgn).strip() in existing_map:
-                        animal_id = existing_map[str(rgn).strip()]
-                        
-                        nasc_val = row.get('data_nascimento')
-                        if nasc_val and isinstance(nasc_val, str):
-                            try:
-                                nasc_val = datetime.strptime(nasc_val, '%Y-%m-%d').date()
-                            except:
-                                nasc_val = None
-
-                        self.db.execute(
-                            text("""
-                                UPDATE genetics.animals SET
-                                    nome = COALESCE(:nome, nome),
-                                    serie = COALESCE(:serie, serie),
-                                    sexo = COALESCE(:sexo, sexo),
-                                    nascimento = COALESCE(:nascimento, nascimento),
-                                    genotipado = COALESCE(:genotipado, genotipado),
-                                    csg = COALESCE(:csg, csg),
-                                    upload_id = COALESCE(:upload_id, upload_id)
-                                WHERE id = :id
-                            """),
-                            {
-                                'id': str(animal_id),
-                                'nome': safe_str(row.get('nome_animal')),
-                                'serie': safe_str(row.get('pmg_serie_rgd')),
-                                'sexo': safe_str(row.get('sexo')),
-                                'nascimento': nasc_val,
-                                'genotipado': safe_bool(row.get('genotipado')),
-                                'csg': safe_bool(row.get('csg')),
-                                'upload_id': upload_id_val,
-                            }
-                        )
-                updated += len(animals_to_update_ids)
+            # Get IDs of animals for evaluations
+            rgns_in_batch = [a['rgn'] for a in animals_data]
+            animal_id_map = {r: uid for r, uid in self.db.execute(
+                text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
+                {"rgns": rgns_in_batch, "fid": str(genetics_farm_id)}
+            ).fetchall()}
 
             eval_to_insert = []
             for _, row in batch_df.iterrows():
-                rgn = row.get('rgn_animal')
-                if not rgn or not str(rgn).strip():
-                    continue
+                rgn = str(row.get('rgn_animal') or "").strip()
+                animal_id = animal_id_map.get(rgn)
+                if not animal_id: continue
 
-                rgn_str = str(rgn).strip()
-                animal_id = animal_ids_map.get(rgn_str)
-
-                if not animal_id:
-                    continue
-
-                # Build Metrics JSON
                 metrics_data = {}
-                
-                # Dynamic metrics handling (could be expanded)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -484,73 +444,32 @@ class GeneticDataProcessor:
                         "STAYg": ("pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent"),
                         "AOLg": ("pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent"),
                     }
-                    for metric_name, cols in dep_map.items():
-                        dep, ac, deca, perc = cols
-                        val_dep = safe_float(row.get(dep))
-                        if val_dep is not None:
-                            metrics_data[metric_name] = {
-                                "dep": val_dep,
-                                "acc": safe_float(row.get(ac)),
-                                "rank": safe_float(row.get(deca)),
-                                "perc": safe_float(row.get(perc))
-                            }
                 elif source_system == "ANCP":
-                    # Mapeamento ANCP (usando nomes comuns ou mapeados)
                     dep_map = {
                         "MGTe": ("MGTe", "ACC_MGTe", "TOP_MGTe", None),
                         "D3P": ("D3P", "ACC_D3P", "TOP_D3P", None),
                         "DIPP": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
-                        "DPE365": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
-                        "DPE450": ("DPE450", "ACC_DPE450", "TOP_DPE450", None),
                         "DPN": ("DPN", "ACC_DPN", "TOP_DPN", None),
                         "DSTAY": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
-                        "MP120": ("MP120", "ACC_MP120", "TOP_MP120", None),
-                        "MP210": ("MP210", "ACC_MP210", "TOP_MP210", None),
                         "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
-                        "DP365": ("DP365", "ACC_DP365", "TOP_DP365", None),
                         "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
                     }
-                    for metric_name, cols in dep_map.items():
-                        dep, ac, rank, perc = cols
-                        val_dep = safe_float(row.get(dep))
-                        if val_dep is not None:
-                            metrics_data[metric_name] = {
-                                "dep": val_dep,
-                                "acc": safe_float(row.get(ac)),
-                                "top": safe_float(row.get(rank)),
-                                "perc": safe_float(row.get(perc)) if perc else None
-                            }
-                elif source_system == "GENEPLUS":
-                    dep_map = {
-                        "IQG": ("gen_iqg", "gen_ac_iqg", None, None),
-                        "PN": ("gen_pn", None, None, None),
-                        "P120": ("gen_p120", None, None, None),
-                        "PD": ("gen_pd", None, None, None),
-                        "PS": ("gen_ps", None, None, None),
-                    }
-                    for metric_name, cols in dep_map.items():
-                        dep, ac, rank, perc = cols
-                        val_dep = safe_float(row.get(dep))
-                        if val_dep is not None:
-                            metrics_data[metric_name] = {
-                                "dep": val_dep,
-                                "acc": safe_float(row.get(ac)),
-                                "rank": safe_float(row.get(rank)),
-                                "perc": safe_float(row.get(perc))
-                            }
-                
-                # Default indices
-                indice_val = None
-                rank_val = None
-                
-                if source_system == "PMGZ":
-                    indice_val = safe_float(row.get('pmg_iabc'))
-                    rank_val = safe_float(row.get('pmg_deca'))
-                elif source_system == "ANCP":
-                    indice_val = safe_float(row.get('MGTe'))
-                    rank_val = safe_float(row.get('TOP_MGTe'))
-                elif source_system == "GENEPLUS":
-                    indice_val = safe_float(row.get('gen_iqg'))
+                else:
+                    dep_map = {}
+
+                for metric_name, cols in dep_map.items():
+                    dep, ac, rank, perc = cols
+                    val_dep = safe_float(row.get(dep))
+                    if val_dep is not None:
+                        metrics_data[metric_name] = {
+                            "dep": val_dep,
+                            "acc": safe_float(row.get(ac)),
+                            "top": safe_float(row.get(rank)),
+                            "perc": safe_float(row.get(perc)) if perc else None
+                        }
+
+                indice_val = safe_float(row.get('MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_iabc'))
+                rank_val = safe_float(row.get('TOP_MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_deca'))
 
                 eval_to_insert.append({
                     'id': str(uuid.uuid4()),
@@ -572,14 +491,19 @@ class GeneticDataProcessor:
                         INSERT INTO genetics.genetic_evaluations 
                         (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, metrics, progeny_stats, phenotypes, upload_id)
                         VALUES (:id, :animal_id, :farm_id, :safra, :fonte_origem, :indice_principal, :rank_principal, :metrics, :progeny_stats, :phenotypes, :upload_id)
+                        ON CONFLICT (animal_id, safra, fonte_origem) DO UPDATE SET
+                            indice_principal = EXCLUDED.indice_principal,
+                            rank_principal = EXCLUDED.rank_principal,
+                            metrics = EXCLUDED.metrics,
+                            upload_id = EXCLUDED.upload_id
                     """),
                     eval_to_insert
                 )
-
+            
             self.db.commit()
 
-        logger.info(f"Genetics upsert: inserted={inserted}, updated={updated}, failed={failed}")
-        return inserted, updated, failed
+        logger.info(f"Genetics upsert bulk: total={total_rows}, failed={failed}")
+        return inserted, 0, failed
 
     def generate_formatted_excel(self, df: pd.DataFrame) -> bytes:
         output = io.BytesIO()
