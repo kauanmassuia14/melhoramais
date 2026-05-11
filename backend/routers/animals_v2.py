@@ -335,6 +335,7 @@ def get_stats_v2(
 @router.get("")
 def list_animals(
     farm_id: Optional[str] = Query(None),
+    fonte_origem: Optional[str] = Query(None),  # 'PMGZ' ou 'ANCP'
     sexo: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
@@ -343,6 +344,16 @@ def list_animals(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(GeneticsAnimal)
+
+    # Filtro por Fonte (Plataforma) via subquery para evitar duplicidade
+    if fonte_origem:
+        from sqlalchemy import exists
+        query = query.filter(
+            exists().where(
+                (GeneticsGeneticEvaluation.animal_id == GeneticsAnimal.id) &
+                (GeneticsGeneticEvaluation.fonte_origem == fonte_origem)
+            )
+        )
 
     if farm_id:
         query = query.filter(GeneticsAnimal.farm_id == farm_id)
@@ -358,7 +369,9 @@ def list_animals(
         )
 
     total = query.count()
-    animals = query.offset(offset).limit(limit).all()
+    animals = query.order_by(GeneticsAnimal.rgn).offset(offset).limit(limit).all()
+
+
 
     results = []
     for a in animals:

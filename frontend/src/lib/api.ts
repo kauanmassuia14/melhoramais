@@ -591,6 +591,7 @@ export const api = {
   // Genetics V2 API
   getAnimalsV2: (opts?: {
     farmId?: string;
+    fonteOrigem?: string;
     sexo?: string;
     search?: string;
     limit?: number;
@@ -602,6 +603,8 @@ export const api = {
     if (opts?.search) params.set('search', opts.search);
     params.set('limit', String(opts?.limit || 50));
     params.set('offset', String(opts?.offset || 0));
+    if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
     return fetchApi<{
       total: number;
       limit: number;

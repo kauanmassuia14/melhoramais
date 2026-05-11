@@ -66,12 +66,19 @@ export default function AnimalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sexo, setSexo] = useState("");
+  const [fonteOrigem, setFonteOrigem] = useState("");
+  const [farmId, setFarmId] = useState("");
+  const [farms, setFarms] = useState<{ id: string, nome: string }[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [hasMore, setHasMore] = useState(false);
   const { confirm, dialog } = useConfirm();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    api.getGeneticsFarms().then(setFarms).catch(console.error);
+  }, []);
 
   const fetchAnimals = useCallback(async () => {
     setLoading(true);
@@ -80,6 +87,8 @@ export default function AnimalsPage() {
       const data = await api.getAnimalsV2({
         search: search || undefined,
         sexo: sexo || undefined,
+        fonteOrigem: fonteOrigem || undefined,
+        farmId: farmId || undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       });
@@ -98,7 +107,7 @@ export default function AnimalsPage() {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
       fetchAnimals();
     }
-  }, [page, sexo, fetchAnimals]);
+  }, [page, sexo, fonteOrigem, farmId, fetchAnimals]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,6 +257,43 @@ export default function AnimalsPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
                 />
+              </div>
+            </div>
+
+            <div className="w-40">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Fazenda</label>
+              <div className="relative">
+                <select
+                  value={farmId}
+                  onChange={(e) => { setFarmId(e.target.value); setPage(0); }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-deep-dark text-white">Todas as Fazendas</option>
+                  {farms.map(f => (
+                    <option key={f.id} value={f.id} className="bg-deep-dark text-white">{f.nome}</option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="w-32">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">Plataforma</label>
+              <div className="relative">
+                <select
+                  value={fonteOrigem}
+                  onChange={(e) => { setFonteOrigem(e.target.value); setPage(0); }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-glow/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-deep-dark text-white">Todas</option>
+                  <option value="PMGZ" className="bg-deep-dark text-white">PMGZ</option>
+                  <option value="ANCP" className="bg-deep-dark text-white">ANCP</option>
+                </select>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
             </div>
 
