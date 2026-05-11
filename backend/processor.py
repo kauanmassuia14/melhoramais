@@ -167,7 +167,10 @@ class GeneticDataProcessor:
                     "Nome": "nome_animal",
                     "Sexo": "sexo",
                     "Nasc": "data_nascimento",
-                    "Raça": "raca"
+                    "Raça": "raca",
+                    "Série": "serie_animal",
+                    "Serie": "serie_animal",
+                    "Genotipado": "genotipado"
                 }
                 required = ["RGN"]
             elif source_system == "PMGZ":
@@ -198,6 +201,11 @@ class GeneticDataProcessor:
 
         # Remove duplicados de RGN no próprio DataFrame para evitar CardinalityViolation no PostgreSQL
         if 'rgn_animal' in df.columns:
+            # LIMPEZA CRÍTICA: rgn_animal deve ser limpo e padronizado antes do drop_duplicates
+            df['rgn_animal'] = df['rgn_animal'].astype(str).str.strip().str.upper()
+            df['rgn_animal'] = df['rgn_animal'].replace(['NAN', 'NONE', '', 'NAT'], None)
+            df = df.dropna(subset=['rgn_animal'])
+            
             initial_count = len(df)
             df = df.drop_duplicates(subset=['rgn_animal'], keep='last')
             final_count = len(df)
@@ -365,10 +373,14 @@ class GeneticDataProcessor:
             return None
 
         def safe_float(v):
-            if pd.isna(v):
+            if pd.isna(v) or v is None:
                 return None
             try:
-                return float(v)
+                # Limpeza robusta: remove "TOP", "%", espaços e trata vírgula como ponto
+                s = str(v).upper().replace("TOP", "").replace("%", "").replace(",", ".").strip()
+                if not s or s in ['-', 'NAN', 'NONE', '', 'NAT']:
+                    return None
+                return float(s)
             except:
                 return None
 
@@ -397,36 +409,36 @@ class GeneticDataProcessor:
             logger.info(f">>> Lote {batch_start} até {batch_end} de {total_rows}...")
             
             animals_data = []
+            seen_rgns_in_batch = set()
             for _, row in batch_df.iterrows():
-                # ... (resto do parsing de animal)
                 rgn = row.get('rgn_animal')
-                if not rgn or str(rgn).strip().lower() in ['nan', 'none', '']:
+                if not rgn or str(rgn).strip().lower() in ['nan', 'none', '', 'nat']:
                     failed += 1
                     continue
                 
-                rgn_str = str(rgn).strip()
+                rgn_str = str(rgn).strip().upper()
+                if rgn_str in seen_rgns_in_batch:
+                    continue
+                seen_rgns_in_batch.add(rgn_str)
                 
                 nasc = row.get('data_nascimento')
-                if pd.isna(nasc):
-                    nasc_val = None
-                elif isinstance(nasc, datetime):
-                    nasc_val = nasc.date()
+                # ... parsing de data (nasc_val)
+                if pd.isna(nasc): nasc_val = None
+                elif isinstance(nasc, datetime): nasc_val = nasc.date()
                 else:
-                    try:
-                        nasc_val = pd.to_datetime(nasc).date()
-                    except:
-                        nasc_val = None
+                    try: nasc_val = pd.to_datetime(nasc).date()
+                    except: nasc_val = None
 
                 animals_data.append({
                     'id': str(uuid.uuid4()),
                     'farm_id': str(genetics_farm_id),
                     'rgn': rgn_str,
                     'nome': safe_str(row.get('nome_animal')),
-                    'serie': safe_str(row.get('serie_animal') or row.get('pmg_serie_rgd')),
+                    'serie': safe_str(row.get('serie_animal') or row.get('pmg_serie_rgd') or row.get('Série') or row.get('Serie') or row.get('serie')),
                     'sexo': safe_str(row.get('sexo')),
                     'nascimento': nasc_val,
-                    'genotipado': safe_bool(row.get('genotipado')),
-                    'csg': safe_bool(row.get('csg')),
+                    'genotipado': safe_bool(row.get('genotipado') or row.get('Genotipado') or row.get('genotipado_animal')),
+                    'csg': safe_bool(row.get('csg') or row.get('CSG')),
                     'upload_id': upload_id_val,
                 })
 
@@ -487,22 +499,28 @@ class GeneticDataProcessor:
                         "MARg": ("pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent"),
                     }
                 elif source_system == "ANCP":
-                    # Mapeamento Exato baseado no cabeçalho enviado
+                    # Mapeamento ANCP conforme colunas enviadas pelo usuário
                     dep_map = {
+                        # Pesos (DEP)
                         "PN-EDg": ("DPN", "ACC_DPN", "TOP_DPN", None),
                         "PD-EDg": ("DP210", "ACC_DP210", "TOP_DP210", None),
+                        "PA-EDg": ("DP365", "ACC_DP365", "TOP_DP365", None),
                         "PS-EDg": ("DP450", "ACC_DP450", "TOP_DP450", None),
+                        # Reprodução
                         "IPPg": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
                         "STAYg": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
+                        "PE-365g": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        # Carcaça e Qualidade
                         "AOLg": ("DAOL", "ACC_DAOL", "TOP_DAOL", None),
                         "ACABg": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
                         "MARg": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),
-                        "PE-365g": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        # Conformação / Morfológicas
                         "Eg": ("DES", "ACC_DES", "TOP_DES", None),
                         "Pg": ("DPS", "ACC_DPS", "TOP_DPS", None),
                         "Mg": ("DMS", "ACC_DMS", "TOP_DMS", None),
                     }
-                else: dep_map = {}
+                else:
+                    dep_map = {}
 
                 for metric_name, cols in dep_map.items():
                     dep_col, ac_col, rank_col, perc_col = cols
@@ -518,11 +536,12 @@ class GeneticDataProcessor:
 
                 # Índices principais
                 if source_system == "ANCP":
-                    indice_val = safe_float(row.get('MGTe'))
-                    rank_val = safe_float(row.get('TOP_MGTe'))
+                    # Tenta MGTe com variações de nome
+                    indice_val = safe_float(row.get('MGTe') or row.get('MGTe_DEP') or row.get('MGTe DEP'))
+                    rank_val = safe_float(row.get('TOP_MGTe') or row.get('TOP_MGTe_DEP') or row.get('TOP MGTe'))
                 else:
-                    indice_val = safe_float(row.get('pmg_iabc'))
-                    rank_val = safe_float(row.get('pmg_deca'))
+                    indice_val = safe_float(row.get('pmg_iabc') or row.get('identificacao_indice_iabczg'))
+                    rank_val = safe_float(row.get('pmg_deca') or row.get('identificacao_indice_deca'))
 
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
