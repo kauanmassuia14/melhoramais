@@ -151,6 +151,11 @@ class GeneticDataProcessor:
     ) -> Tuple[pd.DataFrame, int, int, int]:
         df = self._read_file(file_content, filename, source_system)
 
+        # Remove linhas totalmente vazias (evita processar "fantasmas" no Excel)
+        df = df.dropna(how='all')
+        if df.empty:
+            raise ValueError("O arquivo parece estar vazio.")
+
         col_map = self.get_mappings(source_system)
         required = self.get_required_columns(source_system)
         
@@ -181,7 +186,7 @@ class GeneticDataProcessor:
         if 'rgn_animal' not in df.columns:
             # Tenta achar alguma coluna que se pareça com RGN
             for c in df.columns:
-                if str(c).upper() in ["RGN", "REGISTRO", "RGD", "CGA"]:
+                if str(c).upper() in ["RGN", "REGISTRO", "RGD", "CGA", "ID"]:
                     df = df.rename(columns={c: 'rgn_animal'})
                     break
             
@@ -192,7 +197,8 @@ class GeneticDataProcessor:
         df = self._clean_data(df, source_system)
 
         # Usar o novo schema genetics
-        inserted, updated, failed = self._upsert_genetics_animals(df, source_system)
+        results = self._upsert_genetics_animals(df, source_system)
+        inserted, updated, failed = results if isinstance(results, tuple) else (0, 0, 0)
 
         return df, inserted, updated, failed
 
@@ -378,15 +384,29 @@ class GeneticDataProcessor:
         for batch_start in range(0, total_rows, BATCH_SIZE):
             batch_end = min(batch_start + BATCH_SIZE, total_rows)
             batch_df = df.iloc[batch_start:batch_end]
+            logger.info(f"Processando lote {batch_start} até {batch_end} de {total_rows}...")
             
             animals_data = []
             for _, row in batch_df.iterrows():
                 rgn = row.get('rgn_animal')
-                if not rgn or not str(rgn).strip():
+                if not rgn or str(rgn).strip().lower() in ['nan', 'none', '']:
                     failed += 1
                     continue
                 
                 rgn_str = str(rgn).strip()
+                
+                # Parsing de data mais robusto
+                nasc = row.get('data_nascimento')
+                if pd.isna(nasc):
+                    nasc_val = None
+                elif isinstance(nasc, datetime):
+                    nasc_val = nasc.date()
+                else:
+                    try:
+                        nasc_val = pd.to_datetime(nasc).date()
+                    except:
+                        nasc_val = None
+
                 animals_data.append({
                     'id': str(uuid.uuid4()),
                     'farm_id': str(genetics_farm_id),
@@ -394,7 +414,7 @@ class GeneticDataProcessor:
                     'nome': safe_str(row.get('nome_animal')),
                     'serie': safe_str(row.get('serie_animal') or row.get('pmg_serie_rgd')),
                     'sexo': safe_str(row.get('sexo')),
-                    'nascimento': safe_date(row.get('data_nascimento')),
+                    'nascimento': nasc_val,
                     'genotipado': safe_bool(row.get('genotipado')),
                     'csg': safe_bool(row.get('csg')),
                     'upload_id': upload_id_val,
