@@ -487,7 +487,7 @@ class GeneticDataProcessor:
                         "MARg": ("pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent"),
                     }
                 elif source_system == "ANCP":
-                    # Na ANCP, as colunas geralmente mantêm os nomes originais se não mapeadas no fallback
+                    # Mapeamento Exato baseado no cabeçalho enviado
                     dep_map = {
                         "PN-EDg": ("DPN", "ACC_DPN", "TOP_DPN", None),
                         "PD-EDg": ("DP210", "ACC_DP210", "TOP_DP210", None),
@@ -498,6 +498,9 @@ class GeneticDataProcessor:
                         "ACABg": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
                         "MARg": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),
                         "PE-365g": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        "Eg": ("DES", "ACC_DES", "TOP_DES", None),
+                        "Pg": ("DPS", "ACC_DPS", "TOP_DPS", None),
+                        "Mg": ("DMS", "ACC_DMS", "TOP_DMS", None),
                     }
                 else: dep_map = {}
 
