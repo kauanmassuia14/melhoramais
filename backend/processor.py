@@ -419,6 +419,9 @@ class GeneticDataProcessor:
                         return r[k]
                 return None
 
+            animals_data = []
+            seen_rgns_in_batch = set()
+
             for _, row in batch_df.iterrows():
                 rgn = get_val(row, 'rgn_animal') or get_val(row, 'rgn')
                 if not rgn or str(rgn).strip().lower() in ['nan', 'none', '', 'nat']:
