@@ -363,12 +363,13 @@ class GeneticDataProcessor:
             return s if s and s.lower() not in ['nan', 'none', ''] else None
 
         def safe_bool(val):
-            if pd.isna(val):
+            if pd.isna(val) or val is None:
                 return None
             v = str(val).upper().strip()
-            if v == 'SIM':
+            # ANCP usa 'G' para Genotipado
+            if v in ['SIM', 'S', 'G', 'TRUE', '1']:
                 return True
-            elif v in ['NÃO', 'NAO', 'N', '']:
+            elif v in ['NÃO', 'NAO', 'N', 'FALSE', '0', '']:
                 return False
             return None
 
@@ -408,10 +409,18 @@ class GeneticDataProcessor:
             batch_df = df.iloc[batch_start:batch_end]
             logger.info(f">>> Lote {batch_start} até {batch_end} de {total_rows}...")
             
-            animals_data = []
-            seen_rgns_in_batch = set()
+            # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
+            def get_val(r, col_name):
+                if not col_name: return None
+                if col_name in r: return r[col_name]
+                c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
+                for k in r.keys():
+                    if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
+                        return r[k]
+                return None
+
             for _, row in batch_df.iterrows():
-                rgn = row.get('rgn_animal')
+                rgn = get_val(row, 'rgn_animal') or get_val(row, 'rgn')
                 if not rgn or str(rgn).strip().lower() in ['nan', 'none', '', 'nat']:
                     failed += 1
                     continue
@@ -421,24 +430,30 @@ class GeneticDataProcessor:
                     continue
                 seen_rgns_in_batch.add(rgn_str)
                 
-                nasc = row.get('data_nascimento')
-                # ... parsing de data (nasc_val)
-                if pd.isna(nasc): nasc_val = None
-                elif isinstance(nasc, datetime): nasc_val = nasc.date()
-                else:
-                    try: nasc_val = pd.to_datetime(nasc).date()
-                    except: nasc_val = None
+                # Busca robusta por Nascimento (especialmente para ANCP 'Nasc')
+                nasc = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
+                nasc_val = None
+                if nasc and not pd.isna(nasc):
+                    if isinstance(nasc, datetime):
+                        nasc_val = nasc.date()
+                    else:
+                        try:
+                            # Tenta parsear com dia primeiro para o formato brasileiro DD/MM/YYYY
+                            nasc_val = pd.to_datetime(nasc, dayfirst=True).date()
+                        except:
+                            try: nasc_val = pd.to_datetime(nasc).date()
+                            except: nasc_val = None
 
                 animals_data.append({
                     'id': str(uuid.uuid4()),
                     'farm_id': str(genetics_farm_id),
                     'rgn': rgn_str,
-                    'nome': safe_str(row.get('nome_animal')),
-                    'serie': safe_str(row.get('serie_animal') or row.get('pmg_serie_rgd') or row.get('Série') or row.get('Serie') or row.get('serie')),
-                    'sexo': safe_str(row.get('sexo')),
+                    'nome': safe_str(get_val(row, 'nome_animal') or get_val(row, 'nome')),
+                    'serie': safe_str(get_val(row, 'serie_animal') or get_val(row, 'serie') or get_val(row, 'série')),
+                    'sexo': safe_str(get_val(row, 'sexo')),
                     'nascimento': nasc_val,
-                    'genotipado': safe_bool(row.get('genotipado') or row.get('Genotipado') or row.get('genotipado_animal')),
-                    'csg': safe_bool(row.get('csg') or row.get('CSG')),
+                    'genotipado': safe_bool(get_val(row, 'genotipado') or get_val(row, 'genotipado_animal')),
+                    'csg': safe_bool(get_val(row, 'csg') or get_val(row, 'csg_animal')),
                     'upload_id': upload_id_val,
                 })
 
@@ -520,15 +535,7 @@ class GeneticDataProcessor:
                 else:
                     dep_map = {}
 
-                # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
-                def get_val(r, col_name):
-                    if not col_name: return None
-                    if col_name in r: return r[col_name]
-                    c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
-                    for k in r.keys():
-                        if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
-                            return r[k]
-                    return None
+                # (Helper get_val já definido acima no loop de animais para reaproveitamento)
 
                 for metric_key, cols in dep_map.items():
                     dep_col, ac_col, rank_col, perc_col = cols
