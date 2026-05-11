@@ -168,12 +168,25 @@ def fix_sequences():
                 except Exception as e:
                     logger.warning(f"Skipping col {col_name}: {e}")
 
-            # 3. Add unique constraint for upserts if not exists
+            # 3. Cleanup and fix constraints for genetic_evaluations
             try:
+                # Remove a restrição antiga que impede múltiplas plataformas
+                conn.execute(text("ALTER TABLE genetics.genetic_evaluations DROP CONSTRAINT IF EXISTS uix_farm_animal_safra"))
+                logger.info("Migration: dropped old constraint uix_farm_animal_safra")
+                
+                # Garante que a nova restrição exista
                 conn.execute(text("""
                     DO $$ 
                     BEGIN 
                         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_animal_safra_fonte') THEN
+                            -- Remove duplicados antes de criar a restrição para não dar erro
+                            DELETE FROM genetics.genetic_evaluations a USING (
+                                SELECT MIN(ctid) as ctid, animal_id, safra, fonte_origem
+                                FROM genetics.genetic_evaluations 
+                                GROUP BY animal_id, safra, fonte_origem HAVING COUNT(*) > 1
+                            ) b WHERE a.animal_id = b.animal_id AND a.safra = b.safra 
+                            AND a.fonte_origem = b.fonte_origem AND a.ctid <> b.ctid;
+
                             ALTER TABLE genetics.genetic_evaluations 
                             ADD CONSTRAINT uix_animal_safra_fonte UNIQUE (animal_id, safra, fonte_origem);
                         END IF;
@@ -181,10 +194,10 @@ def fix_sequences():
                 """))
                 logger.info("Migration: added unique constraint uix_animal_safra_fonte")
             except Exception as e:
-                logger.warning(f"Could not add constraint: {e}")
+                logger.warning(f"Constraint migration warning: {e}")
 
             conn.commit()
-        return {"status": "success", "message": "Sequences, Schema and Constraints synchronized successfully"}
+        return {"status": "success", "message": "Schema cleaned and synchronized successfully"}
     except Exception as e:
         logger.error(f"Error fixing sequences: {e}")
         return {"status": "error", "message": str(e)}
