@@ -476,8 +476,8 @@ class GeneticDataProcessor:
                             serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
                             sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
                             nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
-                            genotipado = COALESCE(EXCLUDED.genotipado, genetics.animals.genotipado),
-                            csg = COALESCE(EXCLUDED.csg, genetics.animals.csg),
+                            genotipado = EXCLUDED.genotipado,
+                            csg = EXCLUDED.csg,
                             upload_id = EXCLUDED.upload_id
                     """
                     # Transforma dict em tupla para o execute_values
@@ -486,7 +486,9 @@ class GeneticDataProcessor:
                         a['sexo'], a['nascimento'], a['genotipado'], a['csg'], a['upload_id']
                     ) for a in animals_data]
                     
-                    execute_values(cur, animal_sql, animal_tuples)
+                    # Usa template para cast dos tipos customizados do schema genetics
+                    template = "(%s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s)"
+                    execute_values(cur, animal_sql, animal_tuples, template=template)
                 inserted += len(animals_data)
 
             # Get IDs (ainda via SQLAlchemy para conveniência, mas com índice é rápido)
