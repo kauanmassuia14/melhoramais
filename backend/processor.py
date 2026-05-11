@@ -474,6 +474,7 @@ class GeneticDataProcessor:
 
                 metrics_data = {}
                 # ... (mapa de métricas simplificado para o prompt)
+                # Mapeamento Unificado para o Frontend (Chaves do PMGZ como padrão)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -482,16 +483,19 @@ class GeneticDataProcessor:
                         "IPPg": ("pmg_ipp_dep", "pmg_ipp_ac", "pmg_ipp_deca", "pmg_ipp_p_percent"),
                         "STAYg": ("pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent"),
                         "AOLg": ("pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent"),
+                        "ACABg": ("pmg_acab_dep", "pmg_acab_ac", "pmg_acab_deca", "pmg_acab_p_percent"),
                     }
                 elif source_system == "ANCP":
                     dep_map = {
-                        "MGTe": ("MGTe", "ACC_MGTe", "TOP_MGTe", None),
-                        "D3P": ("D3P", "ACC_D3P", "TOP_D3P", None),
-                        "DIPP": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
-                        "DPN": ("DPN", "ACC_DPN", "TOP_DPN", None),
-                        "DSTAY": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
-                        "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
-                        "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
+                        "PN-EDg": ("DPN", "ACC_DPN", "TOP_DPN", None),
+                        "PD-EDg": ("DP210", "ACC_DP210", "TOP_DP210", None),
+                        "PS-EDg": ("DP450", "ACC_DP450", "TOP_DP450", None),
+                        "IPPg": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
+                        "STAYg": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
+                        "AOLg": ("DAOL", "ACC_DAOL", "TOP_DAOL", None),
+                        "ACABg": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
+                        "MARg": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),
+                        "PE-365g": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
                     }
                 else: dep_map = {}
 
