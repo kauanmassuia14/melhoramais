@@ -95,24 +95,8 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
         except:
             metrics = {}
 
-    # Compatibility mapping: map platform-specific names to standard frontend fields
-    pn = None
-    pd = None
-    ps = None
-    
-    if e.fonte_origem == "PMGZ":
-        pn = metrics.get("PN-EDg")
-        pd = metrics.get("PD-EDg")
-        ps = metrics.get("PS-EDg")
-    elif e.fonte_origem == "ANCP":
-        pn = metrics.get("DPN")
-        pd = metrics.get("DP210")
-        ps = metrics.get("DP450")
-    elif e.fonte_origem == "GENEPLUS":
-        pn = metrics.get("PN")
-        pd = metrics.get("PD")
-        ps = metrics.get("PS")
-
+    # Compatibility mapping: map standardized names (from processor.py) to standard frontend fields
+    # Tenta buscar tanto no formato PMGZ quanto no formato ANCP para garantir que nada se perca
     return {
         "id": str(e.id),
         "safra": e.safra,
@@ -120,15 +104,25 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
         "iabczg": float(e.indice_principal) if e.indice_principal else (float(e.iabczg) if hasattr(e, 'iabczg') and e.iabczg else None),
         "deca_index": e.rank_principal if e.rank_principal else (e.deca_index if hasattr(e, 'deca_index') else None),
         "metrics": metrics,
-        "pn": pn,
-        "pd": pd,
-        "ps": ps,
-        # Legacy fields (returning None or mapping if possible)
-        "pa": metrics.get("PA-EDg") if e.fonte_origem == "PMGZ" else None,
-        "pm": metrics.get("PM-EMg") if e.fonte_origem == "PMGZ" else None,
-        "ipp": metrics.get("IPPg"),
-        "stay": metrics.get("STAYg"),
-        "pe_365": metrics.get("PE-365g"),
+        # Pesos
+        "pn": metrics.get("PN-EDg") or metrics.get("DPN"),
+        "pd": metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120"),
+        "pa": metrics.get("PA-EDg") or metrics.get("DP365"),
+        "ps": metrics.get("PS-EDg") or metrics.get("DP450"),
+        "pm": metrics.get("PM-EMg") or metrics.get("DIPM"),
+        # Reprodução
+        "ipp": metrics.get("IPPg") or metrics.get("DIPP"),
+        "stay": metrics.get("STAYg") or metrics.get("DSTAY"),
+        "pe_365": metrics.get("PE-365g") or metrics.get("DPE365"),
+        "psn": metrics.get("PSNg"),
+        # Carcaça
+        "aol": metrics.get("AOLg") or metrics.get("DAOL"),
+        "acab": metrics.get("ACABg") or metrics.get("DACAB"),
+        "marmoreio": metrics.get("MARg") or metrics.get("DMAR"),
+        # Conformação
+        "eg": metrics.get("Eg") or metrics.get("DES"),
+        "pg": metrics.get("Pg") or metrics.get("DPS"),
+        "mg": metrics.get("Mg") or metrics.get("DMS"),
     }
 
 

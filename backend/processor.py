@@ -487,6 +487,7 @@ class GeneticDataProcessor:
                 metrics_data = {}
                 # ... (mapa de métricas simplificado para o prompt)
                 # Mapeamento de busca no DataFrame (usa nomes internos ou originais)
+                # Mapa de métricas conforme a fonte (Nomes originais para cada plataforma)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -499,49 +500,55 @@ class GeneticDataProcessor:
                         "MARg": ("pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent"),
                     }
                 elif source_system == "ANCP":
-                    # Mapeamento ANCP conforme colunas enviadas pelo usuário
+                    # Mantém nomes originais da ANCP para não confundir as plataformas
                     dep_map = {
-                        # Pesos (DEP)
-                        "PN-EDg": ("DPN", "ACC_DPN", "TOP_DPN", None),
-                        "PD-EDg": ("DP210", "ACC_DP210", "TOP_DP210", None),
-                        "PA-EDg": ("DP365", "ACC_DP365", "TOP_DP365", None),
-                        "PS-EDg": ("DP450", "ACC_DP450", "TOP_DP450", None),
-                        # Reprodução
-                        "IPPg": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
-                        "STAYg": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
-                        "PE-365g": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
-                        # Carcaça e Qualidade
-                        "AOLg": ("DAOL", "ACC_DAOL", "TOP_DAOL", None),
-                        "ACABg": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
-                        "MARg": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),
-                        # Conformação / Morfológicas
-                        "Eg": ("DES", "ACC_DES", "TOP_DES", None),
-                        "Pg": ("DPS", "ACC_DPS", "TOP_DPS", None),
-                        "Mg": ("DMS", "ACC_DMS", "TOP_DMS", None),
+                        "DPN": ("DPN", "ACC_DPN", "TOP_DPN", None),
+                        "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
+                        "DP365": ("DP365", "ACC_DP365", "TOP_DP365", None),
+                        "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
+                        "DIPM": ("DIPM", "ACC_DIPM", "TOP_DIPM", None),
+                        "DIPP": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
+                        "DSTAY": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
+                        "DPE365": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        "DAOL": ("DAOL", "ACC_DAOL", "TOP_DAOL", None),
+                        "DACAB": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
+                        "DMAR": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),
+                        "DES": ("DES", "ACC_DES", "TOP_DES", None),
+                        "DPS": ("DPS", "ACC_DPS", "TOP_DPS", None),
+                        "DMS": ("DMS", "ACC_DMS", "TOP_DMS", None),
                     }
                 else:
                     dep_map = {}
 
-                for metric_name, cols in dep_map.items():
+                # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
+                def get_val(r, col_name):
+                    if not col_name: return None
+                    if col_name in r: return r[col_name]
+                    c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
+                    for k in r.keys():
+                        if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
+                            return r[k]
+                    return None
+
+                for metric_key, cols in dep_map.items():
                     dep_col, ac_col, rank_col, perc_col = cols
-                    # Tenta pegar o valor. Se for None, tenta com o nome da métrica em si
-                    val_dep = safe_float(row.get(dep_col))
+                    val_dep = safe_float(get_val(row, dep_col))
                     if val_dep is not None:
-                        metrics_data[metric_name] = {
+                        metrics_data[metric_key] = {
                             "dep": val_dep,
-                            "acc": safe_float(row.get(ac_col)),
-                            "top": safe_float(row.get(rank_col)),
-                            "perc": safe_float(row.get(perc_col)) if perc_col else None
+                            "acc": safe_float(get_val(row, ac_col)),
+                            "top": safe_float(get_val(row, rank_col)),
+                            "perc": safe_float(get_val(row, perc_col))
                         }
 
                 # Índices principais
                 if source_system == "ANCP":
-                    # Tenta MGTe com variações de nome
-                    indice_val = safe_float(row.get('MGTe') or row.get('MGTe_DEP') or row.get('MGTe DEP'))
-                    rank_val = safe_float(row.get('TOP_MGTe') or row.get('TOP_MGTe_DEP') or row.get('TOP MGTe'))
+                    # Tenta MGTe com variações de nome usando o helper robusto
+                    indice_val = safe_float(get_val(row, 'MGTe'))
+                    rank_val = safe_float(get_val(row, 'TOP_MGTe'))
                 else:
-                    indice_val = safe_float(row.get('pmg_iabc') or row.get('identificacao_indice_iabczg'))
-                    rank_val = safe_float(row.get('pmg_deca') or row.get('identificacao_indice_deca'))
+                    indice_val = safe_float(get_val(row, 'pmg_iabc') or get_val(row, 'identificacao_indice_iabczg'))
+                    rank_val = safe_float(get_val(row, 'pmg_deca') or get_val(row, 'identificacao_indice_deca'))
 
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
