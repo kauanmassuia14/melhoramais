@@ -132,19 +132,44 @@ def run_pmgz_migration():
 
 @router.post("/admin/fix-sequences")
 def fix_sequences():
-    """Fix database sequences that might be out of sync in production"""
+    """Fix database sequences and add missing columns for v2 schema"""
     try:
         with engine.connect() as conn:
-            # Fix notifications sequence
+            # 1. Fix sequences
             conn.execute(text("""
                 SELECT setval('genetics.notifications_id_seq', COALESCE((SELECT MAX(id) FROM genetics.notifications), 1) + 100);
             """))
-            # Fix users sequence if needed
-            conn.execute(text("""
-                SELECT setval('genetics.users_id_seq', COALESCE((SELECT MAX(id) FROM genetics.users), 1) + 10);
-            """))
+            
+            # 2. Add missing columns to genetic_evaluations (Unified v2)
+            eval_cols = [
+                ("indice_principal", "NUMERIC(10,4)"),
+                ("rank_principal", "INTEGER"),
+                ("percentil_principal", "NUMERIC(10,4)"),
+                ("metrics", "JSONB"),
+                ("progeny_stats", "JSONB"),
+                ("phenotypes", "JSONB"),
+                ("upload_id", "VARCHAR(36)"),
+                ("fonte_origem", "VARCHAR(50)")
+            ]
+            
+            for col_name, col_type in eval_cols:
+                try:
+                    # PostgreSQL check if column exists
+                    res = conn.execute(text(f"""
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'genetics' 
+                        AND table_name = 'genetic_evaluations' 
+                        AND column_name = '{col_name}'
+                    """)).fetchone()
+                    
+                    if not res:
+                        conn.execute(text(f"ALTER TABLE genetics.genetic_evaluations ADD COLUMN {col_name} {col_type}"))
+                        logger.info(f"Migration: added {col_name} to genetic_evaluations")
+                except Exception as e:
+                    logger.warning(f"Skipping col {col_name}: {e}")
+
             conn.commit()
-        return {"status": "success", "message": "Sequences synchronized successfully"}
+        return {"status": "success", "message": "Sequences and Schema synchronized successfully"}
     except Exception as e:
         logger.error(f"Error fixing sequences: {e}")
         return {"status": "error", "message": str(e)}
