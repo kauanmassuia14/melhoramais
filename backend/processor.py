@@ -481,10 +481,22 @@ class GeneticDataProcessor:
                             upload_id = EXCLUDED.upload_id
                     """
                     # Transforma dict em tupla para o execute_values
-                    animal_tuples = [(
-                        a['id'], a['farm_id'], a['rgn'], a['nome'], a['serie'],
-                        a['sexo'], a['nascimento'], a['genotipado'], a['csg'], a['upload_id']
-                    ) for a in animals_data]
+                    # IMPORTANTE: o tipo genetics.boolean_status é um ENUM ('SIM', 'NÃO')
+                    # não aceita boolean direto, precisa converter para string e castar
+                    animal_tuples = []
+                    for a in animals_data:
+                        gen_status = None
+                        if a['genotipado'] is True: gen_status = 'SIM'
+                        elif a['genotipado'] is False: gen_status = 'NÃO'
+                        
+                        csg_status = None
+                        if a['csg'] is True: csg_status = 'SIM'
+                        elif a['csg'] is False: csg_status = 'NÃO'
+
+                        animal_tuples.append((
+                            a['id'], a['farm_id'], a['rgn'], a['nome'], a['serie'],
+                            a['sexo'], a['nascimento'], gen_status, csg_status, a['upload_id']
+                        ))
                     
                     # Usa template para cast dos tipos customizados do schema genetics
                     template = "(%s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s)"
