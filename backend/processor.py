@@ -151,21 +151,47 @@ class GeneticDataProcessor:
     ) -> Tuple[pd.DataFrame, int, int, int]:
         df = self._read_file(file_content, filename, source_system)
 
-        if source_system == "PMGZ":
-            col_map = {}
-            required = []
-        else:
-            col_map = self.get_mappings(source_system)
-            required = self.get_required_columns(source_system)
+        col_map = self.get_mappings(source_system)
+        required = self.get_required_columns(source_system)
+        
+        # Fallback se não houver mapeamento no banco
+        if not col_map:
+            if source_system == "ANCP":
+                col_map = {
+                    "RGN": "rgn_animal",
+                    "Nome": "nome_animal",
+                    "Sexo": "sexo",
+                    "Nasc": "data_nascimento",
+                    "Raça": "raca"
+                }
+                required = ["RGN"]
+            elif source_system == "PMGZ":
+                col_map = {
+                    "RGN": "rgn_animal",
+                    "Nome": "nome_animal",
+                    "Sexo": "sexo",
+                    "Nascimento": "data_nascimento"
+                }
+                required = ["RGN"]
 
         df, rename = self._match_columns(df, col_map, required)
         df = df.rename(columns=rename)
+        
+        # Validação extra de segurança para evitar KeyError 'rgn_animal'
+        if 'rgn_animal' not in df.columns:
+            # Tenta achar alguma coluna que se pareça com RGN
+            for c in df.columns:
+                if str(c).upper() in ["RGN", "REGISTRO", "RGD", "CGA"]:
+                    df = df.rename(columns={c: 'rgn_animal'})
+                    break
+            
+            if 'rgn_animal' not in df.columns:
+                available = list(df.columns)
+                raise ValueError(f"Não foi possível encontrar a coluna de Registro (RGN) no arquivo. Colunas disponíveis: {available}")
+
         df = self._clean_data(df, source_system)
 
-        df["id_farm"] = self.farm_id
-        if self.upload_id:
-            df["upload_id"] = self.upload_id
-
+        # Usar o novo schema genetics
         inserted, updated, failed = self._upsert_genetics_animals(df, source_system)
 
         return df, inserted, updated, failed
