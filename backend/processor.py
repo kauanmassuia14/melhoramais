@@ -121,19 +121,14 @@ class GeneticDataProcessor:
             return df, None, upload
 
         except Exception as e:
+            import traceback
+            logger.error(f"Error in process_file: {str(e)}")
+            logger.error(traceback.format_exc())
             self.db.rollback()
 
+            from backend.database import SessionLocal
             fresh_db = SessionLocal()
             try:
-                failed_log = fresh_db.query(ProcessingLog).filter(
-                    ProcessingLog.id == log_id
-                ).first()
-                if failed_log:
-                    failed_log.status = "failed"
-                    failed_log.error_message = str(e)[:1000]
-                    failed_log.completed_at = datetime.utcnow()
-                    fresh_db.commit()
-
                 if self.upload_id:
                     failed_upload = fresh_db.query(Upload).filter(
                         Upload.upload_id == self.upload_id
@@ -143,13 +138,13 @@ class GeneticDataProcessor:
                         failed_upload.error_message = str(e)[:1000]
                         failed_upload.completed_at = datetime.utcnow()
                         fresh_db.commit()
-            except Exception:
+            except Exception as inner_e:
+                logger.error(f"Error updating failed upload status: {inner_e}")
                 fresh_db.rollback()
-                raise
             finally:
                 fresh_db.close()
 
-            raise
+            raise e
 
     def _process_and_persist(
         self, file_content: bytes, filename: str, source_system: str
@@ -375,30 +370,41 @@ class GeneticDataProcessor:
                 inserted += len(animals_to_insert)
 
             if animals_to_update_ids:
-                # Update logic (simplified to update non-null values)
-                self.db.execute(
-                    text("""
-                        UPDATE genetics.animals SET
-                            nome = COALESCE(:nome, nome),
-                            serie = COALESCE(:serie, serie),
-                            sexo = COALESCE(:sexo, sexo),
-                            nascimento = COALESCE(:nascimento, nascimento),
-                            genotipado = COALESCE(:genotipado, genotipado),
-                            csg = COALESCE(:csg, csg),
-                            upload_id = COALESCE(:upload_id, upload_id)
-                        WHERE id = ANY(:ids)
-                    """),
-                    {
-                        'ids': animals_to_update_ids,
-                        'nome': safe_str(batch_df.iloc[0].get('nome_animal')),
-                        'serie': safe_str(batch_df.iloc[0].get('pmg_serie_rgd')),
-                        'sexo': safe_str(batch_df.iloc[0].get('sexo')),
-                        'nascimento': safe_str(batch_df.iloc[0].get('data_nascimento')),
-                        'genotipado': safe_bool(batch_df.iloc[0].get('genotipado')),
-                        'csg': safe_bool(batch_df.iloc[0].get('csg')),
-                        'upload_id': upload_id_val,
-                    }
-                )
+                for _, row in batch_df.iterrows():
+                    rgn = row.get('rgn_animal')
+                    if rgn and str(rgn).strip() in existing_map:
+                        animal_id = existing_map[str(rgn).strip()]
+                        
+                        nasc_val = row.get('data_nascimento')
+                        if nasc_val and isinstance(nasc_val, str):
+                            try:
+                                nasc_val = datetime.strptime(nasc_val, '%Y-%m-%d').date()
+                            except:
+                                nasc_val = None
+
+                        self.db.execute(
+                            text("""
+                                UPDATE genetics.animals SET
+                                    nome = COALESCE(:nome, nome),
+                                    serie = COALESCE(:serie, serie),
+                                    sexo = COALESCE(:sexo, sexo),
+                                    nascimento = COALESCE(:nascimento, nascimento),
+                                    genotipado = COALESCE(:genotipado, genotipado),
+                                    csg = COALESCE(:csg, csg),
+                                    upload_id = COALESCE(:upload_id, upload_id)
+                                WHERE id = :id
+                            """),
+                            {
+                                'id': str(animal_id),
+                                'nome': safe_str(row.get('nome_animal')),
+                                'serie': safe_str(row.get('pmg_serie_rgd')),
+                                'sexo': safe_str(row.get('sexo')),
+                                'nascimento': nasc_val,
+                                'genotipado': safe_bool(row.get('genotipado')),
+                                'csg': safe_bool(row.get('csg')),
+                                'upload_id': upload_id_val,
+                            }
+                        )
                 updated += len(animals_to_update_ids)
 
             eval_to_insert = []
