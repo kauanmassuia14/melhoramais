@@ -357,10 +357,33 @@ class GeneticDataProcessor:
         upload_id_val = self.upload_id if self.upload_id else None
 
         def safe_str(val):
-            if pd.isna(val):
+            if pd.isna(val) or val is None:
                 return None
             s = str(val).strip()
             return s if s and s.lower() not in ['nan', 'none', ''] else None
+
+        def safe_date(v):
+            if pd.isna(v) or v is None:
+                return None
+            # Trata strings vazias ou placeholders
+            s_val = str(v).strip().lower()
+            if not s_val or s_val in ['nan', 'none', '', '-', 'nat', '—']:
+                return None
+            
+            if isinstance(v, datetime):
+                return v.date()
+            if hasattr(v, 'date'):
+                try: return v.date()
+                except: pass
+                
+            try:
+                # Prioridade total para formato brasileiro DD/MM/YYYY
+                dt = pd.to_datetime(v, dayfirst=True, errors='coerce')
+                if pd.notna(dt):
+                    return dt.date()
+            except:
+                pass
+            return None
 
         def safe_bool(val):
             if pd.isna(val) or val is None:
@@ -423,7 +446,7 @@ class GeneticDataProcessor:
             seen_rgns_in_batch = set()
 
             for _, row in batch_df.iterrows():
-                rgn = get_val(row, 'rgn_animal') or get_val(row, 'rgn')
+                rgn = get_val(row, 'rgn_animal') or get_val(row, 'rgn') or get_val(row, 'registro')
                 if not rgn or str(rgn).strip().lower() in ['nan', 'none', '', 'nat']:
                     failed += 1
                     continue
@@ -433,19 +456,9 @@ class GeneticDataProcessor:
                     continue
                 seen_rgns_in_batch.add(rgn_str)
                 
-                # Busca robusta por Nascimento (especialmente para ANCP 'Nasc')
-                nasc = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
-                nasc_val = None
-                if nasc and not pd.isna(nasc):
-                    if isinstance(nasc, datetime):
-                        nasc_val = nasc.date()
-                    else:
-                        try:
-                            # Tenta parsear com dia primeiro para o formato brasileiro DD/MM/YYYY
-                            nasc_val = pd.to_datetime(nasc, dayfirst=True).date()
-                        except:
-                            try: nasc_val = pd.to_datetime(nasc).date()
-                            except: nasc_val = None
+                # Busca Nascimento (especialmente para ANCP 'Nasc')
+                nasc_raw = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
+                nasc_val = safe_date(nasc_raw)
 
                 animals_data.append({
                     'id': str(uuid.uuid4()),
