@@ -196,6 +196,14 @@ class GeneticDataProcessor:
 
         df = self._clean_data(df, source_system)
 
+        # Remove duplicados de RGN no próprio DataFrame para evitar CardinalityViolation no PostgreSQL
+        if 'rgn_animal' in df.columns:
+            initial_count = len(df)
+            df = df.drop_duplicates(subset=['rgn_animal'], keep='last')
+            final_count = len(df)
+            if initial_count > final_count:
+                logger.info(f"Removidos {initial_count - final_count} registros duplicados de RGN do arquivo.")
+
         # Usar o novo schema genetics
         results = self._upsert_genetics_animals(df, source_system)
         inserted, updated, failed = results if isinstance(results, tuple) else (0, 0, 0)
