@@ -31,12 +31,20 @@ def get_dashboard_stats(
     if current_user.role != "admin" and current_user.id_farm:
         import uuid as _uuid
         try:
-            farm_uuid = _uuid.UUID(str(current_user.id_farm))
-            genetics_farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
-            if genetics_farm:
-                query = query.filter(GeneticsAnimal.farm_id == genetics_farm.id)
+            # Tenta converter o id_farm do usuário para UUID
+            farm_str = str(current_user.id_farm).strip()
+            farm_uuid = _uuid.UUID(farm_str)
+            query = query.filter(GeneticsAnimal.farm_id == farm_uuid)
+            # Para fins de cálculos de peso lá embaixo
+            genetics_farm_id = farm_uuid
         except (ValueError, AttributeError):
-            pass
+            # Se não for um UUID válido, as estatísticas v2 não encontrarão nada 
+            # para este usuário, o que é o comportamento correto (segurança)
+            query = query.filter(GeneticsAnimal.farm_id == None)
+            genetics_farm_id = None
+    else:
+        genetics_farm_id = None
+
 
     total_animals = query.count()
 
@@ -87,8 +95,9 @@ def get_dashboard_stats(
         GeneticsAnimal, GeneticsAnimal.id == GeneticsGeneticEvaluation.animal_id
     )
     
-    if current_user.role != "admin" and current_user.id_farm and genetics_farm:
-        latest_evals = latest_evals.filter(GeneticsAnimal.farm_id == genetics_farm.id)
+    if current_user.role != "admin" and genetics_farm_id:
+        latest_evals = latest_evals.filter(GeneticsAnimal.farm_id == genetics_farm_id)
+
     
     evals = latest_evals.all()
     

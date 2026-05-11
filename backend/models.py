@@ -547,6 +547,8 @@ class GeneticsAnimal(Base):
     csg = Column(Boolean, default=False)
     sire_id = Column(UUID(as_uuid=True), nullable=True)
     dam_id = Column(UUID(as_uuid=True), nullable=True)
+    upload_id = Column(String(36), index=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

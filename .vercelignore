@@ -1,5 +1,9 @@
 backend/
 *.py
+*.xls
+*.pdf
+*.rpm
+*.db
 pyproject.toml
 poetry.lock
 requirements.txt
@@ -7,3 +11,9 @@ nixpacks.toml
 railway.json
 Dockerfile
 docker-compose.yml
+.agents/
+.claude/
+.windsurf/
+database/
+docker/
+tests/

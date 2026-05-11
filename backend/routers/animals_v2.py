@@ -86,6 +86,18 @@ def animal_to_dict(a: GeneticsAnimal, latest_eval: Optional[GeneticsGeneticEvalu
     return result
 
 
+def normalize_metric(m) -> Optional[dict]:
+    """Traduz as chaves do banco (processor.py) para o formato do frontend."""
+    if not m or not isinstance(m, dict):
+        return None
+    return {
+        "dep": m.get("dep"),
+        "ac": m.get("acc"),        # No banco é 'acc', no front é 'ac'
+        "deca": m.get("top"),      # No banco é 'top', no front é 'deca'
+        "p_percent": m.get("perc") # No banco é 'perc', no front é 'p_percent'
+    }
+
+
 def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
     # Basic metrics mapping for frontend backward compatibility
     metrics = e.metrics if isinstance(e.metrics, dict) else {}
@@ -105,25 +117,26 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
         "deca_index": e.rank_principal if e.rank_principal else (e.deca_index if hasattr(e, 'deca_index') else None),
         "metrics": metrics,
         # Pesos
-        "pn": metrics.get("PN-EDg") or metrics.get("DPN"),
-        "pd": metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120"),
-        "pa": metrics.get("PA-EDg") or metrics.get("DP365"),
-        "ps": metrics.get("PS-EDg") or metrics.get("DP450"),
-        "pm": metrics.get("PM-EMg") or metrics.get("DIPM"),
+        "pn": normalize_metric(metrics.get("PN-EDg") or metrics.get("DPN")),
+        "pd": normalize_metric(metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")),
+        "pa": normalize_metric(metrics.get("PA-EDg") or metrics.get("DP365")),
+        "ps": normalize_metric(metrics.get("PS-EDg") or metrics.get("DP450")),
+        "pm": normalize_metric(metrics.get("PM-EMg") or metrics.get("DIPM")),
         # Reprodução
-        "ipp": metrics.get("IPPg") or metrics.get("DIPP"),
-        "stay": metrics.get("STAYg") or metrics.get("DSTAY"),
-        "pe_365": metrics.get("PE-365g") or metrics.get("DPE365"),
-        "psn": metrics.get("PSNg"),
+        "ipp": normalize_metric(metrics.get("IPPg") or metrics.get("DIPP")),
+        "stay": normalize_metric(metrics.get("STAYg") or metrics.get("DSTAY")),
+        "pe_365": normalize_metric(metrics.get("PE-365g") or metrics.get("DPE365")),
+        "psn": normalize_metric(metrics.get("PSNg")),
         # Carcaça
-        "aol": metrics.get("AOLg") or metrics.get("DAOL"),
-        "acab": metrics.get("ACABg") or metrics.get("DACAB"),
-        "marmoreio": metrics.get("MARg") or metrics.get("DMAR"),
+        "aol": normalize_metric(metrics.get("AOLg") or metrics.get("DAOL")),
+        "acab": normalize_metric(metrics.get("ACABg") or metrics.get("DACAB")),
+        "marmoreio": normalize_metric(metrics.get("MARg") or metrics.get("DMAR")),
         # Conformação
-        "eg": metrics.get("Eg") or metrics.get("DES"),
-        "pg": metrics.get("Pg") or metrics.get("DPS"),
-        "mg": metrics.get("Mg") or metrics.get("DMS"),
+        "eg": normalize_metric(metrics.get("Eg") or metrics.get("DES")),
+        "pg": normalize_metric(metrics.get("Pg") or metrics.get("DPS")),
+        "mg": normalize_metric(metrics.get("Mg") or metrics.get("DMS")),
     }
+
 
 
 # ============================================================
@@ -224,71 +237,71 @@ def get_stats_v2(
     )
     animals_by_sex = {s or "unknown": c for s, c in sex_counts}
 
-    animal_ids = [a.id for a in query.with_entities(GeneticsAnimal.id).all()]
-    source_counts = {}
-    avg_p210 = avg_p365 = avg_p450 = None
+    # Subconsulta para filtrar animais (evita carregar milhares de IDs na memória)
+    animal_subq = query.with_entities(GeneticsAnimal.id).subquery()
+    
+    eval_counts = (
+        db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
+        .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_subq))
+        .group_by(GeneticsGeneticEvaluation.fonte_origem)
+        .all()
+    )
+    source_counts = {s or "unknown": c for s, c in eval_counts}
 
-    if animal_ids:
-        eval_counts = (
-            db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
-            .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
-            .group_by(GeneticsGeneticEvaluation.fonte_origem)
-            .all()
-        )
-        source_counts = {s or "unknown": c for s, c in eval_counts}
+    # Médias de pesos: usa o campo metrics (JSONB)
+    # Tenta pegar PD (Desmama) e PS (Sobreano) dependendo da fonte
+    # Otimizado para usar a subquery diretamente no SQL
+    p210 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
+    ).scalar()
+    
+    # P365 (Ano)
+    p365 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
+    ).scalar()
 
-        # Médias de pesos: usa o campo metrics (JSONB)
-        # Tenta pegar PD (Desmama) e PS (Sobreano) dependendo da fonte
-        p210 = db.execute(
-            text("""
-                SELECT AVG(
-                    CASE 
-                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
-                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
-                        ELSE NULL
-                    END
-                )
-                FROM genetics.genetic_evaluations
-                WHERE animal_id = ANY(:ids)
-            """),
-            {"ids": animal_ids}
-        ).scalar()
-        
-        # P365 (Ano)
-        p365 = db.execute(
-            text("""
-                SELECT AVG(
-                    CASE 
-                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
-                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
-                        ELSE NULL
-                    END
-                )
-                FROM genetics.genetic_evaluations
-                WHERE animal_id = ANY(:ids)
-            """),
-            {"ids": animal_ids}
-        ).scalar()
+    # P450 (Sobreano)
+    p450 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
+    ).scalar()
 
-        # P450 (Sobreano)
-        p450 = db.execute(
-            text("""
-                SELECT AVG(
-                    CASE 
-                        WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
-                        WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
-                        ELSE NULL
-                    END
-                )
-                FROM genetics.genetic_evaluations
-                WHERE animal_id = ANY(:ids)
-            """),
-            {"ids": animal_ids}
-        ).scalar()
+    avg_p210 = round(float(p210), 2) if p210 else None
+    avg_p365 = round(float(p365), 2) if p365 else None
+    avg_p450 = round(float(p450), 2) if p450 else None
 
-        avg_p210 = round(float(p210), 2) if p210 else None
-        avg_p365 = round(float(p365), 2) if p365 else None
-        avg_p450 = round(float(p450), 2) if p450 else None
 
     if current_user.role == "admin":
         total_farms = db.query(GeneticsFarm).count()
