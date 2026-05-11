@@ -138,26 +138,25 @@ def startup_event():
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS audit"))
                 conn.execute(text("CREATE SCHEMA IF NOT EXISTS genetics"))
+                
+                # Create custom types if they don't exist
+                conn.execute(text("""
+                    DO $$ 
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = 'animal_sex' AND n.nspname = 'genetics') THEN
+                            CREATE TYPE genetics.animal_sex AS ENUM ('M', 'F');
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = 'boolean_status' AND n.nspname = 'genetics') THEN
+                            CREATE TYPE genetics.boolean_status AS ENUM ('SIM', 'NÃO');
+                        END IF;
+                    END $$;
+                """))
                 conn.commit()
         except Exception as e:
-            print(f"Erro ao criar schemas: {e}")
+            print(f"Erro ao criar schemas ou tipos: {e}")
     
     # Criar todas as tabelas (modelos existentes + v2)
     from backend.models import Base
-    all_models = list(Base.metadata.tables.keys()) + [
-        'animal_base', 'animal_platform_data', 'animal_snapshot', 'animal_audit'
-    ]
-    
-    try:
-        #from backend.models.v2 import Base as BaseV2
-        #BaseV2.metadata.create_all(bind=engine)
-        print("Tabelas v2 criadas com sucesso.")
-    except Exception as e:
-        print(f"Erro ao criar tabelas v2: {e}")
-    
-    print("Database initialization complete.")
-    
-    # 4. Create all tables (standard) - Wrapped to prevent startup crash
     try:
         print("Ensuring database tables exist...")
         Base.metadata.create_all(bind=engine)

@@ -135,6 +135,7 @@ export interface GeneticsFarm {
   id: string;
   nome: string;
   dono_fazenda: string | null;
+  cnpj?: string | null;
   created_at: string | null;
 }
 

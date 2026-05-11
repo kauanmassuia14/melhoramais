@@ -348,9 +348,13 @@ class GeneticDataProcessor:
         if len(df) == 0:
             return 0, 0, 0
 
-        farm = self.db.query(GeneticsFarm).first()
+        if self.farm_id:
+            farm = self.db.query(GeneticsFarm).filter(GeneticsFarm.id == self.farm_id).first()
+        else:
+            farm = self.db.query(GeneticsFarm).first()
+
         if not farm:
-            logger.error("No farm found in genetics.farms")
+            logger.error(f"No farm found in genetics.farms for ID: {self.farm_id}")
             return 0, 0, len(df)
 
         genetics_farm_id = farm.id
@@ -414,7 +418,8 @@ class GeneticDataProcessor:
             try:
                 if isinstance(v, datetime):
                     return v.date()
-                return pd.to_datetime(v).date()
+                # Prioridade para formato DD/MM/YYYY
+                return pd.to_datetime(v, dayfirst=True).date()
             except:
                 return None
 

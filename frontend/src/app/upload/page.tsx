@@ -55,10 +55,18 @@ function CreateFarmModal({ isOpen, onClose, onSuccess }: CreateFarmModalProps) {
     setError("");
 
     try {
-      const farm = await api.createFarm({
+      const farmResponse = await api.createFarm({
         nome_farm: nomeFarm,
         cnpj: cnpj || undefined,
       });
+      // Convert legacy Farm response to GeneticsFarm format
+      const farm: Farm = {
+        id: farmResponse.id_farm,
+        nome: farmResponse.nome_farm,
+        dono_fazenda: farmResponse.responsavel || null,
+        cnpj: farmResponse.cnpj || null,
+        created_at: farmResponse.created_at
+      };
       onSuccess(farm);
       setNomeFarm("");
       setCnpj("");
@@ -329,8 +337,8 @@ export default function UploadPage() {
                       >
                         <BuildingOfficeIcon className="w-4 h-4 text-text-muted" />
                         <span className="text-white">{farm.nome}</span>
-                        {farm.documento && (
-                          <span className="text-xs text-text-muted">{farm.documento}</span>
+                        {farm.cnpj && (
+                          <span className="text-xs text-text-muted">{farm.cnpj}</span>
                         )}
                       </button>
                     ))}
@@ -343,8 +351,8 @@ export default function UploadPage() {
                       }}
                       className="w-full px-4 py-2.5 rounded-lg bg-emerald-glow/10 border border-emerald-glow/20 text-emerald-glow-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-emerald-glow/15 transition-colors"
                     >
-                      {/* Botão desativado temporariamente para o novo schema genetics */}
-                      Criar Nova Fazenda (Desativado)
+                      <PlusIcon className="w-4 h-4" />
+                      Criar Nova Fazenda
                     </button>
                   </div>
                 </motion.div>
