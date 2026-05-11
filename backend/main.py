@@ -1296,9 +1296,13 @@ def create_notification(
         type=notification.type,
         link=notification.link,
     )
-    db.add(db_notification)
-    db.commit()
-    db.refresh(db_notification)
+    try:
+        db.add(db_notification)
+        db.commit()
+        db.refresh(db_notification)
+    except Exception as e:
+        logger.error(f"Failed to create notification: {e}")
+        db.rollback()
     return db_notification
 
 

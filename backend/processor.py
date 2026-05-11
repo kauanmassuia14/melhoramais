@@ -172,27 +172,53 @@ class GeneticDataProcessor:
 
     def _read_file(self, file_content: bytes, filename: str, source_system: str) -> pd.DataFrame:
         from backend.loaders import PMGZLoader
+        import io
         
-        if filename.endswith((".xlsx", ".xls")):
-            if source_system == "PMGZ":
-                loader = PMGZLoader(farm_id=self.farm_id)
-                df = loader.load(file_content, filename)
-                df = loader.para_colunas_banco(df)
+        content_io = io.BytesIO(file_content)
+        
+        try:
+            if filename.lower().endswith((".xlsx", ".xls")):
+                if source_system == "PMGZ":
+                    loader = PMGZLoader(farm_id=self.farm_id)
+                    df = loader.load(file_content, filename)
+                    df = loader.para_colunas_banco(df)
+                else:
+                    try:
+                        # Try as Excel first with openpyxl
+                        df = pd.read_excel(content_io, engine="openpyxl")
+                    except Exception:
+                        content_io.seek(0)
+                        try:
+                            # Try as Excel old format
+                            df = pd.read_excel(content_io, engine="xlrd")
+                        except Exception:
+                            content_io.seek(0)
+                            # Fallback: maybe it's a CSV with .xls extension
+                            try:
+                                df = pd.read_csv(content_io, sep=";", encoding="utf-8")
+                            except:
+                                content_io.seek(0)
+                                df = pd.read_csv(content_io, sep=",", encoding="utf-8")
+            elif filename.lower().endswith(".csv"):
+                try:
+                    df = pd.read_csv(content_io, sep=";", encoding="utf-8")
+                except:
+                    content_io.seek(0)
+                    df = pd.read_csv(content_io, sep=",", encoding="utf-8")
+            elif filename.lower().endswith(".pag"):
+                df = pd.read_csv(content_io, sep=None, engine="python")
             else:
-                df = pd.read_excel(io.BytesIO(file_content))
-        elif filename.endswith(".csv"):
-            if source_system == "PMGZ":
-                df = pd.read_csv(io.BytesIO(file_content), sep="\t")
-                if len(df.columns) == 1:
-                    df = pd.read_csv(io.BytesIO(file_content), sep=";")
-                if len(df.columns) == 1:
-                    df = pd.read_csv(io.BytesIO(file_content))
-            else:
-                df = pd.read_csv(io.BytesIO(file_content))
-        elif filename.endswith(".PAG"):
-            df = pd.read_csv(io.BytesIO(file_content), sep=None, engine="python")
-        else:
-            raise ValueError(f"Unsupported file format: {filename}")
+                # Try guessing
+                try:
+                    df = pd.read_excel(content_io)
+                except:
+                    content_io.seek(0)
+                    df = pd.read_csv(content_io, sep=";")
+        except Exception as e:
+            raise ValueError(f"Não foi possível ler o arquivo {filename}: {str(e)}")
+
+        if df is None or df.empty:
+            raise ValueError(f"O arquivo {filename} está vazio ou não pôde ser processado.")
 
         df.columns = [str(c).strip() for c in df.columns]
         df = df.dropna(how="all")

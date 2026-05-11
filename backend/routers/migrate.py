@@ -130,6 +130,26 @@ def run_pmgz_migration():
     return {"status": "success", "columns_added": len(new_columns)}
 
 
+@router.post("/admin/fix-sequences")
+def fix_sequences():
+    """Fix database sequences that might be out of sync in production"""
+    try:
+        with engine.connect() as conn:
+            # Fix notifications sequence
+            conn.execute(text("""
+                SELECT setval('genetics.notifications_id_seq', COALESCE((SELECT MAX(id) FROM genetics.notifications), 1) + 100);
+            """))
+            # Fix users sequence if needed
+            conn.execute(text("""
+                SELECT setval('genetics.users_id_seq', COALESCE((SELECT MAX(id) FROM genetics.users), 1) + 10);
+            """))
+            conn.commit()
+        return {"status": "success", "message": "Sequences synchronized successfully"}
+    except Exception as e:
+        logger.error(f"Error fixing sequences: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 def run_migration_on_startup():
     """Run migration automatically on startup"""
     import logging
