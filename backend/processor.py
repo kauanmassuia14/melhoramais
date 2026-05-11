@@ -182,8 +182,20 @@ class GeneticDataProcessor:
                 }
                 required = ["RGN"]
 
-        df, rename = self._match_columns(df, col_map, required)
-        df = df.rename(columns=rename)
+        # Para PMGZ, o loader já faz o mapeamento completo e robusto.
+        # Não precisamos do _match_columns genérico que pode falhar com as colunas já renomeadas.
+        if source_system == "PMGZ":
+            rename = {}
+            # Garante que rgn_animal está presente (o loader já deve ter garantido)
+            if 'rgn_animal' not in df.columns:
+                # Fallback caso o loader não tenha mapeado por algum motivo
+                df, rename = self._match_columns(df, col_map, required)
+        else:
+            df, rename = self._match_columns(df, col_map, required)
+            
+        if rename:
+            df = df.rename(columns=rename)
+
         
         # Validação extra de segurança para evitar KeyError 'rgn_animal'
         if 'rgn_animal' not in df.columns:
