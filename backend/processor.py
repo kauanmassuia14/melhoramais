@@ -474,7 +474,7 @@ class GeneticDataProcessor:
 
                 metrics_data = {}
                 # ... (mapa de métricas simplificado para o prompt)
-                # Mapeamento Unificado para o Frontend (Chaves do PMGZ como padrão)
+                # Mapeamento de busca no DataFrame (usa nomes internos ou originais)
                 if source_system == "PMGZ":
                     dep_map = {
                         "PN-EDg": ("pmg_pn_dep", "pmg_pn_ac", "pmg_pn_deca", "pmg_pn_p_percent"),
@@ -484,8 +484,10 @@ class GeneticDataProcessor:
                         "STAYg": ("pmg_stay_dep", "pmg_stay_ac", "pmg_stay_deca", "pmg_stay_p_percent"),
                         "AOLg": ("pmg_aol_dep", "pmg_aol_ac", "pmg_aol_deca", "pmg_aol_p_percent"),
                         "ACABg": ("pmg_acab_dep", "pmg_acab_ac", "pmg_acab_deca", "pmg_acab_p_percent"),
+                        "MARg": ("pmg_mar_dep", "pmg_mar_ac", "pmg_mar_deca", "pmg_mar_p_percent"),
                     }
                 elif source_system == "ANCP":
+                    # Na ANCP, as colunas geralmente mantêm os nomes originais se não mapeadas no fallback
                     dep_map = {
                         "PN-EDg": ("DPN", "ACC_DPN", "TOP_DPN", None),
                         "PD-EDg": ("DP210", "ACC_DP210", "TOP_DP210", None),
@@ -500,18 +502,24 @@ class GeneticDataProcessor:
                 else: dep_map = {}
 
                 for metric_name, cols in dep_map.items():
-                    dep, ac, rank, perc = cols
-                    val_dep = safe_float(row.get(dep))
+                    dep_col, ac_col, rank_col, perc_col = cols
+                    # Tenta pegar o valor. Se for None, tenta com o nome da métrica em si
+                    val_dep = safe_float(row.get(dep_col))
                     if val_dep is not None:
                         metrics_data[metric_name] = {
                             "dep": val_dep,
-                            "acc": safe_float(row.get(ac)),
-                            "top": safe_float(row.get(rank)),
-                            "perc": safe_float(row.get(perc)) if perc else None
+                            "acc": safe_float(row.get(ac_col)),
+                            "top": safe_float(row.get(rank_col)),
+                            "perc": safe_float(row.get(perc_col)) if perc_col else None
                         }
 
-                indice_val = safe_float(row.get('MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_iabc'))
-                rank_val = safe_float(row.get('TOP_MGTe')) if source_system == "ANCP" else safe_float(row.get('pmg_deca'))
+                # Índices principais
+                if source_system == "ANCP":
+                    indice_val = safe_float(row.get('MGTe'))
+                    rank_val = safe_float(row.get('TOP_MGTe'))
+                else:
+                    indice_val = safe_float(row.get('pmg_iabc'))
+                    rank_val = safe_float(row.get('pmg_deca'))
 
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
