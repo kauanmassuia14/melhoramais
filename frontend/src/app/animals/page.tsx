@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -61,7 +61,7 @@ const fmtDate = (d: string | null) => {
   return new Date(d).toLocaleDateString("pt-BR", { year: "numeric", month: "2-digit", day: "2-digit" });
 };
 
-export default function AnimalsPage() {
+function AnimalsContent() {
   const searchParams = useSearchParams();
   const initialFarmId = searchParams.get("farm_id") || "";
   
@@ -593,5 +593,17 @@ export default function AnimalsPage() {
       </div>
       {dialog}
     </DashboardLayout>
+  );
+}
+
+export default function AnimalsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-deep-dark flex items-center justify-center text-text-secondary">
+        Carregando...
+      </div>
+    }>
+      <AnimalsContent />
+    </Suspense>
   );
 }
