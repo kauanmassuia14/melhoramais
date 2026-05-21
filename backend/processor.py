@@ -295,7 +295,7 @@ class GeneticDataProcessor:
             )
 
         if "data_nascimento" in df.columns:
-            df["data_nascimento"] = pd.to_datetime(df["data_nascimento"], errors="coerce").dt.date
+            df["data_nascimento"] = pd.to_datetime(df["data_nascimento"], dayfirst=True, errors="coerce").dt.date
 
         if "raca" in df.columns:
             df["raca"] = df["raca"].fillna("Nelore").replace(["", "nan", "None", "-"], "Nelore")
@@ -304,6 +304,9 @@ class GeneticDataProcessor:
             df["fonte_origem"] = source_system
 
         for col in df.columns:
+            if col == "data_nascimento":
+                df[col] = df[col].replace([pd.NaT, None], None)
+                continue
             df[col] = df[col].astype(str).str.strip()
             df[col] = df[col].str.replace(",", ".", regex=False)
             df[col] = df[col].replace(["-", "", "nan", "None", "NaN", "nat"], None)
@@ -347,6 +350,14 @@ class GeneticDataProcessor:
             if col in float_columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
+                except:
+                    pass
+
+        # Enforce 3-decimal precision for deepCAR / CAR columns
+        for col in df.columns:
+            if "CAR" in str(col).upper():
+                try:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").round(3)
                 except:
                     pass
 
@@ -578,6 +589,8 @@ class GeneticDataProcessor:
                         "DES": ("DES", "ACC_DES", "TOP_DES", None),
                         "DPS": ("DPS", "ACC_DPS", "TOP_DPS", None),
                         "DMS": ("DMS", "ACC_DMS", "TOP_DMS", None),
+                        "CAR": ("CAR", "ACC_CAR", "TOP_CAR", None),
+                        "IMS": ("IMS", "ACC_IMS", "TOP_IMS", None),
                     }
                 else:
                     dep_map = {}
@@ -588,6 +601,8 @@ class GeneticDataProcessor:
                     dep_col, ac_col, rank_col, perc_col = cols
                     val_dep = safe_float(get_val(row, dep_col))
                     if val_dep is not None:
+                        if "CAR" in str(metric_key).upper() or "CAR" in str(dep_col).upper():
+                            val_dep = round(val_dep, 3)
                         metrics_data[metric_key] = {
                             "dep": val_dep,
                             "acc": safe_float(get_val(row, ac_col)),
@@ -597,16 +612,20 @@ class GeneticDataProcessor:
 
                 # Índices principais
                 if source_system == "ANCP":
-                    # Tenta MGTe com variações de nome usando o helper robusto
-                    indice_val = safe_float(get_val(row, 'MGTe'))
-                    rank_val = safe_float(get_val(row, 'TOP_MGTe'))
-                else:
-                    indice_val = safe_float(get_val(row, 'pmg_iabc') or get_val(row, 'identificacao_indice_iabczg'))
-                    rank_val = safe_float(get_val(row, 'pmg_deca') or get_val(row, 'identificacao_indice_deca'))
+                    indice_val = safe_float(get_val(row, 'MGTe') or get_val(row, 'mgte'))
+                    rank_val = safe_float(get_val(row, 'TOP_MGTe') or get_val(row, 'top_mgte') or get_val(row, 'TOP') or get_val(row, 'top'))
+                elif source_system == "GENEPLUS":
+                    indice_val = safe_float(get_val(row, 'iqg') or get_val(row, 'IQG'))
+                    rank_val = safe_float(get_val(row, 'percentil') or get_val(row, 'percentil_iqg') or get_val(row, 'TOP') or get_val(row, 'top'))
+                else:  # PMGZ ou outro
+                    indice_val = safe_float(get_val(row, 'pmg_iabc') or get_val(row, 'identificacao_indice_iabczg') or get_val(row, 'iabczg') or get_val(row, 'iabcz'))
+                    rank_val = safe_float(get_val(row, 'pmg_deca') or get_val(row, 'identificacao_indice_deca') or get_val(row, 'deca') or get_val(row, 'deca_index'))
+
+                rank_int = int(round(rank_val)) if rank_val is not None else None
 
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
-                    2026, source_system, indice_val, rank_val, json.dumps(metrics_data),
+                    2026, source_system, indice_val, rank_int, rank_val, json.dumps(metrics_data),
                     json.dumps({}), json.dumps({}), upload_id_val
                 ))
 
@@ -616,11 +635,12 @@ class GeneticDataProcessor:
                 with raw_conn.cursor() as cur:
                     eval_sql = """
                         INSERT INTO genetics.genetic_evaluations 
-                        (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, metrics, progeny_stats, phenotypes, upload_id)
+                        (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, percentil_principal, metrics, progeny_stats, phenotypes, upload_id)
                         VALUES %s
                         ON CONFLICT (animal_id, fonte_origem, safra) DO UPDATE SET
                             indice_principal = EXCLUDED.indice_principal,
                             rank_principal = EXCLUDED.rank_principal,
+                            percentil_principal = EXCLUDED.percentil_principal,
                             metrics = EXCLUDED.metrics,
                             upload_id = EXCLUDED.upload_id
                     """

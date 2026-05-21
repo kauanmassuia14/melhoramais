@@ -264,19 +264,7 @@ export default function AnimalDetailPage({
                   <MetricCard metricKey="pm" label="PM — Peso Materno" value={fmt(ev.pm?.dep)} unit="kg" />
                 </div>
 
-                {/* Acurácias */}
-                {(ev.pn?.ac || ev.pd?.ac || ev.ps?.ac) && (
-                  <>
-                    <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Acurácias (%)</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
-                      {ev.pn?.ac != null && <MetricCard metricKey="pn" label="AC% — PN" value={`${ev.pn.ac}`} unit="%" />}
-                      {ev.pd?.ac != null && <MetricCard metricKey="pd" label="AC% — PD" value={`${ev.pd.ac}`} unit="%" />}
-                      {ev.pa?.ac != null && <MetricCard metricKey="pa" label="AC% — PA" value={`${ev.pa.ac}`} unit="%" />}
-                      {ev.ps?.ac != null && <MetricCard metricKey="ps" label="AC% — PS" value={`${ev.ps.ac}`} unit="%" />}
-                      {ev.pm?.ac != null && <MetricCard metricKey="pm" label="AC% — PM" value={`${ev.pm.ac}`} unit="%" />}
-                    </div>
-                  </>
-                )}
+
 
                 {/* Reprodução */}
                 <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Reprodução</h3>

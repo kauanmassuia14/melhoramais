@@ -801,36 +801,51 @@ def delete_upload(
     if current_user.role != "admin" and upload.id_farm != current_user.id_farm:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # 1. Obter os IDs de animais vinculados a esse upload
-    animais_ids = [a.id_animal for a in db.query(Animal.id_animal).filter(Animal.upload_id == upload_id).all()]
+    # 1. Tenta deletar dados legacy de forma segura (ignora se as tabelas não existirem)
+    try:
+        animais_ids = [a.id_animal for a in db.query(Animal.id_animal).filter(Animal.upload_id == upload_id).all()]
+        if animais_ids:
+            db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
+        db.query(Animal).filter(Animal.upload_id == upload_id).delete(synchronize_session=False)
+        db.flush()
+    except Exception as e:
+        logger.warning(f"Bypassing legacy silver animal deletion because table doesn't exist: {e}")
+        db.rollback()
+        # Restaura o objeto upload na sessão após o rollback
+        upload = db.query(Upload).filter(Upload.upload_id == upload_id).first()
+        if not upload:
+            raise HTTPException(status_code=404, detail="Upload not found after transaction rollback")
     
-    # 2. Deletar os dados raw correspondentes, caso existam na base (importante para não sobrar lixo)
-    if animais_ids:
-        db.query(RawAnimalData).filter(RawAnimalData.id_animal.in_(animais_ids)).delete(synchronize_session=False)
-
-    # 3. Deletar os Animais da tabela principal
-    db.query(Animal).filter(Animal.upload_id == upload_id).delete(synchronize_session=False)
-    
-    # 4. Deletar genetics.animals e genetics.genetic_evaluations
-    genetics_animals = db.execute(
-        text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
-        {"upload_id": upload_id}
-    ).fetchall()
-    
-    if genetics_animals:
-        animal_ids = [a[0] for a in genetics_animals]
-        db.execute(
-            text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
-            {"animal_ids": animal_ids}
-        )
-        db.execute(
-            text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+    # 2. Deleta genetics.animals e genetics.genetic_evaluations
+    try:
+        genetics_animals = db.execute(
+            text("SELECT id FROM genetics.animals WHERE upload_id = :upload_id"),
             {"upload_id": upload_id}
-        )
+        ).fetchall()
+        
+        if genetics_animals:
+            animal_ids = [a[0] for a in genetics_animals]
+            db.execute(
+                text("DELETE FROM genetics.genetic_evaluations WHERE animal_id = ANY(:animal_ids)"),
+                {"animal_ids": animal_ids}
+            )
+            db.execute(
+                text("DELETE FROM genetics.animals WHERE upload_id = :upload_id"),
+                {"upload_id": upload_id}
+            )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting genetics data: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error deleting genetics data: {str(e)}")
     
-    # 5. Deletar a entrada de upload
-    db.delete(upload)
-    db.commit()
+    # 3. Deleta a entrada de upload
+    try:
+        db.delete(upload)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error finalizing upload deletion: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error during commit: {str(e)}")
     
     return {"message": "Upload and associated data deleted successfully"}
 

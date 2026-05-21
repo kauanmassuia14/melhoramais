@@ -101,7 +101,7 @@ export default function AnimalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, sexo, page]);
+  }, [search, sexo, fonteOrigem, farmId, page]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
@@ -202,7 +202,7 @@ export default function AnimalsPage() {
 
   const columns = [
     "", "RGN", "Nome", "Sexo", "Nascimento", "Genotipado", "CSG",
-    "Índice (IABCZG)", "Deca", "DEP Desmama", "DEP Sobreano", "Fonte", "",
+    "IABCZ", "Deca", "MGTe", "TOP", "IQG", "Fonte", "",
   ];
 
   return (
@@ -290,6 +290,7 @@ export default function AnimalsPage() {
                   <option value="" className="bg-deep-dark text-white">Todas</option>
                   <option value="PMGZ" className="bg-deep-dark text-white">PMGZ</option>
                   <option value="ANCP" className="bg-deep-dark text-white">ANCP</option>
+                  <option value="GENEPLUS" className="bg-deep-dark text-white">Geneplus</option>
                 </select>
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -343,7 +344,7 @@ export default function AnimalsPage() {
                     <th
                       key={idx}
                       className={`px-4 py-3 text-[10px] text-text-muted uppercase tracking-wider font-semibold ${
-                        ["Índice (IABCZG)", "DEP Desmama", "DEP Sobreano"].includes(col)
+                        ["IABCZ", "Deca", "MGTe", "TOP", "IQG"].includes(col)
                           ? "text-right"
                           : "text-left"
                       }`}
@@ -367,7 +368,7 @@ export default function AnimalsPage() {
                       <td className="px-4 py-3">
                          <div className="h-4 w-4 bg-white/[0.04] rounded animate-pulse" />
                       </td>
-                      {Array.from({ length: 12 }).map((_, j) => (
+                      {Array.from({ length: 13 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 bg-white/[0.04] rounded animate-pulse" />
                         </td>
@@ -376,13 +377,16 @@ export default function AnimalsPage() {
                   ))
                 ) : animals.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-12 text-center">
+                    <td colSpan={14} className="px-4 py-12 text-center">
                       <p className="text-text-muted text-sm">Nenhum animal encontrado</p>
                     </td>
                   </tr>
                 ) : (
                   animals.map((animal, i) => {
-                    const ev = animal.evaluations?.[0];
+                    const pmgzEval = animal.evaluations?.find(e => e.fonte_origem === 'PMGZ');
+                    const ancpEval = animal.evaluations?.find(e => e.fonte_origem === 'ANCP');
+                    const geneplusEval = animal.evaluations?.find(e => e.fonte_origem === 'GENEPLUS');
+                    const primaryEval = animal.evaluations?.[0];
                     const isSelected = selectedIds.has(animal.id);
                     return (
                       <motion.tr
@@ -448,38 +452,53 @@ export default function AnimalsPage() {
                           )}
                         </td>
 
-                        {/* IABCZG */}
+                        {/* IABCZ (PMGZ) */}
                         <td className="px-4 py-3 text-right">
-                          {ev?.iabczg != null ? (
+                          {pmgzEval?.iabczg != null ? (
                             <span className="font-mono text-sm font-semibold text-cyan-400">
-                              {Number(ev.iabczg).toFixed(2)}
+                              {Number(pmgzEval.iabczg).toFixed(2)}
                             </span>
                           ) : (
                             <span className="text-text-muted text-xs">—</span>
                           )}
                         </td>
 
-                        {/* Deca */}
-                        <td className="px-4 py-3">
-                          {getDecaBadge(ev?.deca_index ?? ev?.pd?.deca ?? ev?.pn?.deca)}
+                        {/* Deca (PMGZ) */}
+                        <td className="px-4 py-3 text-right">
+                          {pmgzEval?.deca_index != null ? (
+                            getDecaBadge(pmgzEval.deca_index)
+                          ) : (
+                            <span className="text-text-muted text-xs">—</span>
+                          )}
                         </td>
 
-                        {/* DEP Desmama (pd) */}
+                        {/* MGTe (ANCP) */}
                         <td className="px-4 py-3 text-right">
-                          {ev?.pd?.dep != null ? (
-                            <span className="font-mono text-sm text-amber-400">
-                              {fmt(ev.pd.dep)}
+                          {ancpEval?.iabczg != null ? (
+                            <span className="font-mono text-sm font-semibold text-emerald-400">
+                              {Number(ancpEval.iabczg).toFixed(2)}
                             </span>
                           ) : (
                             <span className="text-text-muted text-xs">—</span>
                           )}
                         </td>
 
-                        {/* DEP Sobreano (ps) */}
+                        {/* TOP (ANCP) */}
                         <td className="px-4 py-3 text-right">
-                          {ev?.ps?.dep != null ? (
-                            <span className="font-mono text-sm text-orange-400">
-                              {fmt(ev.ps.dep)}
+                          {ancpEval?.deca_index != null ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-violet-500/20 text-violet-400">
+                              TOP {ancpEval.deca_index}%
+                            </span>
+                          ) : (
+                            <span className="text-text-muted text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* IQG (Geneplus) */}
+                        <td className="px-4 py-3 text-right">
+                          {geneplusEval?.iabczg != null ? (
+                            <span className="font-mono text-sm font-semibold text-amber-400">
+                              {Number(geneplusEval.iabczg).toFixed(2)}
                             </span>
                           ) : (
                             <span className="text-text-muted text-xs">—</span>
@@ -488,9 +507,9 @@ export default function AnimalsPage() {
 
                         {/* Fonte */}
                         <td className="px-4 py-3">
-                          {ev?.fonte_origem ? (
+                          {primaryEval?.fonte_origem ? (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-text-secondary">
-                              {ev.fonte_origem}
+                              {primaryEval.fonte_origem}
                             </span>
                           ) : (
                             <span className="text-text-muted text-xs">—</span>
@@ -500,7 +519,7 @@ export default function AnimalsPage() {
                         {/* Link */}
                         <td className="px-4 py-3">
                           <Link
-                            href={`/animals/${animal.id}`}
+                             href={`/animals/${animal.id}`}
                             className="text-xs text-emerald-glow-400 opacity-0 group-hover:opacity-100 hover:text-emerald-glow-300 transition-all"
                           >
                             Detalhes →

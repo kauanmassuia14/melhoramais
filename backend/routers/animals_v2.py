@@ -113,8 +113,8 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
         "id": str(e.id),
         "safra": e.safra,
         "fonte_origem": e.fonte_origem,
-        "iabczg": float(e.indice_principal) if e.indice_principal else (float(e.iabczg) if hasattr(e, 'iabczg') and e.iabczg else None),
-        "deca_index": e.rank_principal if e.rank_principal else (e.deca_index if hasattr(e, 'deca_index') else None),
+        "iabczg": float(e.indice_principal) if e.indice_principal is not None else (float(e.iabczg) if hasattr(e, 'iabczg') and e.iabczg is not None else None),
+        "deca_index": float(e.percentil_principal) if e.percentil_principal is not None else (e.rank_principal if e.rank_principal is not None else None),
         "metrics": metrics,
         # Pesos
         "pn": normalize_metric(metrics.get("PN-EDg") or metrics.get("DPN")),
@@ -375,13 +375,22 @@ def list_animals(
 
     results = []
     for a in animals:
-        latest_eval = (
+        eval_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id == a.id)
+        if fonte_origem:
+            eval_query = eval_query.filter(GeneticsGeneticEvaluation.fonte_origem == fonte_origem)
+        
+        latest_eval = eval_query.order_by(GeneticsGeneticEvaluation.safra.desc()).first()
+        
+        all_evals = (
             db.query(GeneticsGeneticEvaluation)
             .filter(GeneticsGeneticEvaluation.animal_id == a.id)
             .order_by(GeneticsGeneticEvaluation.safra.desc())
-            .first()
+            .all()
         )
-        results.append(animal_to_dict(a, latest_eval))
+        
+        animal_dict = animal_to_dict(a, latest_eval)
+        animal_dict["evaluations"] = [eval_to_dict(e) for e in all_evals]
+        results.append(animal_dict)
 
     return {"total": total, "limit": limit, "offset": offset, "data": results}
 

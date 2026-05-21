@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: viruss
       POSTGRES_DB: melhoramais_agro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -21,7 +21,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://kauan:viruss@db:5432/melhoramais_agro
+      DATABASE_URL: postgresql://kauan:viruss@db:5432/melhoramais_agro?sslmode=disable
       ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
       - db
