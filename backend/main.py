@@ -1028,15 +1028,25 @@ def generate_dashboard_report(
     # Fetch animals if requested
     animals_data = None
     if include_animals:
-        animals_list = animal_query.limit(200).all()
+        animals_list = animal_query.all()
         animals_data = []
-        for a in animals_list:
-            latest_eval = (
+        
+        # Optimize N+1 Query: Fetch all evaluations in a single query
+        animal_ids = [a.id for a in animals_list]
+        eval_map = {}
+        if animal_ids:
+            all_evals_for_list = (
                 db.query(GeneticsGeneticEvaluation)
-                .filter(GeneticsGeneticEvaluation.animal_id == a.id)
-                .order_by(GeneticsGeneticEvaluation.safra.desc())
-                .first()
+                .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+                .all()
             )
+            for ev in all_evals_for_list:
+                existing = eval_map.get(ev.animal_id)
+                if not existing or (ev.safra and (not existing.safra or ev.safra > existing.safra)):
+                    eval_map[ev.animal_id] = ev
+
+        for a in animals_list:
+            latest_eval = eval_map.get(a.id)
 
             p210_val = None
             p365_val = None
@@ -1084,7 +1094,7 @@ def generate_dashboard_report(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=relatorio_dashboard_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+            "Content-Disposition": f"attachment; filename=relatorio_dashboard_{datetime.now(timezone(timedelta(hours=-3))).strftime('%Y%m%d_%H%M')}.pdf"
         },
     )
 

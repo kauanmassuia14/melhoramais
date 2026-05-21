@@ -13,7 +13,7 @@ from reportlab.platypus import (
     PageBreak, HRFlowable, Image
 )
 from reportlab.pdfgen import canvas
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import io
 import os
 import statistics
@@ -152,7 +152,7 @@ class ReportGeneratorV2:
         canvas_obj.setFont("Helvetica", 8)
         canvas_obj.drawRightString(
             A4[0] - 15 * mm, A4[1] - 13 * mm,
-            f"Gerado em: {datetime.now().strftime('%d/%m/%Y')}"
+            f"Gerado em: {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y')}"
         )
         canvas_obj.drawRightString(
             A4[0] - 15 * mm, A4[1] - 18 * mm,
@@ -196,7 +196,7 @@ class ReportGeneratorV2:
         # Title
         story.append(Paragraph(f"Relatório Genético", self.styles["ReportTitle"]))
         story.append(Paragraph(
-            f"Fazenda: {farm_name} | {len(animals)} animais | Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}",
+            f"Fazenda: {farm_name} | {len(animals)} animais | Gerado em {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y às %H:%M')}",
             self.styles["ReportSubtitle"]
         ))
         
@@ -498,7 +498,7 @@ class ReportGeneratorV2:
             title_text += f" — {farm_name}"
         story.append(Paragraph(title_text, self.styles["ReportTitle"]))
         story.append(Paragraph(
-            f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}",
+            f"Gerado em {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y às %H:%M')}",
             self.styles["ReportSubtitle"]
         ))
         
