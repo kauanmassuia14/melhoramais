@@ -10,12 +10,16 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable
+    PageBreak, HRFlowable, Image
 )
 from reportlab.pdfgen import canvas
 from datetime import datetime
 import io
+import os
 import statistics
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 # ==============================================================================
@@ -466,4 +470,366 @@ class ReportGeneratorV2:
                 self.styles["Footer"]
             ))
         
+        return story
+
+    def generate_dashboard_report(
+        self,
+        stats: dict,
+        animals: list = None,
+        logs: list = None,
+        farm_name: str = None,
+    ) -> bytes:
+        """Gera o relatório do Dashboard Genético com Matplotlib Charts e tabelas."""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=30 * mm,
+            bottomMargin=18 * mm,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        
+        story = []
+        
+        # Titulo Principal
+        title_text = "Relatório do Dashboard Genético"
+        if farm_name:
+            title_text += f" — {farm_name}"
+        story.append(Paragraph(title_text, self.styles["ReportTitle"]))
+        story.append(Paragraph(
+            f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}",
+            self.styles["ReportSubtitle"]
+        ))
+        
+        # Resumo Executivo & KPIs
+        story.append(Paragraph("Resumo Executivo", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
+        
+        total_anim = stats.get("total_animals", 0)
+        recent_ups = stats.get("recent_uploads", 0)
+        
+        # KPI Averages Weights
+        avg_p210 = stats.get("avg_p210")
+        avg_p365 = stats.get("avg_p365")
+        avg_p450 = stats.get("avg_p450")
+        
+        kpi_data = [
+            [
+                Paragraph("Total de Animais", self.styles["KPITitle"]),
+                Paragraph("Uploads (30 dias)", self.styles["KPITitle"]),
+                Paragraph("P210 Méd (Desmama)", self.styles["KPITitle"]),
+                Paragraph("P365 Méd (Ano)", self.styles["KPITitle"]),
+                Paragraph("P450 Méd (Sobreano)", self.styles["KPITitle"]),
+            ],
+            [
+                Paragraph(str(total_anim), self.styles["KPIValue"]),
+                Paragraph(str(recent_ups), self.styles["KPIValue"]),
+                Paragraph(f"{avg_p210:.2f} kg" if avg_p210 else "—", self.styles["KPIValue"]),
+                Paragraph(f"{avg_p365:.2f} kg" if avg_p365 else "—", self.styles["KPIValue"]),
+                Paragraph(f"{avg_p450:.2f} kg" if avg_p450 else "—", self.styles["KPIValue"]),
+            ]
+        ]
+        
+        kpi_table = Table(kpi_data, colWidths=[35 * mm, 35 * mm, 38 * mm, 36 * mm, 36 * mm])
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), HexColor("#f8fafc")),
+            ("BOX", (0, 0), (-1, -1), 1, PRINT_BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, PRINT_BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(kpi_table)
+        story.append(Spacer(1, 6 * mm))
+        
+        # ----------------------------------------------------
+        # Seção de Gráficos e Distribuição (Visual Dashboards)
+        # ----------------------------------------------------
+        story.append(Paragraph("Distribuição e Análise Visual", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
+        
+        charts_flowables = []
+        
+        # 1. Sex distribution chart
+        sex_counts = stats.get("animals_by_sex") or {}
+        if sex_counts:
+            try:
+                sex_chart_buf = self._generate_sex_distribution_chart(sex_counts)
+                sex_chart_flowable = Image(sex_chart_buf, width=82 * mm, height=38 * mm)
+                charts_flowables.append(sex_chart_flowable)
+            except Exception as e:
+                charts_flowables.append(Paragraph(f"Erro ao gerar gráfico de sexo: {str(e)}", self.styles["TableCell"]))
+        
+        # 2. ANCP vs PMGZ Metrics Comparison Chart
+        pmgz_evals = []
+        ancp_evals = []
+        for anim in (animals or []):
+            fo = anim.get("fonte_origem")
+            metrics = anim.get("metrics") or {}
+            if not metrics:
+                continue
+            if fo == "PMGZ":
+                pmgz_evals.append(metrics)
+            elif fo == "ANCP":
+                ancp_evals.append(metrics)
+                
+        pmgz_avgs = {}
+        ancp_avgs = {}
+        
+        def get_avg_dep(evals_list, pmgz_key, ancp_key):
+            values = []
+            for ev in evals_list:
+                m = ev.get(pmgz_key) or ev.get(ancp_key)
+                if m and m.get("dep") is not None:
+                    try:
+                        values.append(float(m["dep"]))
+                    except:
+                        pass
+            return statistics.mean(values) if values else 0.0
+            
+        if pmgz_evals:
+            pmgz_avgs['pd'] = get_avg_dep(pmgz_evals, 'PD-EDg', 'DP210')
+            pmgz_avgs['ps'] = get_avg_dep(pmgz_evals, 'PS-EDg', 'DP450')
+            pmgz_avgs['pm'] = get_avg_dep(pmgz_evals, 'PM-EMg', 'DIPM')
+            pmgz_avgs['pe'] = get_avg_dep(pmgz_evals, 'PE-365g', 'DPE')
+            pmgz_avgs['aol'] = get_avg_dep(pmgz_evals, 'AOLg', 'DAOL')
+            
+        if ancp_evals:
+            ancp_avgs['pd'] = get_avg_dep(ancp_evals, 'PD-EDg', 'DP210')
+            ancp_avgs['ps'] = get_avg_dep(ancp_evals, 'PS-EDg', 'DP450')
+            ancp_avgs['pm'] = get_avg_dep(ancp_evals, 'PM-EMg', 'DIPM')
+            ancp_avgs['pe'] = get_avg_dep(ancp_evals, 'PE-365g', 'DPE')
+            ancp_avgs['aol'] = get_avg_dep(ancp_evals, 'AOLg', 'DAOL')
+            
+        if pmgz_evals or ancp_evals:
+            try:
+                comp_chart_buf = self._generate_comparison_chart(pmgz_avgs, ancp_avgs, has_pmgz=bool(pmgz_evals), has_ancp=bool(ancp_evals))
+                comp_chart_flowable = Image(comp_chart_buf, width=98 * mm, height=38 * mm)
+                charts_flowables.append(comp_chart_flowable)
+            except Exception as e:
+                charts_flowables.append(Paragraph(f"Erro ao gerar gráfico de métricas: {str(e)}", self.styles["TableCell"]))
+                
+        # Layout double charts side-by-side inside a table
+        if len(charts_flowables) >= 2:
+            charts_table = Table([[charts_flowables[0], charts_flowables[1]]], colWidths=[85 * mm, 100 * mm])
+            charts_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            story.append(charts_table)
+        elif len(charts_flowables) == 1:
+            story.append(charts_flowables[0])
+            
+        story.append(Spacer(1, 4 * mm))
+        
+        # 3. Source platforms text summary
+        source_counts = stats.get("animals_by_source") or {}
+        if source_counts:
+            source_rows = [
+                [
+                    Paragraph("Plataforma Origem", self.styles["TableHeader"]),
+                    Paragraph("Quantidade", self.styles["TableHeader"]),
+                    Paragraph("Proporção", self.styles["TableHeader"]),
+                ]
+            ]
+            for source, count in sorted(source_counts.items(), key=lambda x: -x[1]):
+                pct = (count / total_anim * 100) if total_anim > 0 else 0.0
+                source_rows.append([
+                    Paragraph(str(source), self.styles["TableCellLeft"]),
+                    Paragraph(str(count), self.styles["TableCell"]),
+                    Paragraph(f"{pct:.1f}%", self.styles["TableCell"]),
+                ])
+                
+            source_table = Table(source_rows, colWidths=[70 * mm, 50 * mm, 60 * mm])
+            source_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), PRIMARY_DARK),
+                ("TEXTCOLOR", (0, 0), (-1, 0), white),
+                ("BACKGROUND", (0, 1), (-1, -1), white),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [white, HexColor("#f8fafc")]),
+                ("BOX", (0, 0), (-1, -1), 1, PRINT_BORDER),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, PRINT_BORDER),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(source_table)
+            
+        # Animals Table (PageBreak if list is populated)
+        if animals:
+            story.append(PageBreak())
+            story.append(Paragraph("Animais do Rebanho", self.styles["SectionTitle"]))
+            story.append(HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4 * mm))
+            
+            # Draw a beautiful table of V2 animals
+            selected_cols = {
+                "basic": ["rgn_animal", "nome_animal", "sexo", "raca", "p210_peso_desmama", "p365_peso_ano", "p450_peso_sobreano"],
+                "platforms": {}
+            }
+            story.extend(self._build_animals_table_v2(animals, selected_cols))
+            
+        doc.build(story, onFirstPage=self._header, onLaterPages=self._header)
+        
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+        
+    def _generate_sex_distribution_chart(self, sex_counts: dict) -> io.BytesIO:
+        """Desenha um gráfico de pizza da distribuição por sexo em Matplotlib."""
+        labels = []
+        values = []
+        for s, count in sex_counts.items():
+            label = 'Machos' if s in ['M', 'Macho'] else 'Fêmeas' if s in ['F', 'Fêmea'] else str(s or 'Indefinido')
+            labels.append(label)
+            values.append(count)
+            
+        fig, ax = plt.subplots(figsize=(4.0, 1.8), dpi=300)
+        
+        colors = ['#0891b2', '#ec4899', '#94a3b8']
+        
+        wedges, texts, autotexts = ax.pie(
+            values, 
+            labels=labels, 
+            autopct='%1.1f%%', 
+            startangle=90, 
+            colors=colors[:len(values)],
+            textprops={'fontsize': 7, 'color': '#1e293b'},
+            wedgeprops={'edgecolor': 'white', 'linewidth': 1, 'antialiased': True}
+        )
+        
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_weight('bold')
+            autotext.set_size(6.5)
+            
+        ax.axis('equal')
+        ax.set_title('Distribuição por Sexo', fontsize=8, pad=8, weight='bold', color='#0f172a')
+        
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=300, transparent=True)
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+        
+    def _generate_comparison_chart(self, pmgz_data: dict, ancp_data: dict, has_pmgz: bool, has_ancp: bool) -> io.BytesIO:
+        """Desenha o gráfico comparativo de métricas PMGZ vs ANCP em Matplotlib."""
+        labels = ['Desmama', 'Sobreano', 'Maternal', 'PE', 'AOL']
+        keys = ['pd', 'ps', 'pm', 'pe', 'aol']
+        
+        pmgz_vals = [pmgz_data.get(k, 0.0) for k in keys]
+        ancp_vals = [ancp_data.get(k, 0.0) for k in keys]
+        
+        x = range(len(labels))
+        width = 0.3
+        
+        fig, ax = plt.subplots(figsize=(4.8, 1.8), dpi=300)
+        
+        if has_pmgz and has_ancp:
+            ax.bar([i - width/2 for i in x], pmgz_vals, width, label='PMGZ', color='#7c3aed', edgecolor='none')
+            ax.bar([i + width/2 for i in x], ancp_vals, width, label='ANCP', color='#0891b2', edgecolor='none')
+            ax.set_title('Comparativo Genético: PMGZ vs ANCP', fontsize=8, pad=8, weight='bold', color='#0f172a')
+            ax.legend(fontsize=6, loc='upper right', frameon=True, facecolor='white', edgecolor='none')
+        elif has_pmgz:
+            ax.bar(x, pmgz_vals, width*1.5, label='PMGZ', color='#7c3aed')
+            ax.set_title('Métricas Genéticas Médias: PMGZ', fontsize=8, pad=8, weight='bold', color='#0f172a')
+        else:
+            ax.bar(x, ancp_vals, width*1.5, label='ANCP', color='#0891b2')
+            ax.set_title('Métricas Genéticas Médias: ANCP', fontsize=8, pad=8, weight='bold', color='#0f172a')
+            
+        ax.set_ylabel('DEP Média', fontsize=7, color='#475569')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=6.5, color='#475569')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#cbd5e1')
+        ax.spines['bottom'].set_color('#cbd5e1')
+        ax.tick_params(colors='#475569', labelsize=6.5)
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=300, transparent=True)
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+        
+    def _build_animals_table_v2(
+        self,
+        animals: list,
+        selected_columns: dict,
+    ) -> list:
+        """Constrói tabela de animais específica para o dashboard v2."""
+        story = []
+        
+        header = [
+            Paragraph("RGN", self.styles["TableHeader"]),
+            Paragraph("Nome", self.styles["TableHeader"]),
+            Paragraph("Sexo", self.styles["TableHeader"]),
+            Paragraph("Série/Raça", self.styles["TableHeader"]),
+            Paragraph("PD (Desmama)", self.styles["TableHeader"]),
+            Paragraph("PA (Ano)", self.styles["TableHeader"]),
+            Paragraph("PS (Sobreano)", self.styles["TableHeader"]),
+            Paragraph("Origem", self.styles["TableHeader"]),
+        ]
+        
+        rows = [header]
+        
+        for animal in animals[:100]:
+            rgn = animal.get("rgn_animal") or "—"
+            nome = animal.get("nome_animal") or "—"
+            sexo = animal.get("sexo") or "—"
+            raca = animal.get("raca") or "—"
+            
+            p210 = animal.get("p210_peso_desmama")
+            p365 = animal.get("p365_peso_ano")
+            p450 = animal.get("p450_peso_sobreano")
+            
+            p210_str = f"{p210:.2f}" if p210 is not None else "—"
+            p365_str = f"{p365:.2f}" if p365 is not None else "—"
+            p450_str = f"{p450:.2f}" if p450 is not None else "—"
+            
+            origem = animal.get("fonte_origem") or "—"
+            
+            rows.append([
+                Paragraph(str(rgn), self.styles["TableCellLeft"]),
+                Paragraph(str(nome)[:22], self.styles["TableCellLeft"]),
+                Paragraph(str(sexo), self.styles["TableCell"]),
+                Paragraph(str(raca)[:15], self.styles["TableCell"]),
+                Paragraph(p210_str, self.styles["TableCell"]),
+                Paragraph(p365_str, self.styles["TableCell"]),
+                Paragraph(p450_str, self.styles["TableCell"]),
+                Paragraph(str(origem), self.styles["TableCell"]),
+            ])
+            
+        table = Table(rows, colWidths=[20*mm, 35*mm, 15*mm, 25*mm, 25*mm, 25*mm, 25*mm, 20*mm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), PRIMARY_DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), white),
+            ("BACKGROUND", (0, 1), (-1, -1), white),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [white, HexColor("#f8fafc")]),
+            ("BOX", (0, 0), (-1, -1), 0.5, PRINT_BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, PRINT_BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ]))
+        
+        story.append(table)
+        
+        if len(animals) > 100:
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph(
+                f"* Mostrando 100 de {len(animals)} animais cadastrados.",
+                self.styles["Footer"]
+            ))
+            
         return story

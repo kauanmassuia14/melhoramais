@@ -412,7 +412,7 @@ export const api = {
       id_farm: number | null; role: string; ativo: boolean;
     }>('/auth/me'),
 
-  downloadDashboardReport: async (opts?: { farmId?: number; includeAnimals?: boolean; includeLogs?: boolean }): Promise<Blob> => {
+  downloadDashboardReport: async (opts?: { farmId?: string | number; includeAnimals?: boolean; includeLogs?: boolean }): Promise<Blob> => {
     const token = getAccessToken();
     const params = new URLSearchParams();
     if (opts?.farmId) params.set('farm_id', String(opts.farmId));

@@ -71,10 +71,10 @@ export default function DashboardPage() {
                   Importar Dados
                 </GlowButton>
              </Link>
-             <Link href="/analytics">
+             <Link href="/animals">
                 <GlowButton size="sm">
-                  <ChartBarIcon className="w-4 h-4" />
-                  Ver Análises
+                  <Squares2X2Icon className="w-4 h-4" />
+                  Ver Animais
                 </GlowButton>
              </Link>
           </div>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
                 
                 <div className="flex items-center justify-between mb-6">
                    <h3 className="text-xl font-bold text-white">Estatísticas de Peso</h3>
-                   <Link href="/analytics" className="text-sm text-cyan-glow-400 hover:underline flex items-center gap-1">
+                   <Link href="/animals" className="text-sm text-cyan-glow-400 hover:underline flex items-center gap-1">
                       Ver tudo <ArrowRightIcon className="w-4 h-4" />
                    </Link>
                 </div>

@@ -29,6 +29,7 @@ from .processor import GeneticDataProcessor
 from .auth.router import router as auth_router
 from .auth.dependencies import get_current_user, require_role
 from .report_generator import ReportGenerator
+from .report_generator_v2 import ReportGeneratorV2
 from .benchmark import router as benchmark_router
 
 app = FastAPI(title="Melhora+ Genetic Data Unifier API", version="2.0.0")
@@ -922,119 +923,160 @@ def clear_all_genetics(
 # ============================================
 @app.get("/report/dashboard")
 def generate_dashboard_report(
-    farm_id: Optional[int] = Query(None),
+    farm_id: Optional[str] = Query(None),
     include_animals: bool = Query(False),
     include_logs: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Get stats
-    animal_query = db.query(Animal)
-    if current_user.role != "admin" and current_user.id_farm:
-        animal_query = animal_query.filter(Animal.id_farm == current_user.id_farm)
-    elif farm_id is not None:
-        animal_query = animal_query.filter(Animal.id_farm == farm_id)
+    import uuid as _uuid
+    import statistics
+    import json
 
+    # Access Control
+    if current_user.role != "admin" and current_user.id_farm:
+        farm_id = str(current_user.id_farm)
+
+    if not farm_id:
+        raise HTTPException(status_code=400, detail="Farm ID is required")
+
+    try:
+        farm_uuid = _uuid.UUID(str(farm_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Farm UUID")
+
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+
+    farm_name = farm.nome
+
+    # Get all animals in the farm
+    animal_query = db.query(GeneticsAnimal).filter(GeneticsAnimal.farm_id == farm_uuid)
     total_animals = animal_query.count()
 
-    if current_user.role == "admin":
-        total_farms = db.query(GeneticsFarm).count()
-    else:
-        total_farms = 1 if current_user.id_farm else 0
-
-    source_counts = (
-        db.query(Animal.fonte_origem, func.count(Animal.id_animal))
-        .group_by(Animal.fonte_origem)
+    # Sex Breakdown
+    sex_counts_query = (
+        db.query(GeneticsAnimal.sexo, func.count(GeneticsAnimal.id))
+        .filter(GeneticsAnimal.farm_id == farm_uuid)
+        .group_by(GeneticsAnimal.sexo)
         .all()
     )
-    animals_by_source = {s or "unknown": c for s, c in source_counts}
+    animals_by_sex = {s or "unknown": c for s, c in sex_counts_query}
 
-    sex_counts = (
-        db.query(Animal.sexo, func.count(Animal.id_animal))
-        .group_by(Animal.sexo)
+    # Source Platform Breakdown & Evaluations
+    eval_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.farm_id == farm_uuid)
+    source_counts_query = (
+        db.query(GeneticsGeneticEvaluation.fonte_origem, func.count(GeneticsGeneticEvaluation.id))
+        .filter(GeneticsGeneticEvaluation.farm_id == farm_uuid)
+        .group_by(GeneticsGeneticEvaluation.fonte_origem)
         .all()
     )
-    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
+    animals_by_source = {s or "unknown": c for s, c in source_counts_query}
 
+    # Calculate weight statistics (P210, P365, P450)
+    all_evals = eval_query.all()
+
+    p210_list = []
+    p365_list = []
+    p450_list = []
+
+    for ev in all_evals:
+        metrics = ev.metrics if isinstance(ev.metrics, dict) else {}
+        if isinstance(ev.metrics, str):
+            try:
+                metrics = json.loads(ev.metrics)
+            except:
+                metrics = {}
+
+        pd_m = metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")
+        if pd_m and pd_m.get("dep") is not None:
+            p210_list.append(float(pd_m["dep"]))
+
+        pa_m = metrics.get("PA-EDg") or metrics.get("DP365")
+        if pa_m and pa_m.get("dep") is not None:
+            p365_list.append(float(pa_m["dep"]))
+
+        ps_m = metrics.get("PS-EDg") or metrics.get("DP450")
+        if ps_m and ps_m.get("dep") is not None:
+            p450_list.append(float(ps_m["dep"]))
+
+    avg_p210 = statistics.mean(p210_list) if p210_list else None
+    avg_p365 = statistics.mean(p365_list) if p365_list else None
+    avg_p450 = statistics.mean(p450_list) if p450_list else None
+
+    # Recent Uploads (past 30 days)
     from datetime import datetime, timedelta, timezone
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-    log_query = db.query(ProcessingLog).filter(ProcessingLog.started_at >= thirty_days_ago)
-    if current_user.role != "admin" and current_user.id_farm:
-        log_query = log_query.filter(ProcessingLog.id_farm == current_user.id_farm)
-    recent_uploads = log_query.count()
-
-    avg_p210 = animal_query.with_entities(func.avg(Animal.p210_peso_desmama)).scalar()
-    avg_p365 = animal_query.with_entities(func.avg(Animal.p365_peso_ano)).scalar()
-    avg_p450 = animal_query.with_entities(func.avg(Animal.p450_peso_sobreano)).scalar()
+    recent_uploads = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.id_farm == farm_id, ProcessingLog.started_at >= thirty_days_ago)
+        .count()
+    )
 
     stats = {
         "total_animals": total_animals,
-        "total_farms": total_farms,
+        "total_farms": 1,
         "animals_by_source": animals_by_source,
         "animals_by_sex": animals_by_sex,
         "recent_uploads": recent_uploads,
-        "avg_p210": round(float(avg_p210), 2) if avg_p210 else None,
-        "avg_p365": round(float(avg_p365), 2) if avg_p365 else None,
-        "avg_p450": round(float(avg_p450), 2) if avg_p450 else None,
+        "avg_p210": avg_p210,
+        "avg_p365": avg_p365,
+        "avg_p450": avg_p450,
     }
 
-    # Get animals if requested
+    # Fetch animals if requested
     animals_data = None
     if include_animals:
-        animals = animal_query.limit(200).all()
-        animals_data = [
-            {
-                "rgn_animal": a.rgn_animal,
-                "nome_animal": a.nome_animal,
-                "sexo": a.sexo,
-                "raca": a.raca,
-                "p210_peso_desmama": a.p210_peso_desmama,
-                "p365_peso_ano": a.p365_peso_ano,
-                "p450_peso_sobreano": a.p450_peso_sobreano,
-                "fonte_origem": a.fonte_origem,
-            }
-            for a in animals
-        ]
+        animals_list = animal_query.limit(200).all()
+        animals_data = []
+        for a in animals_list:
+            latest_eval = (
+                db.query(GeneticsGeneticEvaluation)
+                .filter(GeneticsGeneticEvaluation.animal_id == a.id)
+                .order_by(GeneticsGeneticEvaluation.safra.desc())
+                .first()
+            )
 
-    # Get logs if requested
-    logs_data = None
-    if include_logs:
-        logs_q = db.query(ProcessingLog)
-        if current_user.role != "admin" and current_user.id_farm:
-            logs_q = logs_q.filter(ProcessingLog.id_farm == current_user.id_farm)
-        elif farm_id:
-            logs_q = logs_q.filter(ProcessingLog.id_farm == farm_id)
-        logs = logs_q.order_by(ProcessingLog.started_at.desc()).limit(20).all()
-        logs_data = [
-            {
-                "source_system": l.source_system,
-                "filename": l.filename,
-                "total_rows": l.total_rows,
-                "rows_inserted": l.rows_inserted,
-                "status": l.status,
-                "started_at": l.started_at.isoformat() if l.started_at else None,
-            }
-            for l in logs
-        ]
+            p210_val = None
+            p365_val = None
+            p450_val = None
+            metrics = {}
+            if latest_eval:
+                metrics = latest_eval.metrics if isinstance(latest_eval.metrics, dict) else {}
+                if isinstance(latest_eval.metrics, str):
+                    try:
+                        metrics = json.loads(latest_eval.metrics)
+                    except:
+                        metrics = {}
 
-    # Get farm name from genetics.farms
-    farm_name = None
-    if current_user.id_farm:
-        import uuid as _uuid
-        try:
-            farm_uuid = _uuid.UUID(str(current_user.id_farm))
-            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
-            if farm:
-                farm_name = farm.nome
-        except (ValueError, AttributeError):
-            pass
+                pd_m = metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")
+                if pd_m and pd_m.get("dep") is not None:
+                    p210_val = float(pd_m["dep"])
+                pa_m = metrics.get("PA-EDg") or metrics.get("DP365")
+                if pa_m and pa_m.get("dep") is not None:
+                    p365_val = float(pa_m["dep"])
+                ps_m = metrics.get("PS-EDg") or metrics.get("DP450")
+                if ps_m and ps_m.get("dep") is not None:
+                    p450_val = float(ps_m["dep"])
+
+            animals_data.append({
+                "rgn_animal": a.rgn,
+                "nome_animal": a.nome or "—",
+                "sexo": a.sexo or "—",
+                "raca": a.serie or "—",
+                "p210_peso_desmama": p210_val,
+                "p365_peso_ano": p365_val,
+                "p450_peso_sobreano": p450_val,
+                "fonte_origem": latest_eval.fonte_origem if latest_eval else "—",
+                "metrics": metrics,
+            })
 
     # Generate PDF
-    generator = ReportGenerator()
+    generator = ReportGeneratorV2()
     pdf_bytes = generator.generate_dashboard_report(
         stats=stats,
         animals=animals_data,
-        logs=logs_data,
         farm_name=farm_name,
     )
 

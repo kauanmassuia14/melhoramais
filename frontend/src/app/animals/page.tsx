@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -61,13 +62,16 @@ const fmtDate = (d: string | null) => {
 };
 
 export default function AnimalsPage() {
+  const searchParams = useSearchParams();
+  const initialFarmId = searchParams.get("farm_id") || "";
+  
   const [animals, setAnimals] = useState<AnimalV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sexo, setSexo] = useState("");
   const [fonteOrigem, setFonteOrigem] = useState("");
-  const [farmId, setFarmId] = useState("");
+  const [farmId, setFarmId] = useState(initialFarmId);
   const [farms, setFarms] = useState<{ id: string, nome: string }[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -154,18 +158,22 @@ export default function AnimalsPage() {
   const handleExportPDF = async () => {
     try {
       showToast("Gerando PDF...", "info");
-      const farms = await api.getGeneticsFarms();
-      if (farms.length === 0) throw new Error("Nenhuma fazenda encontrada");
+      const targetFarmId = farmId || (farms.length > 0 ? farms[0].id : null);
+      if (!targetFarmId) throw new Error("Nenhuma fazenda encontrada ou selecionada");
       
       const blob = await api.downloadDashboardReport({ 
-        farmId: Number(farms[0].id), 
+        farmId: targetFarmId, 
         includeAnimals: true 
       });
       
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `relatorio_animais_${new Date().toISOString().slice(0, 10)}.pdf`;
+      
+      const selectedFarm = farms.find(f => f.id === targetFarmId);
+      const farmName = selectedFarm ? selectedFarm.nome.replace(/\s+/g, '_').toLowerCase() : "fazenda";
+      a.download = `relatorio_${farmName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      
       document.body.appendChild(a);
       a.click();
       a.remove();

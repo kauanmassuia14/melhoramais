@@ -146,7 +146,7 @@ export default function FarmsPage() {
   };
 
   const handleFarmClick = (farmId: string) => {
-    router.push(`/analytics?farm_id=${farmId}`);
+    router.push(`/animals?farm_id=${farmId}`);
   };
 
   const isAdmin = user?.role === "admin";
