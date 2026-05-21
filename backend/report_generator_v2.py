@@ -132,7 +132,10 @@ class ReportGeneratorV2:
         canvas_obj.rect(0, A4[1] - 25 * mm, A4[0], 25 * mm, fill=1, stroke=0)
         
         # Logo
-        logo_path = "backend/static/logo.png"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.abspath(os.path.join(
+            current_dir, "..", "frontend", "public", "assets", "images", "logomelhoramais.png"
+        ))
         try:
             canvas_obj.drawImage(logo_path, 15 * mm, A4[1] - 20 * mm, width=15 * mm, height=15 * mm, mask='auto')
         except:
