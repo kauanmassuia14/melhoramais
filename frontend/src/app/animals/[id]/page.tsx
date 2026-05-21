@@ -66,6 +66,18 @@ const fmtDate = (d: string | null) => {
   return new Date(d).toLocaleDateString("pt-BR");
 };
 
+const getIndexLabel = (src: string | null | undefined) => {
+  if (src === "ANCP") return "MGTe";
+  if (src === "GENEPLUS") return "IQG";
+  return "iABCZ";
+};
+
+const getDecaLabel = (src: string | null | undefined) => {
+  if (src === "ANCP") return "TOP";
+  if (src === "GENEPLUS") return "Percentil";
+  return "DECA";
+};
+
 export default function AnimalDetailPage({
   params,
 }: {
@@ -250,8 +262,8 @@ export default function AnimalDetailPage({
 
                 {/* Global */}
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <MetricCard metricKey="iabczg" label="iABCZ — Índice Global" value={fmt(ev.iabczg)} />
-                  <MetricCard metricKey="deca" label="DECA — Decil" value={decanil?.toString()} />
+                  <MetricCard metricKey="iabczg" label={`${getIndexLabel(ev.fonte_origem)} — Índice Global`} value={fmt(ev.iabczg)} />
+                  <MetricCard metricKey="deca" label={`${getDecaLabel(ev.fonte_origem)} — Decil`} value={decanil != null ? decanil.toString() + (ev.fonte_origem === "ANCP" || ev.fonte_origem === "GENEPLUS" ? "%" : "") : null} />
                 </div>
 
                 {/* Pesos */}
