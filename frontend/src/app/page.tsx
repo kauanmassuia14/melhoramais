@@ -17,17 +17,34 @@ import {
 import { GlowButton } from "@/components/ui/glow-button";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { DashboardPlatformChart } from "@/components/features/DashboardPlatformChart";
+import type { DashboardPlatformData } from "@/lib/mock-comparison-data";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [platformData, setPlatformData] = useState<DashboardPlatformData | null>(null);
+  const [platformLoading, setPlatformLoading] = useState(true);
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
       loadStats();
+      loadPlatformData();
     }
   }, []);
+
+  const loadPlatformData = async () => {
+    setPlatformLoading(true);
+    try {
+      const data = await api.getPlatformOverviewStats();
+      setPlatformData(data);
+    } catch {
+      // Silently fail — chart won't render
+    } finally {
+      setPlatformLoading(false);
+    }
+  };
 
   const loadStats = async () => {
     setLoading(true);
@@ -175,7 +192,48 @@ export default function DashboardPage() {
                          </div>
                        );
                     })}
-                 </div>
+                  </div>
+               </GlassCard>
+            </div>
+
+            {/* ── Comparação entre Plataformas ───────────────────────────── */}
+            <div className="grid grid-cols-1 gap-6">
+              <GlassCard className="p-6 min-h-[300px] flex flex-col justify-center relative overflow-hidden">
+                {platformLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
+                    {/* Animated spinner/glow */}
+                    <div className="relative w-14 h-14 flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
+                      <SparklesIcon className="w-5 h-5 text-cyan-400 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Processando dados genéticos...</h4>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm">Estamos consolidando as métricas das fazendas para comparação.</p>
+                    </div>
+                    {/* Progress bar or time estimate */}
+                    <div className="w-full max-w-[240px] space-y-1.5">
+                      <div className="w-full h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                        <motion.div 
+                          className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500"
+                          initial={{ width: "0%" }}
+                          animate={{ width: "95%" }}
+                          transition={{ duration: 4, ease: "easeInOut" }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-600 font-mono">
+                        <span>Tempo estimado: ~3s</span>
+                        <span>Carregando...</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : platformData ? (
+                  <DashboardPlatformChart data={platformData} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <ExclamationTriangleIcon className="w-8 h-8 text-slate-600 mb-2" />
+                    <p className="text-sm text-slate-500">Nenhum dado de avaliação genética disponível.</p>
+                  </div>
+                )}
               </GlassCard>
             </div>
 

@@ -15,9 +15,15 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
 import { MetricCard } from "@/components/ui/MetricCard";
 
+// Features de Comparação
+import { PlatformComparisonChart } from "@/components/features/PlatformComparisonChart";
+import { RadarComparisonChart } from "@/components/features/RadarComparisonChart";
+import { MelhoraPlusForm } from "@/components/features/MelhoraPlusForm";
+import type { AnimalComparisonData } from "@/lib/mock-comparison-data";
+
 interface EvaluationMetric {
   dep: number | null;
-  ac: number | null;
+  acc: number | null;
   deca: number | null;
   p_percent: number | null;
 }
@@ -88,6 +94,10 @@ export default function AnimalDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Estados adicionais para gráficos e dados Melhora+ interactivos
+  const [comparisonData, setComparisonData] = useState<AnimalComparisonData | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
   const fetchAnimal = async () => {
     setLoading(true);
     setError(null);
@@ -101,9 +111,20 @@ export default function AnimalDetailPage({
     }
   };
 
+  const fetchComparison = async () => {
+    try {
+      const data = await api.getAnimalComparison(id);
+      setComparisonData(data);
+    } catch (err: unknown) {
+      // Silently fail — charts will just not render
+      console.warn("Erro ao carregar comparação:", err);
+    }
+  };
+
   useEffect(() => {
     if (id && typeof window !== "undefined" && localStorage.getItem("access_token")) {
       fetchAnimal();
+      fetchComparison();
     }
   }, [id]);
 
@@ -114,6 +135,41 @@ export default function AnimalDetailPage({
     if (s === "M") return "Macho";
     if (s === "F") return "Fêmea";
     return "—";
+  };
+
+  // Salvar dados manuais do Melhora+ no estado local
+  const handleSaveMelhoraPlus = (saved: {
+    metrics: Record<string, { dep: number | null; acc: number | null }>;
+    notas: string;
+  }) => {
+    setComparisonData((prev) => {
+      // Cria a estrutura de dados compatível com PlatformData
+      const formattedMetrics: Record<string, EvaluationMetric> = {};
+      Object.entries(saved.metrics).forEach(([key, val]) => {
+        formattedMetrics[key] = {
+          dep: val.dep,
+          acc: val.acc,
+          deca: null,
+          p_percent: null,
+        };
+      });
+
+      const base = prev || { animal: { id, rgn: "", nome: "" }, platforms: {}, available_metrics: [] };
+
+      return {
+        ...base,
+        platforms: {
+          ...base.platforms,
+          MELHORA_PLUS: {
+            fonte: "MELHORA_PLUS",
+            safra: 2026,
+            indice_principal: 10.0,
+            rank: null,
+            metrics: formattedMetrics,
+          },
+        },
+      };
+    });
   };
 
   return (
@@ -197,8 +253,8 @@ export default function AnimalDetailPage({
                 {/* Série */}
                 {animal.serie && (
                   <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Série</span>
-                    <span className="font-mono text-lg font-bold text-white">{animal.serie}</span>
+                     <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">Série</span>
+                     <span className="font-mono text-lg font-bold text-white">{animal.serie}</span>
                   </div>
                 )}
                 {/* Nome */}
@@ -247,6 +303,22 @@ export default function AnimalDetailPage({
               </div>
             </GlassCard>
 
+            {/* ── Comparação entre Plataformas ───────────────────────────── */}
+            {comparisonData && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <GlassCard className="lg:col-span-2 p-6">
+                <PlatformComparisonChart
+                  data={comparisonData}
+                  onOpenMelhoraForm={() => setIsFormOpen(true)}
+                />
+              </GlassCard>
+
+              <GlassCard className="p-6">
+                <RadarComparisonChart data={comparisonData} />
+              </GlassCard>
+            </div>
+            )}
+
             {/* ── Índices Genéticos ──────────────────────────────────────── */}
             {ev && (
               <GlassCard className="p-6">
@@ -275,8 +347,6 @@ export default function AnimalDetailPage({
                   <MetricCard metricKey="ps" label="PS — Peso Sobreano" value={fmt(ev.ps?.dep)} unit="kg" />
                   <MetricCard metricKey="pm" label="PM — Peso Materno" value={fmt(ev.pm?.dep)} unit="kg" />
                 </div>
-
-
 
                 {/* Reprodução */}
                 <h3 className="text-[10px] text-text-muted uppercase tracking-wider mb-3 mt-2">Reprodução</h3>
@@ -315,6 +385,23 @@ export default function AnimalDetailPage({
           </motion.div>
         )}
       </div>
+
+      {/* Modal Form Melhora+ */}
+      {animal && (
+        <MelhoraPlusForm
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          animalName={animal.nome || ""}
+          animalRgn={animal.rgn || ""}
+          existingData={
+            comparisonData?.platforms?.MELHORA_PLUS?.metrics as Record<
+              string,
+              { dep: number | null; acc: number | null }
+            > || undefined
+          }
+          onSave={handleSaveMelhoraPlus}
+        />
+      )}
     </DashboardLayout>
   );
 }

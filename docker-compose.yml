@@ -21,7 +21,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://kauan:viruss@db:5432/melhoramais_agro?sslmode=disable
+      DATABASE_URL: postgresql://neondb_owner:npg_OHiFUPo9X0le@ep-cool-resonance-acsa3yku.sa-east-1.aws.neon.tech/neondb?sslmode=require
       ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
     depends_on:
       - db

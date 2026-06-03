@@ -382,7 +382,7 @@ class UserCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     senha: str = Field(..., min_length=6, max_length=128)
-    id_farm: Optional[int] = None
+    id_farm: Optional[str] = None
     role: Optional[str] = "user"
 
 
@@ -395,7 +395,7 @@ class UserResponse(BaseModel):
     id: int
     nome: str
     email: str
-    id_farm: Optional[int]
+    id_farm: Optional[str]
     role: str
     ativo: bool
     ultimo_login: Optional[datetime]

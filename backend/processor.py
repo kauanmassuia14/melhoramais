@@ -181,6 +181,15 @@ class GeneticDataProcessor:
                     "Nascimento": "data_nascimento"
                 }
                 required = ["RGN"]
+            elif source_system == "GENEPLUS":
+                col_map = {
+                    "Ident": "rgn_animal",
+                    "Nome": "nome_animal",
+                    "Sx": "sexo",
+                    "Dtn": "data_nascimento",
+                    "Cc": "raca",
+                }
+                required = ["Ident"]
 
         # Para PMGZ, o loader já faz o mapeamento completo e robusto.
         # Não precisamos do _match_columns genérico que pode falhar com as colunas já renomeadas.
@@ -322,6 +331,13 @@ class GeneticDataProcessor:
             "gen_pn", "gen_p120", "gen_tmd", "gen_pd", "gen_tm120", "gen_ps", "gen_gpd", "gen_cfd", "gen_cfs",
             "gen_hp_stay", "gen_rd", "gen_egs", "gen_acab", "gen_mar",
             "gen_ac_iqg", "gen_ac_pmm", "gen_ac_p",
+            "gen_pt_iqg", "gen_iqg_basico", "gen_pt_iqg_bat",
+            "gen_dep_pn", "gen_acc_pn", "gen_dep_pmm", "gen_acc_pmm", "gen_dep_tmm", "gen_acc_tmm",
+            "gen_dep_pd", "gen_acc_pd", "gen_dep_tmd", "gen_acc_tmd", "gen_dep_ps", "gen_acc_ps",
+            "gen_dep_gpd", "gen_acc_gpd", "gen_dep_cfd", "gen_acc_cfd", "gen_dep_cfs", "gen_acc_cfs",
+            "gen_dep_stay", "gen_acc_stay", "gen_dep_pes", "gen_acc_pes", "gen_dep_ipp", "gen_acc_ipp",
+            "gen_dep_pp30", "gen_acc_pp30", "gen_dep_rd", "gen_acc_rd", "gen_dep_aol", "gen_acc_aol",
+            "gen_dep_egs", "gen_acc_egs", "gen_dep_mar", "gen_acc_mar", "gen_dep_car", "gen_acc_car",
             "pmg_iabc", "pmg_zpmm", "pmg_p", "pmg_dp", "pmg_sp", "pmg_e", "pmg_sao", "pmg_leg", "pmg_sh",
             "pmg_pp30", "pmg_pn", "pmg_pa", "pmg_ps", "pmg_pm", "pmg_ipp", "pmg_stay", "pmg_pe", "pmg_aol",
             "pmg_acab", "pmg_mar", "pmg_deca", "pmg_deca_pn", "pmg_deca_p12", "pmg_deca_ps", "pmg_deca_stay",
@@ -592,6 +608,29 @@ class GeneticDataProcessor:
                         "CAR": ("CAR", "ACC_CAR", "TOP_CAR", None),
                         "IMS": ("IMS", "ACC_IMS", "TOP_IMS", None),
                     }
+                elif source_system == "GENEPLUS":
+                    # Geneplus usa DepXX / AccXX como convenção
+                    # Chaves do metrics JSONB usam nomes normalizados para cross-platform comparison
+                    dep_map = {
+                        "PN":    ("DepPN",   "AccPN",   None, None),
+                        "PMm":   ("DepPMm",  "AccPMm",  None, None),
+                        "TMm":   ("DepTMm",  "AccTMm",  None, None),
+                        "PD":    ("DepPD",   "AccPD",   None, None),
+                        "TMD":   ("DepTMD",  "AccTMD",  None, None),
+                        "PS":    ("DepPS",   "AccPS",   None, None),
+                        "GPD":   ("DepGPD",  "AccGPD",  None, None),
+                        "CFD":   ("DepCFD",  "AccCFD",  None, None),
+                        "CFS":   ("DepCFS",  "AccCFS",  None, None),
+                        "STAY":  ("DepSTAY", "AccSTAY", None, None),
+                        "PES":   ("DepPES",  "AccPES",  None, None),
+                        "IPP":   ("DepIPP",  "AccIPP",  None, None),
+                        "PP30":  ("DepPP30", "AccPP30", None, None),
+                        "RD":    ("DepRD",   "AccRD",   None, None),
+                        "AOL":   ("DepAOL",  "AccAOL",  None, None),
+                        "EGS":   ("DepEGS",  "AccEGS",  None, None),
+                        "MAR":   ("DepMAR",  "AccMAR",  None, None),
+                        "CAR":   ("DepCAR",  "AccCAR",  None, None),
+                    }
                 else:
                     dep_map = {}
 
@@ -615,8 +654,8 @@ class GeneticDataProcessor:
                     indice_val = safe_float(get_val(row, 'MGTe') or get_val(row, 'mgte'))
                     rank_val = safe_float(get_val(row, 'TOP_MGTe') or get_val(row, 'top_mgte') or get_val(row, 'TOP') or get_val(row, 'top'))
                 elif source_system == "GENEPLUS":
-                    indice_val = safe_float(get_val(row, 'iqg') or get_val(row, 'IQG'))
-                    rank_val = safe_float(get_val(row, 'percentil') or get_val(row, 'percentil_iqg') or get_val(row, 'TOP') or get_val(row, 'top'))
+                    indice_val = safe_float(get_val(row, 'IQG') or get_val(row, 'gen_iqg'))
+                    rank_val = safe_float(get_val(row, 'PtIQG') or get_val(row, 'gen_pt_iqg'))
                 else:  # PMGZ ou outro
                     indice_val = safe_float(get_val(row, 'pmg_iabc') or get_val(row, 'identificacao_indice_iabczg') or get_val(row, 'iabczg') or get_val(row, 'iabcz'))
                     rank_val = safe_float(get_val(row, 'pmg_deca') or get_val(row, 'identificacao_indice_deca') or get_val(row, 'deca') or get_val(row, 'deca_index'))

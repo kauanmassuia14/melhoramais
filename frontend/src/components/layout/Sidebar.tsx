@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 
 const MENU_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: HomeIcon, href: "/" },
+  { id: "analytics", label: "Análises", icon: ChartBarIcon, href: "/analytics" },
   { id: "upload", label: "Upload", icon: DocumentArrowUpIcon, href: "/upload" },
   { id: "animals", label: "Animais", icon: Squares2X2Icon, href: "/animals" },
   { id: "farms", label: "Fazendas", icon: BuildingOffice2Icon, href: "/farms" },

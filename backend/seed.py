@@ -105,77 +105,95 @@ def seed_mappings_only(db: Session):
     ])
 
     # =============================================
-    # GENEPLUS - Todas as colunas
+    # GENEPLUS - Todas as colunas (formato real de exportação)
+    # Headers reais: Ident, Sx, Nome, Dtn, Cc, IQG, PtIQG, IQGbasico, PtIQGbAT, ClasseIQGbAT, DepPN, Acc, ...
     # =============================================
     mappings.extend([
-        # Identificação
-        ColumnMapping(source_system="GENEPLUS", source_column="RGN", target_column="rgn_animal", data_type="string", is_required=True),
-        ColumnMapping(source_system="GENEPLUS", source_column="NOME", target_column="nome_animal", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="SEXO", target_column="sexo", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="DT_NASC", target_column="data_nascimento", data_type="date"),
-        ColumnMapping(source_system="GENEPLUS", source_column="RACA", target_column="raca", data_type="string"),
+        # Identificação — headers reais do arquivo Geneplus
+        ColumnMapping(source_system="GENEPLUS", source_column="Ident", target_column="rgn_animal", data_type="string", is_required=True),
+        ColumnMapping(source_system="GENEPLUS", source_column="Nome", target_column="nome_animal", data_type="string"),
+        ColumnMapping(source_system="GENEPLUS", source_column="Sx", target_column="sexo", data_type="string"),
+        ColumnMapping(source_system="GENEPLUS", source_column="Dtn", target_column="data_nascimento", data_type="date"),
+        ColumnMapping(source_system="GENEPLUS", source_column="Cc", target_column="raca", data_type="string"),
         
-        # Genealogia - 1ª geração
-        ColumnMapping(source_system="GENEPLUS", source_column="MAE_RGN", target_column="mae_rgn", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PAI_RGN", target_column="pai_rgn", data_type="string"),
-        
-        # Genealogia - 2ª geração
-        ColumnMapping(source_system="GENEPLUS", source_column="AVO_PAT_RGN", target_column="avo_paterno_rgn", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AVO_PAT_MAE_RGN", target_column="avo_paterno_mae_rgn", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AVO_MAT_RGN", target_column="avo_materno_rgn", data_type="string"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AVO_MAT_MAE_RGN", target_column="avo_materno_mae_rgn", data_type="string"),
-        
-        # Pesos
-        ColumnMapping(source_system="GENEPLUS", source_column="PESO_NASC", target_column="peso_nascimento", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PESO_DESM", target_column="p210_peso_desmama", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="P365", target_column="p365_peso_ano", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PESO_SOBRE", target_column="p450_peso_sobreano", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PESO_FINAL", target_column="peso_final", data_type="float"),
-        
-        # Medidas
-        ColumnMapping(source_system="GENEPLUS", source_column="PE", target_column="pe_perimetro_escrotal", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AOL", target_column="a_area_olho_lombo", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="EGP", target_column="eg_espessura_gordura", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="ALTURA", target_column="altura", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="CIRCUNFERENCIA", target_column="circumference", data_type="float"),
-        
-        # Reprodução
-        ColumnMapping(source_system="GENEPLUS", source_column="IPP", target_column="im_idade_primeiro_parto", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="INTERV_PARTOS", target_column="intervalo_partos", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="DIAS_GEST", target_column="dias_gestacao", data_type="float"),
-        
-        # GENEPLUS - Benchmarking
+        # Índice principal & ranking
         ColumnMapping(source_system="GENEPLUS", source_column="IQG", target_column="gen_iqg", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PMm", target_column="gen_pmm", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="P", target_column="gen_p", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="DP", target_column="gen_dp", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="SP", target_column="gen_sp", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="E", target_column="gen_e", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="SAO", target_column="gen_sao", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="LEG", target_column="gen_leg", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="SH", target_column="gen_sh", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PP30", target_column="gen_pp30", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="PtIQG", target_column="gen_pt_iqg", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="IQGbasico", target_column="gen_iqg_basico", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="PtIQGbAT", target_column="gen_pt_iqg_bat", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="ClasseIQGbAT", target_column="gen_classe_iqg_bat", data_type="string"),
         
-        # GENEPLUS - DEP Individuais
-        ColumnMapping(source_system="GENEPLUS", source_column="PN", target_column="gen_pn", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="P120", target_column="gen_p120", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="TMD", target_column="gen_tmd", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PD", target_column="gen_pd", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="TM120", target_column="gen_tm120", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="PS", target_column="gen_ps", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="GPD", target_column="gen_gpd", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="CFD", target_column="gen_cfd", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="CFS", target_column="gen_cfs", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="HP_STAY", target_column="gen_hp_stay", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="RD", target_column="gen_rd", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="EGS", target_column="gen_egs", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="ACAB", target_column="gen_acab", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="MAR", target_column="gen_mar", data_type="float"),
+        # DEP Peso Nascimento
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPN", target_column="gen_dep_pn", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPN", target_column="gen_acc_pn", data_type="float"),
         
-# GENEPLUS - AC
-        ColumnMapping(source_system="GENEPLUS", source_column="AC_IQG", target_column="gen_ac_iqg", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AC_PMm", target_column="gen_ac_pmm", data_type="float"),
-        ColumnMapping(source_system="GENEPLUS", source_column="AC_P", target_column="gen_ac_p", data_type="float"),
+        # DEP PMm (Peso Materno)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPMm", target_column="gen_dep_pmm", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPMm", target_column="gen_acc_pmm", data_type="float"),
+        
+        # DEP TMm (Total Materno)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepTMm", target_column="gen_dep_tmm", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccTMm", target_column="gen_acc_tmm", data_type="float"),
+        
+        # DEP PD (Peso Desmama)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPD", target_column="gen_dep_pd", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPD", target_column="gen_acc_pd", data_type="float"),
+        
+        # DEP TMD (Total Materno Desmama)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepTMD", target_column="gen_dep_tmd", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccTMD", target_column="gen_acc_tmd", data_type="float"),
+        
+        # DEP PS (Peso Sobreano)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPS", target_column="gen_dep_ps", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPS", target_column="gen_acc_ps", data_type="float"),
+        
+        # DEP GPD (Ganho de Peso Diário)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepGPD", target_column="gen_dep_gpd", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccGPD", target_column="gen_acc_gpd", data_type="float"),
+        
+        # DEP CFD (Conformação Frigorífica Desmama)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepCFD", target_column="gen_dep_cfd", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccCFD", target_column="gen_acc_cfd", data_type="float"),
+        
+        # DEP CFS (Conformação Frigorífica Sobreano)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepCFS", target_column="gen_dep_cfs", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccCFS", target_column="gen_acc_cfs", data_type="float"),
+        
+        # DEP STAY (Stayability)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepSTAY", target_column="gen_dep_stay", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccSTAY", target_column="gen_acc_stay", data_type="float"),
+        
+        # DEP PES (Perímetro Escrotal)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPES", target_column="gen_dep_pes", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPES", target_column="gen_acc_pes", data_type="float"),
+        
+        # DEP IPP (Idade Primeiro Parto)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepIPP", target_column="gen_dep_ipp", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccIPP", target_column="gen_acc_ipp", data_type="float"),
+        
+        # DEP PP30 (Probabilidade de Parto até 30 meses)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepPP30", target_column="gen_dep_pp30", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccPP30", target_column="gen_acc_pp30", data_type="float"),
+        
+        # DEP RD (Rendimento de Carcaça)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepRD", target_column="gen_dep_rd", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccRD", target_column="gen_acc_rd", data_type="float"),
+        
+        # DEP AOL (Área de Olho de Lombo)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepAOL", target_column="gen_dep_aol", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccAOL", target_column="gen_acc_aol", data_type="float"),
+        
+        # DEP EGS (Espessura de Gordura Subcutânea)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepEGS", target_column="gen_dep_egs", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccEGS", target_column="gen_acc_egs", data_type="float"),
+        
+        # DEP MAR (Marmoreio)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepMAR", target_column="gen_dep_mar", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccMAR", target_column="gen_acc_mar", data_type="float"),
+        
+        # DEP CAR (Carcaça — índice composto)
+        ColumnMapping(source_system="GENEPLUS", source_column="DepCAR", target_column="gen_dep_car", data_type="float"),
+        ColumnMapping(source_system="GENEPLUS", source_column="AccCAR", target_column="gen_acc_car", data_type="float"),
         
         # =============================================
         # PMGZ - NOVO FORMATO CAVAFUNDA

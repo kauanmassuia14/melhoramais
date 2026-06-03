@@ -92,10 +92,19 @@ def normalize_metric(m) -> Optional[dict]:
         return None
     return {
         "dep": m.get("dep"),
-        "ac": m.get("acc"),        # No banco é 'acc', no front é 'ac'
-        "deca": m.get("top"),      # No banco é 'top', no front é 'deca'
-        "p_percent": m.get("perc") # No banco é 'perc', no front é 'p_percent'
+        "ac": m.get("acc") or m.get("ac"),   # No banco pode ser 'acc' ou 'ac'
+        "deca": m.get("top"),                  # No banco é 'top', no front é 'deca'
+        "p_percent": m.get("perc")             # No banco é 'perc', no front é 'p_percent'
     }
+
+
+def _first_metric(metrics: dict, *keys) -> Optional[dict]:
+    """Retorna o primeiro metric block encontrado dentre as chaves fornecidas."""
+    for k in keys:
+        val = metrics.get(k)
+        if val and isinstance(val, dict):
+            return val
+    return None
 
 
 def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
@@ -108,7 +117,7 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
             metrics = {}
 
     # Compatibility mapping: map standardized names (from processor.py) to standard frontend fields
-    # Tenta buscar tanto no formato PMGZ quanto no formato ANCP para garantir que nada se perca
+    # Suporta PMGZ (PN-EDg), ANCP (DPN), e GENEPLUS (PN) side-by-side
     return {
         "id": str(e.id),
         "safra": e.safra,
@@ -116,25 +125,25 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
         "iabczg": float(e.indice_principal) if e.indice_principal is not None else (float(e.iabczg) if hasattr(e, 'iabczg') and e.iabczg is not None else None),
         "deca_index": float(e.percentil_principal) if e.percentil_principal is not None else (e.rank_principal if e.rank_principal is not None else None),
         "metrics": metrics,
-        # Pesos
-        "pn": normalize_metric(metrics.get("PN-EDg") or metrics.get("DPN")),
-        "pd": normalize_metric(metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")),
-        "pa": normalize_metric(metrics.get("PA-EDg") or metrics.get("DP365")),
-        "ps": normalize_metric(metrics.get("PS-EDg") or metrics.get("DP450")),
-        "pm": normalize_metric(metrics.get("PM-EMg") or metrics.get("DIPM")),
+        # Pesos — PMGZ / ANCP / GENEPLUS
+        "pn": normalize_metric(_first_metric(metrics, "PN-EDg", "DPN", "PN")),
+        "pd": normalize_metric(_first_metric(metrics, "PD-EDg", "DP210", "DP120", "PD")),
+        "pa": normalize_metric(_first_metric(metrics, "PA-EDg", "DP365")),
+        "ps": normalize_metric(_first_metric(metrics, "PS-EDg", "DP450", "PS")),
+        "pm": normalize_metric(_first_metric(metrics, "PM-EMg", "DIPM", "PMm")),
         # Reprodução
-        "ipp": normalize_metric(metrics.get("IPPg") or metrics.get("DIPP")),
-        "stay": normalize_metric(metrics.get("STAYg") or metrics.get("DSTAY")),
-        "pe_365": normalize_metric(metrics.get("PE-365g") or metrics.get("DPE365")),
-        "psn": normalize_metric(metrics.get("PSNg")),
+        "ipp": normalize_metric(_first_metric(metrics, "IPPg", "DIPP", "IPP")),
+        "stay": normalize_metric(_first_metric(metrics, "STAYg", "DSTAY", "STAY")),
+        "pe_365": normalize_metric(_first_metric(metrics, "PE-365g", "DPE365", "PES")),
+        "psn": normalize_metric(_first_metric(metrics, "PSNg")),
         # Carcaça
-        "aol": normalize_metric(metrics.get("AOLg") or metrics.get("DAOL")),
-        "acab": normalize_metric(metrics.get("ACABg") or metrics.get("DACAB")),
-        "marmoreio": normalize_metric(metrics.get("MARg") or metrics.get("DMAR")),
+        "aol": normalize_metric(_first_metric(metrics, "AOLg", "DAOL", "AOL")),
+        "acab": normalize_metric(_first_metric(metrics, "ACABg", "DACAB", "EGS")),
+        "marmoreio": normalize_metric(_first_metric(metrics, "MARg", "DMAR", "MAR")),
         # Conformação
-        "eg": normalize_metric(metrics.get("Eg") or metrics.get("DES")),
-        "pg": normalize_metric(metrics.get("Pg") or metrics.get("DPS")),
-        "mg": normalize_metric(metrics.get("Mg") or metrics.get("DMS")),
+        "eg": normalize_metric(_first_metric(metrics, "Eg", "DES")),
+        "pg": normalize_metric(_first_metric(metrics, "Pg", "DPS")),
+        "mg": normalize_metric(_first_metric(metrics, "Mg", "DMS")),
     }
 
 
@@ -142,6 +151,210 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
 # ============================================================
 # ROTAS ESTÁTICAS — devem vir ANTES de /{animal_id}
 # ============================================================
+
+# ── Comparação cross-platform de um animal ─────────────────────
+@router.get("/compare/{animal_id}")
+def get_animal_comparison(
+    animal_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna dados de comparação cross-platform para um animal específico.
+    Formato compatível com AnimalComparisonData do frontend."""
+    import uuid as _uuid
+    try:
+        animal_uuid = _uuid.UUID(animal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"ID inválido: '{animal_id}'")
+
+    animal = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal_uuid).first()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Animal não encontrado")
+
+    evaluations = (
+        db.query(GeneticsGeneticEvaluation)
+        .filter(GeneticsGeneticEvaluation.animal_id == animal.id)
+        .order_by(GeneticsGeneticEvaluation.safra.desc())
+        .all()
+    )
+
+    # Monta o dict por plataforma (mais recente de cada fonte)
+    platforms: dict = {}
+    seen_sources: set = set()
+    available_metrics_set: set = set()
+
+    # Mapeamento de chaves JSONB para chaves frontend normalizadas
+    METRIC_KEY_MAP = {
+        # PMGZ
+        "PN-EDg": "pn", "PD-EDg": "pd", "PA-EDg": "pa", "PS-EDg": "ps", "PM-EMg": "pm",
+        "IPPg": "ipp", "STAYg": "stay", "PE-365g": "pe365", "PSNg": "psn",
+        "AOLg": "aol", "ACABg": "acab", "MARg": "mar",
+        "Eg": "eg", "Pg": "pg", "Mg": "mg",
+        # ANCP
+        "DPN": "pn", "DP210": "pd", "DP120": "pd", "DP365": "pa", "DP450": "ps", "DIPM": "pm",
+        "DIPP": "ipp", "DSTAY": "stay", "DPE365": "pe365",
+        "DAOL": "aol", "DACAB": "acab", "DMAR": "mar",
+        "DES": "eg", "DPS": "pg", "DMS": "mg",
+        # GENEPLUS
+        "PN": "pn", "PD": "pd", "PS": "ps", "PMm": "pm",
+        "IPP": "ipp", "STAY": "stay", "PES": "pe365",
+        "AOL": "aol", "EGS": "acab", "MAR": "mar", "CAR": "car",
+        "GPD": "gpd", "CFD": "cfd", "CFS": "cfs", "PP30": "pp30", "RD": "rd",
+        "TMm": "tmm", "TMD": "tmd",
+    }
+
+    for ev in evaluations:
+        fonte = ev.fonte_origem
+        if fonte in seen_sources:
+            continue
+        seen_sources.add(fonte)
+
+        raw_metrics = ev.metrics if isinstance(ev.metrics, dict) else {}
+        if isinstance(ev.metrics, str):
+            try:
+                raw_metrics = json.loads(ev.metrics)
+            except:
+                raw_metrics = {}
+
+        normalized_metrics: dict = {}
+        for raw_key, block in raw_metrics.items():
+            if not isinstance(block, dict):
+                continue
+            front_key = METRIC_KEY_MAP.get(raw_key, raw_key.lower())
+            normalized_metrics[front_key] = {
+                "dep": block.get("dep"),
+                "acc": block.get("acc") or block.get("ac"),
+                "deca": block.get("top"),
+                "p_percent": block.get("perc"),
+            }
+            available_metrics_set.add(front_key)
+
+        platforms[fonte] = {
+            "fonte": fonte,
+            "safra": ev.safra,
+            "indice_principal": float(ev.indice_principal) if ev.indice_principal else None,
+            "rank": ev.rank_principal,
+            "metrics": normalized_metrics,
+        }
+
+    # Sempre incluir MELHORA_PLUS como null (para o formulário de dados manuais)
+    if "MELHORA_PLUS" not in platforms:
+        platforms["MELHORA_PLUS"] = None
+
+    CANONICAL_METRICS = ["pn", "pd", "pa", "ps", "pm", "ipp", "stay", "pe365", "aol", "acab", "mar", "eg", "pg", "mg"]
+
+    return {
+        "animal": {
+            "id": str(animal.id),
+            "rgn": animal.rgn,
+            "nome": animal.nome,
+        },
+        "platforms": platforms,
+        "available_metrics": sorted(list(available_metrics_set | set(CANONICAL_METRICS))),
+    }
+
+
+# ── Estatísticas por plataforma (Dashboard Overview) ──────────
+@router.get("/stats/platform-comparison")
+def get_platform_comparison_stats(
+    farm_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna médias, min e max por plataforma para o gráfico comparativo do dashboard.
+    Otimizado: toda a agregação de todas as métricas acontece em UMA única query SQL."""
+
+    # Métricas e suas chaves JSONB por plataforma
+    METRIC_CONFIG = {
+        "pn":    {"PMGZ": "PN-EDg",  "ANCP": "DPN",   "GENEPLUS": "PN"},
+        "pd":    {"PMGZ": "PD-EDg",  "ANCP": "DP210", "GENEPLUS": "PD"},
+        "ps":    {"PMGZ": "PS-EDg",  "ANCP": "DP450", "GENEPLUS": "PS"},
+        "pm":    {"PMGZ": "PM-EMg",  "ANCP": "DIPM",  "GENEPLUS": "PMm"},
+        "ipp":   {"PMGZ": "IPPg",    "ANCP": "DIPP",  "GENEPLUS": "IPP"},
+        "stay":  {"PMGZ": "STAYg",   "ANCP": "DSTAY", "GENEPLUS": "STAY"},
+        "pe365": {"PMGZ": "PE-365g", "ANCP": "DPE365","GENEPLUS": "PES"},
+        "aol":   {"PMGZ": "AOLg",    "ANCP": "DAOL",  "GENEPLUS": "AOL"},
+        "acab":  {"PMGZ": "ACABg",   "ANCP": "DACAB", "GENEPLUS": "EGS"},
+        "mar":   {"PMGZ": "MARg",    "ANCP": "DMAR",  "GENEPLUS": "MAR"},
+    }
+
+    # Construir query condicional eficiente
+    farm_filter = ""
+    params: dict = {}
+    if farm_id:
+        farm_filter = "AND ge.farm_id = :farm_id"
+        params["farm_id"] = farm_id
+    elif current_user.role != "admin" and current_user.id_farm:
+        farm_filter = "AND ge.farm_id = :farm_id"
+        params["farm_id"] = str(current_user.id_farm)
+
+    # Constrói a query de forma dinâmica para fazer a agregação de uma vez só no banco
+    select_fields = [
+        "fonte_origem",
+        "COUNT(DISTINCT animal_id) as cnt"
+    ]
+    
+    for metric_key, keys_by_fonte in METRIC_CONFIG.items():
+        cases = []
+        for fonte, json_key in keys_by_fonte.items():
+            cases.append(f"WHEN fonte_origem = '{fonte}' THEN (metrics->'{json_key}'->>'dep')::numeric")
+        cases_sql = " ".join(cases)
+        
+        select_fields.append(f"AVG(CASE {cases_sql} END) as avg_{metric_key}")
+        select_fields.append(f"MIN(CASE {cases_sql} END) as min_{metric_key}")
+        select_fields.append(f"MAX(CASE {cases_sql} END) as max_{metric_key}")
+
+    fields_clause = ",\n            ".join(select_fields)
+    agg_sql = text(f"""
+        SELECT 
+            {fields_clause}
+        FROM genetics.genetic_evaluations ge
+        WHERE 1=1 {farm_filter}
+        GROUP BY fonte_origem
+    """)
+
+    rows = db.execute(agg_sql, params).fetchall()
+
+    result_platforms: dict = {}
+    for row in rows:
+        # row é um RowProxy ou tupla, mapeamos pelas chaves do select_fields
+        row_dict = row._asdict() if hasattr(row, "_asdict") else dict(zip([f.split(" as ")[-1].strip() for f in select_fields], row))
+        
+        fonte = row_dict.get("fonte_origem")
+        if not fonte or fonte not in ["PMGZ", "ANCP", "GENEPLUS"]:
+            continue
+
+        averages: dict = {}
+        for metric_key in METRIC_CONFIG.keys():
+            avg_val = row_dict.get(f"avg_{metric_key}")
+            min_val = row_dict.get(f"min_{metric_key}")
+            max_val = row_dict.get(f"max_{metric_key}")
+            
+            if avg_val is not None:
+                averages[metric_key] = {
+                    "avg": round(float(avg_val), 2),
+                    "min": round(float(min_val), 2),
+                    "max": round(float(max_val), 2),
+                }
+
+        result_platforms[fonte] = {
+            "total_animals": row_dict.get("cnt", 0),
+            "averages": averages,
+        }
+
+    # Garante que plataformas vazias também retornem estrutura vazia
+    for f in ["PMGZ", "ANCP", "GENEPLUS"]:
+        if f not in result_platforms:
+            result_platforms[f] = {
+                "total_animals": 0,
+                "averages": {}
+            }
+
+    return {
+        "metrics": list(METRIC_CONFIG.keys()),
+        "platforms": result_platforms,
+    }
+
 
 @router.get("/stats/by-farm")
 def get_stats_by_farm(
@@ -257,11 +470,12 @@ def get_stats_v2(
                 CASE 
                     WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
                     WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PD'->>'dep')::numeric
                     ELSE NULL
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
         {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
     ).scalar()
@@ -273,11 +487,12 @@ def get_stats_v2(
                 CASE 
                     WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
                     WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN NULL
                     ELSE NULL
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
         {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
     ).scalar()
@@ -289,11 +504,12 @@ def get_stats_v2(
                 CASE 
                     WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
                     WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PS'->>'dep')::numeric
                     ELSE NULL
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM animals WHERE farm_id = :fid OR :is_admin)
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
         {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
     ).scalar()

@@ -616,6 +616,15 @@ export const api = {
   getAnimalV2: (animalId: string) =>
     fetchApi<any>(`/v2/animals/${animalId}`),
 
+  getAnimalComparison: (animalId: string) =>
+    fetchApi<any>(`/v2/animals/compare/${animalId}`),
+
+  getPlatformOverviewStats: (opts?: { farmId?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
+    return fetchApi<any>(`/v2/animals/stats/platform-comparison?${params.toString()}`);
+  },
+
   getAnimalsStatsByFarm: () =>
     fetchApi<{ farm_id: string; farm_name: string; total_animals: number }[]>('/v2/animals/stats/by-farm'),
 
