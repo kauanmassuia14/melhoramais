@@ -532,7 +532,7 @@ class GeneticsFarm(Base):
 class GeneticsAnimal(Base):
     __tablename__ = "animals"
     __table_args__ = (
-        UniqueConstraint("farm_id", "rgn", name="uix_genetics_animal_rgn"),
+        UniqueConstraint("farm_id", "rgn", "serie", name="uix_farm_rgn_serie"),
         {"schema": "genetics"} if not IS_SQLITE else {},
     )
 

@@ -386,6 +386,7 @@ async def process_genetic_data(
     file: UploadFile = File(...),
     farm_id: str = Form(default=None),
     upload_id: str = Form(default=None),
+    download_excel: bool = Form(default=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "user")),
 ):
@@ -420,30 +421,44 @@ async def process_genetic_data(
             source_system
         )
         
-        # Se process_file retorna None para log/upload, criar objetos vazios
-        if log is None:
-            inserted, updated, failed = 0, 0, 0
-        else:
+        # Se process_file retorna None para log/upload, ler do upload ou criar objetos vazios
+        if log is not None:
             inserted = log.rows_inserted or 0
             updated = log.rows_updated or 0
             failed = log.rows_failed or 0
+        elif upload is not None:
+            inserted = upload.rows_inserted or 0
+            updated = upload.rows_updated or 0
+            failed = 0
+        else:
+            inserted, updated, failed = 0, 0, 0
         
         logger.info(f"Processamento concluído: {len(df_cleaned)} linhas, inserted={inserted}, updated={updated}, failed={failed}")
         
-        excel_data = await loop.run_in_executor(
-            None,
-            processor.generate_formatted_excel,
-            df_cleaned
-        )
+        if download_excel:
+            excel_data = await loop.run_in_executor(
+                None,
+                processor.generate_formatted_excel,
+                df_cleaned
+            )
 
-        return StreamingResponse(
-            io.BytesIO(excel_data),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f"attachment; filename=output_tratado_{source_system}.xlsx",
-                "Access-Control-Expose-Headers": "Content-Disposition"
-            },
-        )
+            return StreamingResponse(
+                io.BytesIO(excel_data),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=output_tratado_{source_system}.xlsx",
+                    "Access-Control-Expose-Headers": "Content-Disposition"
+                },
+            )
+        else:
+            return {
+                "status": "success",
+                "message": "File processed successfully",
+                "inserted": inserted,
+                "updated": updated,
+                "failed": failed,
+                "upload_id": upload_id or (upload.upload_id if upload else None)
+            }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

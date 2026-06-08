@@ -220,18 +220,24 @@ class GeneticDataProcessor:
 
         df = self._clean_data(df, source_system)
 
-        # Remove duplicados de RGN no próprio DataFrame para evitar CardinalityViolation no PostgreSQL
+        # Remove duplicados de RGN + Série no próprio DataFrame para evitar CardinalityViolation no PostgreSQL
         if 'rgn_animal' in df.columns:
-            # LIMPEZA CRÍTICA: rgn_animal deve ser limpo e padronizado antes do drop_duplicates
+            # LIMPEZA CRÍTICA: rgn_animal e serie_animal devem ser limpos e padronizados antes do drop_duplicates
             df['rgn_animal'] = df['rgn_animal'].astype(str).str.strip().str.upper()
             df['rgn_animal'] = df['rgn_animal'].replace(['NAN', 'NONE', '', 'NAT'], None)
             df = df.dropna(subset=['rgn_animal'])
             
+            if 'serie_animal' in df.columns:
+                df['serie_animal'] = df['serie_animal'].astype(str).str.strip().str.upper()
+                df['serie_animal'] = df['serie_animal'].replace(['NAN', 'NONE', '', 'NAT'], '')
+            else:
+                df['serie_animal'] = ''
+            
             initial_count = len(df)
-            df = df.drop_duplicates(subset=['rgn_animal'], keep='last')
+            df = df.drop_duplicates(subset=['rgn_animal', 'serie_animal'], keep='last')
             final_count = len(df)
             if initial_count > final_count:
-                logger.info(f"Removidos {initial_count - final_count} registros duplicados de RGN do arquivo.")
+                logger.info(f"Removidos {initial_count - final_count} registros duplicados de RGN+Série do arquivo.")
 
         # Usar o novo schema genetics
         results = self._upsert_genetics_animals(df, source_system)
@@ -462,8 +468,18 @@ class GeneticDataProcessor:
             except:
                 return None
 
-        # BATCH_SIZE menor para estabilidade em produção
-        BATCH_SIZE = 100
+        # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
+        def get_val(r, col_name):
+            if not col_name: return None
+            if col_name in r: return r[col_name]
+            c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
+            for k in r.keys():
+                if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
+                    return r[k]
+            return None
+
+        # BATCH_SIZE otimizado para reduzir round-trips e evitar timeouts
+        BATCH_SIZE = 1000
         inserted = 0
         updated = 0
         failed = 0
@@ -475,16 +491,7 @@ class GeneticDataProcessor:
             batch_end = min(batch_start + BATCH_SIZE, total_rows)
             batch_df = df.iloc[batch_start:batch_end]
             logger.info(f">>> Lote {batch_start} até {batch_end} de {total_rows}...")
-            
-            # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
-            def get_val(r, col_name):
-                if not col_name: return None
-                if col_name in r: return r[col_name]
-                c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
-                for k in r.keys():
-                    if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
-                        return r[k]
-                return None
+
 
             animals_data = []
             seen_rgns_in_batch = set()
@@ -496,9 +503,11 @@ class GeneticDataProcessor:
                     continue
                 
                 rgn_str = str(rgn).strip().upper()
-                if rgn_str in seen_rgns_in_batch:
+                serie_str = str(get_val(row, 'serie_animal') or get_val(row, 'serie') or get_val(row, 'série') or "").strip().upper()
+                combo_key = (rgn_str, serie_str)
+                if combo_key in seen_rgns_in_batch:
                     continue
-                seen_rgns_in_batch.add(rgn_str)
+                seen_rgns_in_batch.add(combo_key)
                 
                 # Busca Nascimento (especialmente para ANCP 'Nasc')
                 nasc_raw = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
@@ -509,7 +518,7 @@ class GeneticDataProcessor:
                     'farm_id': str(genetics_farm_id),
                     'rgn': rgn_str,
                     'nome': safe_str(get_val(row, 'nome_animal') or get_val(row, 'nome')),
-                    'serie': safe_str(get_val(row, 'serie_animal') or get_val(row, 'serie') or get_val(row, 'série')),
+                    'serie': serie_str,
                     'sexo': safe_str(get_val(row, 'sexo')),
                     'nascimento': nasc_val,
                     'genotipado': safe_bool(get_val(row, 'genotipado') or get_val(row, 'genotipado_animal')),
@@ -528,9 +537,8 @@ class GeneticDataProcessor:
                     animal_sql = """
                         INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
                         VALUES %s
-                        ON CONFLICT (farm_id, rgn) DO UPDATE SET
+                        ON CONFLICT (farm_id, rgn, serie) DO UPDATE SET
                             nome = EXCLUDED.nome,
-                            serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
                             sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
                             nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
                             genotipado = EXCLUDED.genotipado,
@@ -562,15 +570,19 @@ class GeneticDataProcessor:
 
             # Get IDs (ainda via SQLAlchemy para conveniência, mas com índice é rápido)
             rgns_in_batch = [a['rgn'] for a in animals_data]
-            animal_id_map = {r: uid for r, uid in self.db.execute(
-                text("SELECT rgn, id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
-                {"rgns": rgns_in_batch, "fid": str(genetics_farm_id)}
-            ).fetchall()}
+            animal_id_map = {}
+            db_res = self.db.execute(
+                text("SELECT rgn, COALESCE(serie, ''), id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
+                {"rgns": list(set(rgns_in_batch)), "fid": str(genetics_farm_id)}
+            ).fetchall()
+            for row_rgn, row_serie, uid in db_res:
+                animal_id_map[(row_rgn, row_serie)] = uid
 
             eval_to_insert = []
             for _, row in batch_df.iterrows():
                 rgn = str(row.get('rgn_animal') or "").strip()
-                animal_id = animal_id_map.get(rgn)
+                serie = str(row.get('serie_animal') or "").strip()
+                animal_id = animal_id_map.get((rgn, serie))
                 if not animal_id: continue
 
                 metrics_data = {}

@@ -159,7 +159,7 @@ def upsert_animal(conn, farm_id: str, rgn: str, nome: str = None, serie: str = N
         return None
 
     nome_val = null_to_none(nome)
-    serie_val = null_to_none(serie)
+    serie_val = null_to_none(serie) or ""
     sexo_val = f"'{sexo}'" if sexo in ['M', 'F'] else "NULL"
     sire_val = f"'{sire_id}'" if sire_id else "NULL"
     dam_val = f"'{dam_id}'" if dam_id else "NULL"
@@ -172,9 +172,8 @@ def upsert_animal(conn, farm_id: str, rgn: str, nome: str = None, serie: str = N
     ) VALUES (
         '{farm_id}', {rgn_sql}, {format_value_for_sql(nome_val)}, {format_value_for_sql(serie_val)}, {sexo_val}, {sire_val}, {dam_val}
     )
-    ON CONFLICT (farm_id, rgn) DO UPDATE SET
+    ON CONFLICT (farm_id, rgn, serie) DO UPDATE SET
         nome = COALESCE(EXCLUDED.nome, genetics.animals.nome),
-        serie = COALESCE(EXCLUDED.serie, genetics.animals.serie),
         sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
         sire_id = COALESCE(EXCLUDED.sire_id, genetics.animals.sire_id),
         dam_id = COALESCE(EXCLUDED.dam_id, genetics.animals.dam_id)
