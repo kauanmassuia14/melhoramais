@@ -150,11 +150,11 @@ export default function UploadsPage() {
               <select
                 value={filterFarm || ""}
                 onChange={(e) => setFilterFarm(e.target.value || null)}
-                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
+                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all cursor-pointer"
               >
-                <option value="">Todas as fazendas</option>
+                <option value="" className="bg-slate-900 text-white">Todas as fazendas</option>
                 {Object.values(farms).map((farm) => (
-                  <option key={farm.id} value={farm.id}>
+                  <option key={farm.id} value={farm.id} className="bg-slate-900 text-white">
                     {farm.nome}
                   </option>
                 ))}
@@ -166,12 +166,12 @@ export default function UploadsPage() {
               <select
                 value={filterStatus || ""}
                 onChange={(e) => setFilterStatus(e.target.value || null)}
-                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all"
+                className="bg-white/10 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-emerald-glow/50 focus:ring-2 focus:ring-emerald-glow/10 transition-all cursor-pointer"
               >
-                <option value="">Todos os status</option>
-                <option value="completed">Concluído</option>
-                <option value="processing">Processando</option>
-                <option value="failed">Falhou</option>
+                <option value="" className="bg-slate-900 text-white">Todos os status</option>
+                <option value="completed" className="bg-slate-900 text-white">Concluído</option>
+                <option value="processing" className="bg-slate-900 text-white">Processando</option>
+                <option value="failed" className="bg-slate-900 text-white">Falhou</option>
               </select>
             </div>
 
