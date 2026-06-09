@@ -27,6 +27,8 @@ export interface DashboardPlatformData {
   metrics: string[];
   platforms: Record<string, {
     total_animals: number;
+    avg_indice_principal?: number | null;
+    indice_label?: string | null;
     averages: Record<string, { avg: number; min: number; max: number }>;
   }>;
 }

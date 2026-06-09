@@ -9,7 +9,7 @@ import { CheckIcon } from "@heroicons/react/24/outline";
 import { useToast } from "@/components/ui/Toast";
 
 export const Header = () => {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -44,6 +44,52 @@ export const Header = () => {
       fetchNotifications();
     }
   }, [showDropdown, initialLoadDone]);
+
+  // Connect to SSE for real-time notification push
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const sseUrl = `${API_BASE}/notifications/sse?token=${accessToken}`;
+    const eventSource = new EventSource(sseUrl);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const newNotif = JSON.parse(event.data);
+        if (newNotif.type === "connected" || newNotif.type === "ping") {
+          return;
+        }
+
+        // Add notification and increment unread count
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === newNotif.id)) return prev;
+          return [newNotif, ...prev];
+        });
+        setUnreadCount((prev) => prev + 1);
+
+        // Map notification type to toast style
+        const toastTypeMap: Record<string, "success" | "error" | "warning" | "info"> = {
+          success: "success",
+          error: "error",
+          warning: "warning",
+          info: "info",
+        };
+        const type = toastTypeMap[newNotif.type] || "info";
+        showToast(`${newNotif.title}: ${newNotif.message}`, type);
+      } catch (err) {
+        console.error("Error parsing SSE event:", err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("SSE connection error, retrying...", err);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [accessToken, showToast]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -201,6 +247,15 @@ export const Header = () => {
                       </div>
                     ))
                   )}
+                </div>
+                <div className="border-t border-white/[0.06] p-2.5 bg-white/[0.01] text-center">
+                  <a
+                    href="/notifications"
+                    onClick={() => setShowDropdown(false)}
+                    className="block w-full py-2 text-xs font-semibold text-text-muted hover:text-emerald-glow-400 hover:bg-white/[0.03] rounded-xl transition-all"
+                  >
+                    Ver todas as notificações
+                  </a>
                 </div>
               </motion.div>
             )}

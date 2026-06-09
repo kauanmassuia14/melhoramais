@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import {
   PlusIcon,
   BuildingOffice2Icon,
@@ -13,6 +14,7 @@ import {
   MagnifyingGlassIcon,
   CheckIcon,
   TrashIcon,
+  FunnelIcon,
 } from "@heroicons/react/24/outline";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -23,6 +25,37 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { api, GeneticsFarm } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
+// ── Configuração de plataformas ───────────────────────────────────────────────
+const PLATFORM_CONFIG: Record<string, {
+  label: string;
+  logo: string;
+  bg: string;
+  border: string;
+  text: string;
+}> = {
+  ANCP: {
+    label: "ANCP",
+    logo: "/assets/images/logoancp.png",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/25",
+    text: "text-emerald-400",
+  },
+  PMGZ: {
+    label: "PMGZ",
+    logo: "/assets/images/logopmgz.png",
+    bg: "bg-cyan-500/10",
+    border: "border-cyan-500/25",
+    text: "text-cyan-400",
+  },
+  GENEPLUS: {
+    label: "Geneplus",
+    logo: "/assets/images/logogeneplus.png",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/25",
+    text: "text-amber-400",
+  },
+};
+
 export default function FarmsPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -32,6 +65,7 @@ export default function FarmsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
@@ -61,14 +95,34 @@ export default function FarmsPage() {
     fetchFarms();
   }, []);
 
-  const filteredFarms = farms.filter((farm) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      farm.nome?.toLowerCase().includes(s) ||
-      farm.dono_fazenda?.toLowerCase().includes(s)
-    );
-  });
+  // Plataformas disponíveis (filtro inteligente: só mostra as que existem)
+  const availablePlatforms = useMemo(() => {
+    const platformSet = new Set<string>();
+    farms.forEach((farm) => {
+      farm.platforms?.forEach((p) => platformSet.add(p));
+    });
+    return Array.from(platformSet).sort();
+  }, [farms]);
+
+  const filteredFarms = useMemo(() => {
+    return farms.filter((farm) => {
+      // Filtro por texto
+      if (search) {
+        const s = search.toLowerCase();
+        if (
+          !farm.nome?.toLowerCase().includes(s) &&
+          !farm.dono_fazenda?.toLowerCase().includes(s)
+        ) {
+          return false;
+        }
+      }
+      // Filtro por plataforma
+      if (selectedPlatform) {
+        if (!farm.platforms?.includes(selectedPlatform)) return false;
+      }
+      return true;
+    });
+  }, [farms, search, selectedPlatform]);
 
   const validateForm = () => {
     const e: Record<string, string> = {};
@@ -174,17 +228,61 @@ export default function FarmsPage() {
           )}
         </div>
 
+        {/* ── Barra de Busca + Filtro por Plataforma ──────────────────────── */}
         <GlassCard className="p-4">
-          <div className="relative max-w-md">
-            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Buscar fazendas..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1 max-w-md">
+              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Buscar fazendas..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary placeholder:text-text-muted focus:border-emerald-glow/30 focus:outline-none transition-colors"
+              />
+            </div>
+
+            {availablePlatforms.length > 0 && (
+              <div className="relative">
+                <FunnelIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                <select
+                  value={selectedPlatform || ""}
+                  onChange={(e) => setSelectedPlatform(e.target.value || null)}
+                  className="pl-10 pr-8 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-text-primary focus:border-cyan-glow/30 focus:outline-none transition-colors cursor-pointer hover:bg-white/[0.08] appearance-none min-w-[200px]"
+                >
+                  <option value="" className="bg-slate-900 text-white">
+                    Todas as plataformas
+                  </option>
+                  {availablePlatforms.map((p) => (
+                    <option key={p} value={p} className="bg-slate-900 text-white">
+                      {PLATFORM_CONFIG[p]?.label || p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
+
+          {/* Active filter indicator */}
+          {selectedPlatform && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-xs text-text-muted">Filtro ativo:</span>
+              <button
+                onClick={() => setSelectedPlatform(null)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors hover:opacity-80 ${PLATFORM_CONFIG[selectedPlatform]?.bg} ${PLATFORM_CONFIG[selectedPlatform]?.border} ${PLATFORM_CONFIG[selectedPlatform]?.text}`}
+              >
+                <Image
+                  src={PLATFORM_CONFIG[selectedPlatform]?.logo || ""}
+                  alt={selectedPlatform}
+                  width={14}
+                  height={14}
+                  className="rounded-sm object-contain"
+                />
+                {PLATFORM_CONFIG[selectedPlatform]?.label || selectedPlatform}
+                <XMarkIcon className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </GlassCard>
 
         {showCreate && (
@@ -257,11 +355,11 @@ export default function FarmsPage() {
           <GlassCard className="p-12 text-center">
             <BuildingOffice2Icon className="w-12 h-12 text-text-muted mx-auto mb-4" />
             <p className="text-text-secondary text-sm">
-              {search ? "Nenhuma fazenda encontrada" : "Nenhuma fazenda cadastrada"}
+              {search || selectedPlatform ? "Nenhuma fazenda encontrada para os filtros selecionados" : "Nenhuma fazenda cadastrada"}
             </p>
-            {isAdmin && !search && (
+            {isAdmin && !search && !selectedPlatform && (
               <p className="text-text-muted text-xs mt-2">
-                Clique em "Nova Fazenda" para começar
+                Clique em &quot;Nova Fazenda&quot; para começar
               </p>
             )}
           </GlassCard>
@@ -351,6 +449,41 @@ export default function FarmsPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* ── Badges de Plataformas ──────────────────────────────── */}
+                      {farm.platforms && farm.platforms.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {farm.platforms.map((platform) => {
+                            const config = PLATFORM_CONFIG[platform];
+                            if (!config) return null;
+                            return (
+                              <div
+                                key={platform}
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all ${config.bg} ${config.border}`}
+                              >
+                                <Image
+                                  src={config.logo}
+                                  alt={config.label}
+                                  width={16}
+                                  height={16}
+                                  className="rounded-sm object-contain"
+                                />
+                                <span className={`text-[10px] font-bold ${config.text}`}>
+                                  {config.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {(!farm.platforms || farm.platforms.length === 0) && (
+                        <div className="mb-3">
+                          <span className="text-[10px] text-text-muted italic">
+                            Nenhuma avaliação genética
+                          </span>
+                        </div>
+                      )}
 
                       {farm.created_at && (
                         <p className="text-[10px] text-text-muted mt-3">

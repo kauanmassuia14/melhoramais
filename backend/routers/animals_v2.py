@@ -254,17 +254,117 @@ def get_animal_comparison(
     }
 
 
-# ── Estatísticas por plataforma (Dashboard Overview) ──────────
-@router.get("/stats/platform-comparison")
-def get_platform_comparison_stats(
-    farm_id: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Retorna médias, min e max por plataforma para o gráfico comparativo do dashboard.
-    Otimizado: toda a agregação de todas as métricas acontece em UMA única query SQL."""
+from fastapi import BackgroundTasks
+from backend.models import DashboardStatsCache
+from datetime import datetime, timezone, timedelta
 
-    # Métricas e suas chaves JSONB por plataforma
+# ── Funções de Computação Interna de Estatísticas ──────────────────
+def compute_stats_v2_internal(db: Session, farm_id: Optional[str]) -> dict:
+    query = db.query(GeneticsAnimal)
+
+    if farm_id:
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
+
+    total_animals = query.count()
+
+    sex_counts = (
+        query.with_entities(GeneticsAnimal.sexo, func.count())
+        .group_by(GeneticsAnimal.sexo)
+        .all()
+    )
+    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
+
+    # Subconsulta para filtrar animais
+    animal_subq = query.with_entities(GeneticsAnimal.id).subquery()
+    
+    eval_counts = (
+        db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
+        .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_subq))
+        .group_by(GeneticsGeneticEvaluation.fonte_origem)
+        .all()
+    )
+    source_counts = {s or "unknown": c for s, c in eval_counts}
+
+    # Médias de pesos
+    p210 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PD'->>'dep')::numeric
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id, "is_admin": farm_id is None}
+    ).scalar()
+    
+    # P365 (Ano)
+    p365 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN NULL
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id, "is_admin": farm_id is None}
+    ).scalar()
+
+    # P450 (Sobreano)
+    p450 = db.execute(
+        text("""
+            SELECT AVG(
+                CASE 
+                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
+                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
+                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PS'->>'dep')::numeric
+                    ELSE NULL
+                END
+            )
+            FROM genetics.genetic_evaluations
+            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+        """),
+        {"fid": farm_id, "is_admin": farm_id is None}
+    ).scalar()
+
+    avg_p210 = round(float(p210), 2) if p210 else None
+    avg_p365 = round(float(p365), 2) if p365 else None
+    avg_p450 = round(float(p450), 2) if p450 else None
+
+    if farm_id is None:
+        total_farms = db.query(GeneticsFarm).count()
+    else:
+        total_farms = 1
+
+    from backend.models import Upload
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    uploads_query = db.query(Upload).filter(Upload.data_upload >= thirty_days_ago)
+    if farm_id:
+        uploads_query = uploads_query.filter(Upload.id_farm == farm_id)
+    recent_uploads = uploads_query.count()
+
+    return {
+        "total_animals": total_animals,
+        "total_farms": total_farms,
+        "recent_uploads": recent_uploads,
+        "animals_by_sex": animals_by_sex,
+        "animals_by_source": source_counts,
+        "avg_p210": avg_p210,
+        "avg_p365": avg_p365,
+        "avg_p450": avg_p450,
+    }
+
+
+def compute_platform_comparison_internal(db: Session, farm_id: Optional[str]) -> dict:
     METRIC_CONFIG = {
         "pn":    {"PMGZ": "PN-EDg",  "ANCP": "DPN",   "GENEPLUS": "PN"},
         "pd":    {"PMGZ": "PD-EDg",  "ANCP": "DP210", "GENEPLUS": "PD"},
@@ -278,20 +378,18 @@ def get_platform_comparison_stats(
         "mar":   {"PMGZ": "MARg",    "ANCP": "DMAR",  "GENEPLUS": "MAR"},
     }
 
-    # Construir query condicional eficiente
     farm_filter = ""
     params: dict = {}
     if farm_id:
         farm_filter = "AND ge.farm_id = :farm_id"
         params["farm_id"] = farm_id
-    elif current_user.role != "admin" and current_user.id_farm:
-        farm_filter = "AND ge.farm_id = :farm_id"
-        params["farm_id"] = str(current_user.id_farm)
 
-    # Constrói a query de forma dinâmica para fazer a agregação de uma vez só no banco
+    INDICE_LABELS = {"ANCP": "MGTe", "PMGZ": "IABCZ", "GENEPLUS": "IQG"}
+
     select_fields = [
         "fonte_origem",
-        "COUNT(DISTINCT animal_id) as cnt"
+        "COUNT(DISTINCT animal_id) as cnt",
+        "AVG(indice_principal) as avg_indice"
     ]
     
     for metric_key, keys_by_fonte in METRIC_CONFIG.items():
@@ -317,7 +415,6 @@ def get_platform_comparison_stats(
 
     result_platforms: dict = {}
     for row in rows:
-        # row é um RowProxy ou tupla, mapeamos pelas chaves do select_fields
         row_dict = row._asdict() if hasattr(row, "_asdict") else dict(zip([f.split(" as ")[-1].strip() for f in select_fields], row))
         
         fonte = row_dict.get("fonte_origem")
@@ -337,16 +434,20 @@ def get_platform_comparison_stats(
                     "max": round(float(max_val), 2),
                 }
 
+        avg_indice = row_dict.get("avg_indice")
         result_platforms[fonte] = {
             "total_animals": row_dict.get("cnt", 0),
+            "avg_indice_principal": round(float(avg_indice), 2) if avg_indice is not None else None,
+            "indice_label": INDICE_LABELS.get(fonte),
             "averages": averages,
         }
 
-    # Garante que plataformas vazias também retornem estrutura vazia
     for f in ["PMGZ", "ANCP", "GENEPLUS"]:
         if f not in result_platforms:
             result_platforms[f] = {
                 "total_animals": 0,
+                "avg_indice_principal": None,
+                "indice_label": INDICE_LABELS.get(f),
                 "averages": {}
             }
 
@@ -354,6 +455,330 @@ def get_platform_comparison_stats(
         "metrics": list(METRIC_CONFIG.keys()),
         "platforms": result_platforms,
     }
+
+
+def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
+    farm_filter_animals = ""
+    farm_filter_evals = ""
+    params = {}
+    if farm_id:
+        farm_filter_animals = "WHERE farm_id = :farm_id"
+        farm_filter_evals = "WHERE farm_id = :farm_id"
+        params["farm_id"] = farm_id
+
+    # Summary
+    summary_sql = text(f"""
+        SELECT 
+            COUNT(*) as total_animals,
+            COUNT(CASE WHEN genotipado::text = 'SIM' THEN 1 END) as genotyped,
+            COUNT(CASE WHEN csg::text = 'SIM' THEN 1 END) as csg_count,
+            COUNT(DISTINCT serie) as total_breeds
+        FROM genetics.animals
+        {farm_filter_animals}
+    """)
+    summary_row = db.execute(summary_sql, params).fetchone()
+    total_animals = summary_row[0] if summary_row else 0
+    genotyped = summary_row[1] if summary_row else 0
+    csg_count = summary_row[2] if summary_row else 0
+    total_breeds = summary_row[3] if summary_row else 0
+
+    genotyping_rate = round((genotyped / total_animals * 100), 2) if total_animals > 0 else 0.0
+    csg_rate = round((csg_count / total_animals * 100), 2) if total_animals > 0 else 0.0
+
+    eval_summary_sql = text(f"""
+        SELECT 
+            COUNT(*) as total_evaluations,
+            ARRAY_AGG(DISTINCT fonte_origem) as platforms
+        FROM genetics.genetic_evaluations
+        {farm_filter_evals}
+    """)
+    eval_row = db.execute(eval_summary_sql, params).fetchone()
+    total_evaluations = eval_row[0] if eval_row else 0
+    raw_platforms = eval_row[1] if eval_row and eval_row[1] else []
+    platforms = [p for p in raw_platforms if p]
+
+    # Breed distribution
+    breed_sql = text(f"""
+        SELECT COALESCE(NULLIF(serie, ''), 'Não Informado') as breed, COUNT(*) as cnt
+        FROM genetics.animals
+        {farm_filter_animals}
+        GROUP BY breed
+        ORDER BY cnt DESC
+    """)
+    breed_rows = db.execute(breed_sql, params).fetchall()
+    breed_dist = {r[0]: r[1] for r in breed_rows}
+
+    # Sex distribution
+    sex_sql = text(f"""
+        SELECT 
+            CASE 
+                WHEN sexo::text IN ('M', 'MACHO', 'Macho') THEN 'M'
+                WHEN sexo::text IN ('F', 'FEMEA', 'FÊMEA', 'Fêmea', 'Femea') THEN 'F'
+                ELSE 'Outros'
+            END as sex,
+            COUNT(*) as cnt
+        FROM genetics.animals
+        {farm_filter_animals}
+        GROUP BY sex
+    """)
+    sex_rows = db.execute(sex_sql, params).fetchall()
+    sex_dist = {r[0]: r[1] for r in sex_rows}
+
+    # Weight metrics (P210, P365, P450)
+    weight_metrics = {}
+    for metric_name, mappings in [
+        ("p210", [("PMGZ", "PD-EDg"), ("ANCP", "DP210"), ("GENEPLUS", "PD")]),
+        ("p365", [("PMGZ", "PA-EDg"), ("ANCP", "DP365")]),
+        ("p450", [("PMGZ", "PS-EDg"), ("ANCP", "DP450"), ("GENEPLUS", "PS")])
+    ]:
+        case_clauses = " ".join([
+            f"WHEN fonte_origem = '{platform}' THEN (metrics->'{field}'->>'dep')::numeric"
+            for platform, field in mappings
+        ])
+        sql = text(f"""
+            SELECT 
+                AVG(CASE {case_clauses} END) as avg_val,
+                MIN(CASE {case_clauses} END) as min_val,
+                MAX(CASE {case_clauses} END) as max_val,
+                COUNT(CASE WHEN { " OR ".join([f"(fonte_origem = '{platform}' AND metrics->'{field}' IS NOT NULL)" for platform, field in mappings]) } THEN 1 END) as cnt
+            FROM genetics.genetic_evaluations
+            {farm_filter_evals}
+        """)
+        row = db.execute(sql, params).fetchone()
+        if row and row[3] > 0:
+            weight_metrics[metric_name] = {
+                "avg": round(float(row[0]), 2) if row[0] is not None else None,
+                "min": round(float(row[1]), 2) if row[1] is not None else None,
+                "max": round(float(row[2]), 2) if row[2] is not None else None,
+                "count": row[3]
+            }
+
+    # Platform index averages
+    index_sql = text(f"""
+        SELECT 
+            fonte_origem,
+            AVG(indice_principal) as avg_idx,
+            MIN(indice_principal) as min_idx,
+            MAX(indice_principal) as max_idx,
+            COUNT(*) as cnt
+        FROM genetics.genetic_evaluations
+        {farm_filter_evals}
+        GROUP BY fonte_origem
+    """)
+    index_rows = db.execute(index_sql, params).fetchall()
+    index_by_platform = {}
+    labels = {"ANCP": "MGTe", "PMGZ": "IABCZ", "GENEPLUS": "IQG"}
+    for r in index_rows:
+        platform = r[0] or "unknown"
+        index_by_platform[platform] = {
+            "label": labels.get(platform, "Índice"),
+            "avg": round(float(r[1]), 2) if r[1] is not None else None,
+            "min": round(float(r[2]), 2) if r[2] is not None else None,
+            "max": round(float(r[3]), 2) if r[3] is not None else None,
+            "count": r[4]
+        }
+
+    # Top animals
+    top_sql = text(f"""
+        SELECT 
+            a.rgn,
+            a.nome,
+            a.sexo,
+            e.fonte_origem,
+            e.indice_principal,
+            e.percentil_principal
+        FROM genetics.genetic_evaluations e
+        JOIN genetics.animals a ON e.animal_id = a.id
+        WHERE {"e.farm_id = :farm_id" if farm_id else "1=1"} AND e.indice_principal IS NOT NULL
+        ORDER BY e.indice_principal DESC
+        LIMIT 10
+    """)
+    top_rows = db.execute(top_sql, params).fetchall()
+    top_animals = []
+    for r in top_rows:
+        platform = r[3] or "unknown"
+        top_animals.append({
+            "rgn": r[0],
+            "nome": r[1] or "Sem Nome",
+            "sexo": r[2] or "unknown",
+            "fonte": platform,
+            "indice": round(float(r[4]), 2) if r[4] is not None else None,
+            "indice_label": labels.get(platform, "Índice"),
+            "percentil": round(float(r[5]), 2) if r[5] is not None else None
+        })
+
+    # Breed averages comparison
+    breed_avg_sql = text(f"""
+        WITH latest_evals AS (
+            SELECT 
+                animal_id,
+                indice_principal,
+                fonte_origem,
+                metrics,
+                ROW_NUMBER() OVER(PARTITION BY animal_id ORDER BY safra DESC) as rn
+            FROM genetics.genetic_evaluations
+            {"WHERE farm_id = :farm_id" if farm_id else ""}
+        )
+        SELECT 
+            COALESCE(NULLIF(a.serie, ''), 'Não Informado') as breed,
+            AVG(le.indice_principal) as avg_idx,
+            AVG(CASE 
+                WHEN le.fonte_origem = 'PMGZ' THEN (le.metrics->'PD-EDg'->>'dep')::numeric
+                WHEN le.fonte_origem = 'ANCP' THEN (le.metrics->'DP210'->>'dep')::numeric
+                WHEN le.fonte_origem = 'GENEPLUS' THEN (le.metrics->'PD'->>'dep')::numeric
+            END) as avg_p210,
+            AVG(CASE 
+                WHEN le.fonte_origem = 'PMGZ' THEN (le.metrics->'PA-EDg'->>'dep')::numeric
+                WHEN le.fonte_origem = 'ANCP' THEN (le.metrics->'DP365'->>'dep')::numeric
+            END) as avg_p365,
+            AVG(CASE 
+                WHEN le.fonte_origem = 'PMGZ' THEN (le.metrics->'PS-EDg'->>'dep')::numeric
+                WHEN le.fonte_origem = 'ANCP' THEN (le.metrics->'DP450'->>'dep')::numeric
+                WHEN le.fonte_origem = 'GENEPLUS' THEN (le.metrics->'PS'->>'dep')::numeric
+            END) as avg_p450
+        FROM genetics.animals a
+        LEFT JOIN latest_evals le ON a.id = le.animal_id AND le.rn = 1
+        WHERE {"a.farm_id = :farm_id" if farm_id else "1=1"}
+        GROUP BY breed
+    """)
+    breed_avg_rows = db.execute(breed_avg_sql, params).fetchall()
+    breed_averages = {}
+    for r in breed_avg_rows:
+        breed_averages[r[0]] = {
+            "indice": round(float(r[1]), 2) if r[1] is not None else None,
+            "p210": round(float(r[2]), 2) if r[2] is not None else None,
+            "p365": round(float(r[3]), 2) if r[3] is not None else None,
+            "p450": round(float(r[4]), 2) if r[4] is not None else None,
+        }
+
+    # Upload activity
+    from backend.models import Upload
+    now = datetime.now(timezone.utc)
+    
+    uploads_q = db.query(Upload)
+    if farm_id:
+        uploads_q = uploads_q.filter(Upload.id_farm == farm_id)
+        
+    l30 = uploads_q.filter(Upload.data_upload >= now - timedelta(days=30)).count()
+    l60 = uploads_q.filter(Upload.data_upload >= now - timedelta(days=60)).count()
+    l90 = uploads_q.filter(Upload.data_upload >= now - timedelta(days=90)).count()
+    
+    upload_activity = {
+        "last_30d": l30,
+        "last_60d": l60,
+        "last_90d": l90
+    }
+
+    return {
+        "summary": {
+            "total_animals": total_animals,
+            "total_evaluations": total_evaluations,
+            "total_breeds": total_breeds,
+            "genotyping_rate": genotyping_rate,
+            "csg_rate": csg_rate,
+            "platforms": platforms
+        },
+        "breed_distribution": breed_dist,
+        "sex_distribution": sex_dist,
+        "weight_metrics": weight_metrics,
+        "index_by_platform": index_by_platform,
+        "top_animals": top_animals,
+        "breed_averages": breed_averages,
+        "upload_activity": upload_activity
+    }
+
+
+def refresh_dashboard_cache_task(db: Session, farm_id_key: str):
+    """Calcula as estatísticas e as salva fisicamente no banco de dados cache."""
+    logger.info(f"Recalculating dashboard stats for cache key: {farm_id_key}")
+    actual_farm_id = None if farm_id_key == "ALL" else farm_id_key
+    
+    try:
+        stats_v2_data = compute_stats_v2_internal(db, actual_farm_id)
+        platform_data = compute_platform_comparison_internal(db, actual_farm_id)
+        analytics_data = compute_analytics_internal(db, actual_farm_id)
+        
+        cache_row = db.query(DashboardStatsCache).filter(DashboardStatsCache.farm_id == farm_id_key).first()
+        if not cache_row:
+            cache_row = DashboardStatsCache(farm_id=farm_id_key)
+            db.add(cache_row)
+        
+        cache_row.stats_v2 = stats_v2_data
+        cache_row.platform_comparison = platform_data
+        cache_row.analytics = analytics_data
+        cache_row.updated_at = datetime.now(timezone.utc)
+        
+        db.commit()
+        logger.info(f"Dashboard stats cache updated successfully for key: {farm_id_key}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in refresh_dashboard_cache_task for {farm_id_key}: {e}", exc_info=True)
+
+
+def refresh_dashboard_cache_background(farm_id_key: str):
+    """Executa a tarefa de recálculo de cache com sua própria sessão DB (Thread-safe)."""
+    from backend.database import SessionLocal
+    db = SessionLocal()
+    try:
+        refresh_dashboard_cache_task(db, farm_id_key)
+    except Exception as e:
+        logger.error(f"Background cache refresh failed for {farm_id_key}: {e}")
+    finally:
+        db.close()
+
+
+def get_cached_field(db: Session, farm_id_key: str, field_name: str, background_tasks: BackgroundTasks) -> dict:
+    """Retorna o campo do cache. Roda stale-while-revalidate assincronamente se expirado."""
+    cache_row = db.query(DashboardStatsCache).filter(DashboardStatsCache.farm_id == farm_id_key).first()
+    
+    # 1. Se não existe cache nenhum, cria na hora de forma síncrona
+    if not cache_row:
+        logger.info(f"Cache MISS for key: {farm_id_key}. Building synchronously...")
+        refresh_dashboard_cache_task(db, farm_id_key)
+        cache_row = db.query(DashboardStatsCache).filter(DashboardStatsCache.farm_id == farm_id_key).first()
+        if cache_row:
+            return getattr(cache_row, field_name)
+        else:
+            # Fallback seguro caso de algum erro na gravação
+            actual_farm_id = None if farm_id_key == "ALL" else farm_id_key
+            if field_name == "stats_v2":
+                return compute_stats_v2_internal(db, actual_farm_id)
+            elif field_name == "platform_comparison":
+                return compute_platform_comparison_internal(db, actual_farm_id)
+            else:
+                return compute_analytics_internal(db, actual_farm_id)
+                
+    # 2. Se existe cache, checa se expirou (10 minutos)
+    now = datetime.now(timezone.utc)
+    updated_at = cache_row.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+        
+    if now - updated_at > timedelta(minutes=10):
+        logger.info(f"Cache STALE for key: {farm_id_key} (age: {now - updated_at}). Triggering background refresh...")
+        background_tasks.add_task(refresh_dashboard_cache_background, farm_id_key)
+        
+    # Retorna o valor atual do cache imediatamente (super rápido!)
+    return getattr(cache_row, field_name)
+
+
+# ── Estatísticas por plataforma (Dashboard Overview) ──────────
+@router.get("/stats/platform-comparison")
+def get_platform_comparison_stats(
+    farm_id: Optional[str] = Query(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna médias, min e max por plataforma para o gráfico comparativo do dashboard."""
+    if farm_id:
+        farm_id_key = farm_id
+    elif current_user.role != "admin" and current_user.id_farm:
+        farm_id_key = str(current_user.id_farm)
+    else:
+        farm_id_key = "ALL"
+
+    return get_cached_field(db, farm_id_key, "platform_comparison", background_tasks)
 
 
 @router.get("/stats/by-farm")
@@ -430,118 +855,37 @@ def get_animal_ranking(
 @router.get("/stats")
 def get_stats_v2(
     farm_id: Optional[str] = Query(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Estatísticas do dashboard vindas do schema genetics."""
-    query = db.query(GeneticsAnimal)
-
     if farm_id:
-        query = query.filter(GeneticsAnimal.farm_id == farm_id)
+        farm_id_key = farm_id
     elif current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(GeneticsAnimal.farm_id == current_user.id_farm)
-
-    total_animals = query.count()
-
-    sex_counts = (
-        query.with_entities(GeneticsAnimal.sexo, func.count())
-        .group_by(GeneticsAnimal.sexo)
-        .all()
-    )
-    animals_by_sex = {s or "unknown": c for s, c in sex_counts}
-
-    # Subconsulta para filtrar animais (evita carregar milhares de IDs na memória)
-    animal_subq = query.with_entities(GeneticsAnimal.id).subquery()
-    
-    eval_counts = (
-        db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
-        .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_subq))
-        .group_by(GeneticsGeneticEvaluation.fonte_origem)
-        .all()
-    )
-    source_counts = {s or "unknown": c for s, c in eval_counts}
-
-    # Médias de pesos: usa o campo metrics (JSONB)
-    # Tenta pegar PD (Desmama) e PS (Sobreano) dependendo da fonte
-    # Otimizado para usar a subquery diretamente no SQL
-    p210 = db.execute(
-        text("""
-            SELECT AVG(
-                CASE 
-                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PD-EDg'->>'dep')::numeric
-                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP210'->>'dep')::numeric
-                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PD'->>'dep')::numeric
-                    ELSE NULL
-                END
-            )
-            FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
-        """),
-        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
-    ).scalar()
-    
-    # P365 (Ano)
-    p365 = db.execute(
-        text("""
-            SELECT AVG(
-                CASE 
-                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PA-EDg'->>'dep')::numeric
-                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP365'->>'dep')::numeric
-                    WHEN fonte_origem = 'GENEPLUS' THEN NULL
-                    ELSE NULL
-                END
-            )
-            FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
-        """),
-        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
-    ).scalar()
-
-    # P450 (Sobreano)
-    p450 = db.execute(
-        text("""
-            SELECT AVG(
-                CASE 
-                    WHEN fonte_origem = 'PMGZ' THEN (metrics->'PS-EDg'->>'dep')::numeric
-                    WHEN fonte_origem = 'ANCP' THEN (metrics->'DP450'->>'dep')::numeric
-                    WHEN fonte_origem = 'GENEPLUS' THEN (metrics->'PS'->>'dep')::numeric
-                    ELSE NULL
-                END
-            )
-            FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
-        """),
-        {"fid": farm_id or current_user.id_farm, "is_admin": current_user.role == "admin"}
-    ).scalar()
-
-    avg_p210 = round(float(p210), 2) if p210 else None
-    avg_p365 = round(float(p365), 2) if p365 else None
-    avg_p450 = round(float(p450), 2) if p450 else None
-
-
-    if current_user.role == "admin":
-        total_farms = db.query(GeneticsFarm).count()
+        farm_id_key = str(current_user.id_farm)
     else:
-        total_farms = 1 if current_user.id_farm else 0
+        farm_id_key = "ALL"
 
-    from backend.models import Upload
-    from datetime import timedelta, timezone
-    thirty_days_ago = __import__('datetime').datetime.now(timezone.utc) - timedelta(days=30)
-    uploads_query = db.query(Upload).filter(Upload.data_upload >= thirty_days_ago)
-    if current_user.role != "admin" and current_user.id_farm:
-        uploads_query = uploads_query.filter(Upload.id_farm == str(current_user.id_farm))
-    recent_uploads = uploads_query.count()
+    return get_cached_field(db, farm_id_key, "stats_v2", background_tasks)
 
-    return {
-        "total_animals": total_animals,
-        "total_farms": total_farms,
-        "recent_uploads": recent_uploads,
-        "animals_by_sex": animals_by_sex,
-        "animals_by_source": source_counts,
-        "avg_p210": avg_p210,
-        "avg_p365": avg_p365,
-        "avg_p450": avg_p450,
-    }
+
+@router.get("/stats/analytics")
+def get_analytics_stats(
+    farm_id: Optional[str] = Query(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna estatísticas detalhadas e profundas sobre as avaliações genéticas e animais."""
+    if farm_id:
+        farm_id_key = farm_id
+    elif current_user.role != "admin" and current_user.id_farm:
+        farm_id_key = str(current_user.id_farm)
+    else:
+        farm_id_key = "ALL"
+
+    return get_cached_field(db, farm_id_key, "analytics", background_tasks)
 
 
 # ============================================================
@@ -587,25 +931,28 @@ def list_animals(
     total = query.count()
     animals = query.order_by(GeneticsAnimal.rgn).offset(offset).limit(limit).all()
 
+    # Pre-fetch genetic evaluations for all returned animals in a single query
+    animal_ids = [a.id for a in animals]
+    all_evals = []
+    if animal_ids:
+        evals_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+        if fonte_origem:
+            evals_query = evals_query.filter(GeneticsGeneticEvaluation.fonte_origem == fonte_origem)
+        all_evals = evals_query.order_by(GeneticsGeneticEvaluation.safra.desc()).all()
 
+    # Group evaluations by animal_id in memory
+    from collections import defaultdict
+    evals_by_animal = defaultdict(list)
+    for ev in all_evals:
+        evals_by_animal[ev.animal_id].append(ev)
 
     results = []
     for a in animals:
-        eval_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id == a.id)
-        if fonte_origem:
-            eval_query = eval_query.filter(GeneticsGeneticEvaluation.fonte_origem == fonte_origem)
-        
-        latest_eval = eval_query.order_by(GeneticsGeneticEvaluation.safra.desc()).first()
-        
-        all_evals = (
-            db.query(GeneticsGeneticEvaluation)
-            .filter(GeneticsGeneticEvaluation.animal_id == a.id)
-            .order_by(GeneticsGeneticEvaluation.safra.desc())
-            .all()
-        )
+        animal_evals = evals_by_animal[a.id]
+        latest_eval = animal_evals[0] if animal_evals else None
         
         animal_dict = animal_to_dict(a, latest_eval)
-        animal_dict["evaluations"] = [eval_to_dict(e) for e in all_evals]
+        animal_dict["evaluations"] = [eval_to_dict(e) for e in animal_evals]
         results.append(animal_dict)
 
     return {"total": total, "limit": limit, "offset": offset, "data": results}
@@ -637,6 +984,9 @@ def bulk_delete_animals(
         if current_user.role != "admin" and str(animal.farm_id) != str(current_user.id_farm):
             raise HTTPException(status_code=403, detail=f"Acesso negado para o animal {animal.rgn}")
     
+    # Coleta fazendas afetadas antes de commitar/invalidar
+    farm_ids = list(set(str(a.farm_id) for a in animals if a.farm_id))
+
     # Excluir avaliações primeiro
     db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id.in_(uuids)).delete(synchronize_session=False)
     
@@ -644,6 +994,15 @@ def bulk_delete_animals(
     db.query(GeneticsAnimal).filter(GeneticsAnimal.id.in_(uuids)).delete(synchronize_session=False)
     
     db.commit()
+
+    try:
+        import threading
+        for fid in farm_ids:
+            threading.Thread(target=refresh_dashboard_cache_background, args=(fid,), daemon=True).start()
+        threading.Thread(target=refresh_dashboard_cache_background, args=("ALL",), daemon=True).start()
+    except Exception as cache_err:
+        logger.error(f"Failed to trigger cache refresh after bulk delete: {cache_err}")
+
     return None
 
 

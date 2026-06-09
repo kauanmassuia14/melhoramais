@@ -83,18 +83,18 @@ export default function LoginPage() {
             />
 
             <div className="relative z-10 space-y-8">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <h2 className="text-3xl font-bold text-white tracking-tight">
                   Acesse sua conta
                 </h2>
-                <p className="text-text-secondary">
-                  Entre com suas credenciais para continuar.
+                <p className="text-text-secondary text-sm">
+                  Entre com suas credenciais para continuar no sistema.
                 </p>
               </div>
 
               <form
                 onSubmit={handleSubmit}
-                className="space-y-5"
+                className="space-y-6"
                 noValidate
               >
                 <AnimatedInput
@@ -110,51 +110,53 @@ export default function LoginPage() {
                   error={errors.email}
                 />
 
-                <div className="space-y-2">
-                  <AnimatedInput
-                    label="Sua Senha"
-                    placeholder="••••••••"
-                    type={showPassword ? "text" : "password"}
-                    icon={<LockClosedIcon className="w-5 h-5" />}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setErrors((prev) => ({
-                        ...prev,
-                        password: undefined,
-                      }));
-                    }}
-                    error={errors.password}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeSlashIcon className="w-4 h-4" />
-                    ) : (
-                      <EyeIcon className="w-4 h-4" />
-                    )}
-                    {showPassword ? "Ocultar" : "Mostrar"}
-                  </button>
-                </div>
+                <AnimatedInput
+                  label="Sua Senha"
+                  placeholder="••••••••"
+                  type={showPassword ? "text" : "password"}
+                  icon={<LockClosedIcon className="w-5 h-5" />}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-text-muted hover:text-text-secondary transition-colors p-1"
+                      title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon className="w-5 h-5" />
+                      ) : (
+                        <EyeIcon className="w-5 h-5" />
+                      )}
+                    </button>
+                  }
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErrors((prev) => ({
+                      ...prev,
+                      password: undefined,
+                    }));
+                  }}
+                  error={errors.password}
+                />
 
-                <GlowButton
-                  type="submit"
-                  size="lg"
-                  className="w-full"
-                  loading={isLoading}
-                >
-                  {isLoading ? (
-                    "Autenticando..."
-                  ) : (
-                    <>
-                      Fazer Login
-                      <ArrowRightIcon className="w-5 h-5 ml-2" />
-                    </>
-                  )}
-                </GlowButton>
+                <div className="pt-2">
+                  <GlowButton
+                    type="submit"
+                    size="lg"
+                    className="w-full"
+                    loading={isLoading}
+                  >
+                    {isLoading ? (
+                      "Autenticando..."
+                    ) : (
+                      <>
+                        Fazer Login
+                        <ArrowRightIcon className="w-5 h-5 ml-2" />
+                      </>
+                    )}
+                  </GlowButton>
+                </div>
               </form>
             </div>
           </GlassCard>

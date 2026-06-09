@@ -167,4 +167,14 @@ def delete_upload(
     db.delete(upload)
     db.commit()
     
+    try:
+        from backend.routers.animals_v2 import refresh_dashboard_cache_background
+        import threading
+        if upload.id_farm:
+            threading.Thread(target=refresh_dashboard_cache_background, args=(str(upload.id_farm),), daemon=True).start()
+        threading.Thread(target=refresh_dashboard_cache_background, args=("ALL",), daemon=True).start()
+    except Exception as cache_err:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to trigger cache refresh after upload deletion: {cache_err}")
+    
     return {"message": "Upload and associated data deleted successfully"}

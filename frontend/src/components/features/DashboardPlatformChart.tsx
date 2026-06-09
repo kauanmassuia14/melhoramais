@@ -219,6 +219,17 @@ export function DashboardPlatformChart({
               <span className={`text-[11px] font-bold ${colors?.text}`}>
                 {platform?.total_animals ?? 0}
               </span>
+              {platform?.avg_indice_principal != null && platform?.indice_label && (
+                <>
+                  <span className="text-[10px] text-slate-600">|</span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {platform.indice_label}:
+                  </span>
+                  <span className={`text-[11px] font-bold ${colors?.text}`}>
+                    {platform.avg_indice_principal.toFixed(2)}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}

@@ -7,11 +7,12 @@ interface AnimatedInputProps
   extends Omit<HTMLMotionProps<"input">, "children"> {
   label?: string;
   icon?: React.ReactNode;
+  rightElement?: React.ReactNode;
   error?: string;
 }
 
 export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
-  ({ label, icon, error, className = "", ...props }, ref) => {
+  ({ label, icon, rightElement, error, className = "", ...props }, ref) => {
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -36,12 +37,19 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
             whileFocus={{ scale: 1.01 }}
             className={`
               glass-input w-full py-3.5 text-[15px]
-              ${icon ? "pl-12 pr-4" : "px-4"}
+              ${icon ? "pl-12" : "pl-4"}
+              ${rightElement ? "pr-12" : "pr-4"}
               ${error ? "border-rose-neon! shadow-[0_0_0_3px_rgba(244,63,94,0.1)]!" : ""}
               ${className}
             `}
             {...props}
           />
+
+          {rightElement && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 z-10 flex items-center">
+              {rightElement}
+            </div>
+          )}
         </div>
 
         {error && (

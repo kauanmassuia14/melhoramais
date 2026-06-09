@@ -586,3 +586,15 @@ class GeneticsGeneticEvaluation(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     animal = relationship("GeneticsAnimal", back_populates="genetic_evaluations")
+
+
+class DashboardStatsCache(Base):
+    __tablename__ = "dashboard_stats_cache"
+    __table_args__ = ({"schema": "genetics"} if not IS_SQLITE else {})
+
+    farm_id = Column(String(36), primary_key=True)  # UUID or 'ALL'
+    stats_v2 = Column(JSONB if not IS_SQLITE else Text)
+    analytics = Column(JSONB if not IS_SQLITE else Text)
+    platform_comparison = Column(JSONB if not IS_SQLITE else Text)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+

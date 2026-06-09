@@ -118,6 +118,17 @@ class GeneticDataProcessor:
                     upload.arquivo_nome_original = filename
 
             self.db.commit()
+
+            # Recalcular cache em background
+            try:
+                from backend.routers.animals_v2 import refresh_dashboard_cache_background
+                import threading
+                if self.farm_id:
+                    threading.Thread(target=refresh_dashboard_cache_background, args=(str(self.farm_id),), daemon=True).start()
+                threading.Thread(target=refresh_dashboard_cache_background, args=("ALL",), daemon=True).start()
+            except Exception as cache_err:
+                logger.error(f"Failed to trigger cache refresh after upload: {cache_err}")
+
             return df, None, upload
 
         except Exception as e:

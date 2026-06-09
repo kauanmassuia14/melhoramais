@@ -513,6 +513,11 @@ class GeneticsFarmResponse(BaseModel):
         return str(v) if v is not None else v
 
 
+class GeneticsFarmWithPlatformsResponse(GeneticsFarmResponse):
+    """Extended farm response that includes which genetic platforms have data."""
+    platforms: list[str] = []
+
+
 # ============================================
 # Upload Schemas
 # ============================================

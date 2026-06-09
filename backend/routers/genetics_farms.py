@@ -4,9 +4,9 @@ from sqlalchemy import text
 from typing import List
 import uuid
 
-from backend.models import GeneticsFarm, User
+from backend.models import GeneticsFarm, GeneticsGeneticEvaluation, User
 from backend.database import get_db
-from backend.schemas import GeneticsFarmCreate, GeneticsFarmUpdate, GeneticsFarmResponse
+from backend.schemas import GeneticsFarmCreate, GeneticsFarmUpdate, GeneticsFarmResponse, GeneticsFarmWithPlatformsResponse
 from backend.auth.dependencies import get_current_user, require_role
 
 
@@ -30,16 +30,54 @@ def create_farm(
     return db_farm
 
 
-@router.get("", response_model=List[GeneticsFarmResponse])
+@router.get("", response_model=List[GeneticsFarmWithPlatformsResponse])
 def list_farms(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role == "admin":
-        return db.query(GeneticsFarm).all()
-    if current_user.id_farm:
-        return db.query(GeneticsFarm).all()
-    return []
+        farms = db.query(GeneticsFarm).all()
+    elif current_user.id_farm:
+        farms = db.query(GeneticsFarm).all()
+    else:
+        return []
+
+    if not farms:
+        return []
+
+    # Query SELECT-only: busca plataformas (fonte_origem) distintas por fazenda
+    farm_ids = [f.id for f in farms]
+    platform_rows = (
+        db.query(
+            GeneticsGeneticEvaluation.farm_id,
+            GeneticsGeneticEvaluation.fonte_origem,
+        )
+        .filter(GeneticsGeneticEvaluation.farm_id.in_(farm_ids))
+        .distinct()
+        .all()
+    )
+
+    # Agrupa plataformas por farm_id
+    farm_platforms: dict = {}
+    for row in platform_rows:
+        fid = str(row.farm_id)
+        fonte = row.fonte_origem
+        if fonte and fonte in ("PMGZ", "ANCP", "GENEPLUS"):
+            farm_platforms.setdefault(fid, []).append(fonte)
+
+    # Monta response enriquecido
+    result = []
+    for farm in farms:
+        farm_dict = {
+            "id": str(farm.id),
+            "nome": farm.nome,
+            "dono_fazenda": farm.dono_fazenda,
+            "created_at": farm.created_at,
+            "platforms": sorted(farm_platforms.get(str(farm.id), [])),
+        }
+        result.append(farm_dict)
+
+    return result
 
 
 @router.get("/{farm_id}", response_model=GeneticsFarmResponse)

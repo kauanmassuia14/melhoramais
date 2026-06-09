@@ -11,6 +11,52 @@ export interface DashboardStats {
   avg_p450: number | null;
 }
 
+export interface AnalyticsStats {
+  summary: {
+    total_animals: number;
+    total_evaluations: number;
+    total_breeds: number;
+    genotyping_rate: number;
+    csg_rate: number;
+    platforms: string[];
+  };
+  breed_distribution: Record<string, number>;
+  sex_distribution: Record<string, number>;
+  weight_metrics: Record<string, {
+    avg: number | null;
+    min: number | null;
+    max: number | null;
+    count: number;
+  }>;
+  index_by_platform: Record<string, {
+    label: string;
+    avg: number | null;
+    min: number | null;
+    max: number | null;
+    count: number;
+  }>;
+  top_animals: Array<{
+    rgn: string;
+    nome: string;
+    sexo: string;
+    fonte: string;
+    indice: number | null;
+    indice_label: string;
+    percentil: number | null;
+  }>;
+  breed_averages: Record<string, {
+    indice: number | null;
+    p210: number | null;
+    p365: number | null;
+    p450: number | null;
+  }>;
+  upload_activity: {
+    last_30d: number;
+    last_60d: number;
+    last_90d: number;
+  };
+}
+
 export interface ProcessingLog {
   id: number;
   id_farm: number;
@@ -137,6 +183,7 @@ export interface GeneticsFarm {
   dono_fazenda: string | null;
   cnpj?: string | null;
   created_at: string | null;
+  platforms?: string[];
 }
 
 export interface Upload {
@@ -565,6 +612,12 @@ export const api = {
   markAllAsRead: () =>
     fetchApi<{ message: string }>('/notifications/read-all', { method: 'PUT' }),
 
+  deleteNotification: (id: number) =>
+    fetchApi<{ message: string }>(`/notifications/${id}`, { method: 'DELETE' }),
+
+  clearReadNotifications: () =>
+    fetchApi<{ message: string }>('/notifications/clear-read', { method: 'DELETE' }),
+
   // Uploads API
   getUploads: (opts?: { farmId?: string; fonteOrigem?: string; status?: string; limit?: number; offset?: number }) => {
     const params = new URLSearchParams();
@@ -634,6 +687,12 @@ export const api = {
     if (opts?.metric) params.set('metric', opts.metric);
     params.set('limit', String(opts?.limit || 20));
     return fetchApi<any[]>(`/v2/animals/stats/ranking?${params.toString()}`);
+  },
+
+  getAnalyticsStats: (farmId?: string) => {
+    const params = new URLSearchParams();
+    if (farmId) params.set('farm_id', farmId);
+    return fetchApi<AnalyticsStats>(`/v2/animals/stats/analytics?${params.toString()}`);
   },
 
   deleteAnimalsV2: (animalIds: string[]) =>

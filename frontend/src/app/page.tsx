@@ -173,11 +173,11 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <GlassCard className="lg:col-span-2 p-6 overflow-hidden relative group">
-                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-emerald-glow/10 rounded-full blur-3xl group-hover:bg-emerald-glow/20 transition-all duration-500" />
+                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-emerald-glow/10 rounded-full blur-3xl group-hover:bg-emerald-glow/20 transition-all duration-500 pointer-events-none" />
                 
                 <div className="flex items-center justify-between mb-6">
                    <h3 className="text-xl font-bold text-white">Estatísticas de Peso</h3>
-                   <Link href="/animals" className="text-sm text-cyan-glow-400 hover:underline flex items-center gap-1">
+                   <Link href="/analytics" className="text-sm text-cyan-glow-400 hover:underline flex items-center gap-1">
                       Ver tudo <ArrowRightIcon className="w-4 h-4" />
                    </Link>
                 </div>

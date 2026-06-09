@@ -4,31 +4,53 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card } from '@/components/ui/Card';
-import { api, type DashboardStats, type GeneticsFarm as Farm } from '@/lib/api';
+import { GlassCard } from '@/components/ui/glass-card';
+import { api, type AnalyticsStats, type GeneticsFarm as Farm } from '@/lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChartBarSquareIcon,
-  CubeTransparentIcon,
-  ArrowTrendingUpIcon,
-  BeakerIcon,
-  ArrowRightIcon,
+  ChartBarIcon,
   SparklesIcon,
-  CheckBadgeIcon,
+  ArrowRightIcon,
+  BeakerIcon,
+  IdentificationIcon,
+  GlobeAltIcon,
+  ServerIcon,
+  ArrowUpTrayIcon,
+  UserGroupIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
 
 function AnalyticsContent() {
   const searchParams = useSearchParams();
   const farmIdParam = searchParams.get('farm_id');
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFarm, setSelectedFarm] = useState<Farm | null>(null);
   const [farms, setFarms] = useState<Farm[]>([]);
+  const [isBreedModalOpen, setIsBreedModalOpen] = useState(false);
+  const [breedPage, setBreedPage] = useState(1);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
       const farmId = farmIdParam || undefined;
-      api.getStatsV2(farmId)
+      setLoading(true);
+      api.getAnalyticsStats(farmId)
         .then(setStats)
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
@@ -49,227 +71,603 @@ function AnalyticsContent() {
     }
   }, [farmIdParam]);
 
-  const sourceTotal = stats
-    ? Object.values(stats.animals_by_source).reduce((a, b) => a + b, 0)
-    : 0;
+  // Color mappings
+  const COLORS = ['#06b6d4', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1'];
+
+  // Breed distribution data format
+  const breedData = stats
+    ? Object.entries(stats.breed_distribution).map(([name, value]) => ({ name, value }))
+    : [];
+
+  // Weight metrics chart data format
+  const weightData = stats
+    ? Object.entries(stats.weight_metrics).map(([key, data]) => ({
+        name: key === 'p210' ? 'Desmama (210d)' : key === 'p365' ? 'Ano (365d)' : 'Sobreano (450d)',
+        avg: data.avg || 0,
+        min: data.min || 0,
+        max: data.max || 0,
+      }))
+    : [];
 
   return (
     <DashboardLayout>
       <div className="space-y-8 animate-in fade-in duration-700">
-        <section className="flex items-start justify-between">
+        
+        {/* ─── Page Title / Header ────────────────────────────────────────── */}
+        <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-white tracking-tight">Análises Genéticas</h1>
-            {selectedFarm && (
-              <p className="text-cyan-400 text-lg">
-                Fazenda: {selectedFarm.nome}
-              </p>
-            )}
-            <p className="text-slate-400 text-lg">Insights avançados sobre o seu rebanho e performance de dados.</p>
+            <h1 className="text-4xl font-bold text-white tracking-tight flex items-center gap-3">
+              <ChartBarIcon className="w-9 h-9 text-cyan-400" />
+              Inteligência Genética
+            </h1>
+            <p className="text-slate-400 text-lg">
+              {selectedFarm 
+                ? `Insights profundos e comparativos para a fazenda ${selectedFarm.nome}` 
+                : 'Métricas globais consolidadas de todas as fazendas registradas'}
+            </p>
           </div>
           {selectedFarm && (
             <Link
               href={`/benchmarking?farm_id=${selectedFarm.id}`}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-glow/10 border border-violet-glow/20 text-violet-glow-400 text-sm font-medium hover:bg-violet-glow/20 transition-all"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-violet-500/20 transition-all transform hover:-translate-y-0.5"
             >
-              <SparklesIcon className="w-5 h-5" />
-              Benchmarking
+              <SparklesIcon className="w-5 h-5 animate-pulse" />
+              Ver Benchmarking
               <ArrowRightIcon className="w-4 h-4" />
             </Link>
           )}
         </section>
 
+        {/* ─── Farm Selector Dropdown ────────────────────────────────────── */}
         {farms.length > 0 && (
-          <Card variant="bento" className="p-4">
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-400">Filtrar por fazenda:</span>
+          <GlassCard className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-slate-300">Selecionar Fazenda:</span>
               <select
                 value={farmIdParam || ''}
                 onChange={(e) => {
                   const id = e.target.value;
                   window.location.href = id ? `/analytics?farm_id=${id}` : '/analytics';
                 }}
-                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm"
+                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
               >
-                <option value="">Todas as fazendas</option>
+                <option value="" className="bg-slate-900 text-white">Todas as fazendas</option>
                 {farms.map((farm) => (
-                  <option key={farm.id} value={farm.id}>
+                  <option key={farm.id} value={farm.id} className="bg-slate-900 text-white">
                     {farm.nome}
                   </option>
                 ))}
               </select>
             </div>
-          </Card>
+            {stats && (
+              <span className="text-xs text-slate-500 font-mono">
+                Dados consolidados de {stats.summary.total_evaluations} avaliações
+              </span>
+            )}
+          </GlassCard>
         )}
 
-        {loading && <p className="text-slate-400">Carregando estatísticas...</p>}
-        {error && <p className="text-red-400">Erro: {typeof error === 'string' ? error : JSON.stringify(error)}</p>}
+        {/* ─── Loading / Error states ─────────────────────────────────────── */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
+              <BeakerIcon className="w-6 h-6 text-cyan-400 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-base font-bold text-white">Consolidando análises complexas...</h4>
+              <p className="text-sm text-slate-500 mt-1 max-w-sm">Processando estatísticas, distribuições raciais e índices de DEPs.</p>
+            </div>
+          </div>
+        )}
 
-        {stats && (
-          <>
-            {/* Stats Grid */}
+        {error && (
+          <GlassCard className="p-8 border-rose-500/20 text-center max-w-lg mx-auto space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto">
+              <span className="text-rose-500 font-bold text-xl">!</span>
+            </div>
+            <h3 className="text-lg font-bold text-white">Erro ao carregar dados</h3>
+            <p className="text-slate-400 text-sm">{error}</p>
+          </GlassCard>
+        )}
+
+        {/* ─── Dashboard Stats ────────────────────────────────────────────── */}
+        {!loading && !error && stats && (
+          <div className="space-y-8">
+            
+            {/* Hero KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard
-                title="Total Animais"
-                value={stats.total_animals.toLocaleString()}
-                trend={`${stats.recent_uploads} uploads/30d`}
-                icon={<CubeTransparentIcon className="w-6 h-6" />}
-                color="blue"
-              />
-              <StatCard
-                title="Média P210"
-                value={stats.avg_p210 ? stats.avg_p210.toFixed(1) : '-'}
-                trend="Peso Desmama"
-                icon={<ArrowTrendingUpIcon className="w-6 h-6" />}
-                color="emerald"
-              />
-              <StatCard
-                title="Fazendas"
-                value={String(stats.total_farms)}
-                trend="Multi-tenant"
-                icon={<BeakerIcon className="w-6 h-6" />}
-                color="purple"
-              />
-              <StatCard
-                title="Média P450"
-                value={stats.avg_p450 ? stats.avg_p450.toFixed(1) : '-'}
-                trend="Peso Sobreano"
-                icon={<ChartBarSquareIcon className="w-6 h-6" />}
-                color="amber"
-              />
+              
+              <GlassCard className="p-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-cyan-glow/10 rounded-full blur-2xl group-hover:bg-cyan-glow/20 transition-all pointer-events-none" />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                    <UserGroupIcon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider bg-slate-800 px-2 py-1 rounded">
+                    Rebanho
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Animais</p>
+                  <p className="text-3xl font-extrabold text-white tracking-tight">{stats.summary.total_animals.toLocaleString("pt-BR")}</p>
+                </div>
+              </GlassCard>
+
+              <GlassCard className="p-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-glow/10 rounded-full blur-2xl group-hover:bg-emerald-glow/20 transition-all pointer-events-none" />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <IdentificationIcon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider bg-slate-800 px-2 py-1 rounded">
+                    Identificação
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Genotipados</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-extrabold text-white tracking-tight">{stats.summary.genotyping_rate}%</p>
+                    <span className="text-xs text-emerald-400 font-medium">taxa</span>
+                  </div>
+                </div>
+              </GlassCard>
+
+              <GlassCard className="p-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-violet-glow/10 rounded-full blur-2xl group-hover:bg-violet-glow/20 transition-all pointer-events-none" />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                    <GlobeAltIcon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider bg-slate-800 px-2 py-1 rounded">
+                    Plataformas
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Ativas</p>
+                  <p className="text-3xl font-extrabold text-white tracking-tight">{stats.summary.platforms.join(' / ') || '—'}</p>
+                </div>
+              </GlassCard>
+
+              <GlassCard className="p-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-amber-glow/10 rounded-full blur-2xl group-hover:bg-amber-glow/20 transition-all pointer-events-none" />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <ServerIcon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider bg-slate-800 px-2 py-1 rounded">
+                    Raças
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Diversidade</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-extrabold text-white tracking-tight">{stats.summary.total_breeds}</p>
+                    <span className="text-xs text-slate-400">racas</span>
+                  </div>
+                </div>
+              </GlassCard>
+
             </div>
 
-            {/* Distribution */}
+            {/* Distribution Charts Block */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <Card variant="bento" className="lg:col-span-8 h-96 flex flex-col justify-between">
+              
+              {/* Donut Chart: Breed Distribution */}
+              <GlassCard className="lg:col-span-5 p-6 flex flex-col justify-between min-h-[380px]">
                 <div>
-                  <h3 className="text-xl font-bold text-white">Distribuição por Fonte</h3>
-                  <p className="text-slate-500 text-sm">Animais por sistema genético</p>
+                  <h3 className="text-lg font-bold text-white">Composição de Raças</h3>
+                  <p className="text-slate-500 text-xs">Percentual de raças no rebanho</p>
                 </div>
-                <div className="flex-1 flex items-end gap-2 pt-8">
-                  {Object.entries(stats.animals_by_source).map(([source, count], i) => {
-                    const maxCount = Math.max(...Object.values(stats.animals_by_source));
-                    const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
-                    const colors = ['from-blue-600 to-blue-400', 'from-emerald-600 to-emerald-400', 'from-violet-600 to-violet-400', 'from-amber-600 to-amber-400'];
-                    return (
-                      <div key={source} className="flex-1 flex flex-col items-center gap-2">
-                        <span className="text-xs text-slate-400 font-bold">{count}</span>
-                        <div className="w-full bg-slate-800/50 rounded-t-xl overflow-hidden relative group" style={{ height: '200px' }}>
-                          <div
-                            className={`w-full bg-gradient-to-t ${colors[i % colors.length]} transition-all duration-1000 group-hover:brightness-125`}
-                            style={{ height: `${height}%`, marginTop: 'auto', display: 'flex', alignItems: 'flex-end' }}
+                
+                {breedData.length > 0 ? (
+                  <div className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-6 py-6">
+                    <div className="relative w-44 h-44">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={breedData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={75}
+                            paddingAngle={4}
+                            dataKey="value"
                           >
-                            <div className="w-full h-full absolute top-0 left-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            {breedData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-white">{stats.summary.total_animals}</span>
+                        <span className="text-[9px] text-slate-500 uppercase tracking-widest">Animais</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 space-y-2.5 w-full">
+                      {breedData.slice(0, 5).map((b, idx) => {
+                        const total = stats.summary.total_animals;
+                        const pct = total > 0 ? ((b.value / total) * 100).toFixed(1) : 0;
+                        return (
+                          <div key={b.name} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                              <span className="text-slate-300 font-semibold">{b.name}</span>
+                            </div>
+                            <span className="text-white font-bold">{b.value.toLocaleString("pt-BR")} ({pct}%)</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-slate-500 text-sm">Nenhum dado de raça disponível</p>
+                  </div>
+                )}
+              </GlassCard>
+
+              {/* Weight Performance Metrics Range */}
+              <GlassCard className="lg:col-span-7 p-6 flex flex-col justify-between min-h-[380px]">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Desempenho de DEPs de Peso</h3>
+                  <p className="text-slate-500 text-xs">Média, valor mínimo e valor máximo de peso estimado (DEP) por período</p>
+                </div>
+                
+                {weightData.length > 0 ? (
+                  <div className="flex-1 w-full h-64 pt-6">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weightData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.05)' }} />
+                        <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.05)' }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                          labelStyle={{ color: '#fff', fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        <Bar dataKey="min" name="Min DEP" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Bar dataKey="avg" name="Média DEP" fill="#06b6d4" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Bar dataKey="max" name="Max DEP" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-slate-500 text-sm">Nenhum dado de avaliação de peso disponível</p>
+                  </div>
+                )}
+              </GlassCard>
+
+            </div>
+
+            {/* Platform Genetic Indices Detailed Info */}
+            <div className="space-y-4">
+              <h3 className="text-xl font-bold text-white">Índices Genéticos por Plataforma</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {['ANCP', 'PMGZ', 'GENEPLUS'].map((platform) => {
+                  const info = stats.index_by_platform[platform];
+                  const colors = {
+                    ANCP: { text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
+                    PMGZ: { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+                    GENEPLUS: { text: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' }
+                  }[platform as 'ANCP' | 'PMGZ' | 'GENEPLUS'] || { text: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/20' };
+
+                  return (
+                    <GlassCard key={platform} className={`p-6 border ${colors.border}`}>
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-bold text-white tracking-widest">{platform}</span>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase ${colors.bg} ${colors.text}`}>
+                          {info?.label || 'DEP'}
+                        </span>
+                      </div>
+                      
+                      {info ? (
+                        <div className="space-y-4">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black text-white font-mono">{info.avg?.toFixed(2)}</span>
+                            <span className="text-xs text-slate-500">Média</span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-xs pt-3 border-t border-white/5">
+                            <div>
+                              <p className="text-slate-500">Mínimo</p>
+                              <p className="text-slate-300 font-bold font-mono">{info.min?.toFixed(2) ?? '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Máximo</p>
+                              <p className="text-slate-300 font-bold font-mono">{info.max?.toFixed(2) ?? '—'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-[10px] text-slate-500 pt-1">
+                            {info.count} animais avaliados
                           </div>
                         </div>
-                        <span className="text-xs text-slate-500 font-medium">{source}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-
-              <Card variant="bento" className="lg:col-span-4 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Distribuição por Sexo</h3>
-                  <p className="text-slate-500 text-sm">Composição do rebanho</p>
-                </div>
-                
-                <div className="flex-1 flex items-center justify-center py-6">
-                  <div className="relative w-40 h-40">
-                    <svg className="w-full h-full" viewBox="0 0 36 36">
-                      {(() => {
-                        let offset = 0;
-                        const total = Object.values(stats.animals_by_sex).reduce((a, b) => a + b, 0);
-                        const colors = ['#3b82f6', '#10b981', '#8b5cf6'];
-                        return Object.entries(stats.animals_by_sex).map(([sex, count], i) => {
-                          const pct = total > 0 ? (count / total) * 100 : 0;
-                          const strokeDash = `${pct} ${100 - pct}`;
-                          const strokeOffset = -offset;
-                          offset += pct;
-                          return (
-                            <circle
-                              key={sex}
-                              cx="18" cy="18" r="16"
-                              fill="none"
-                              stroke={colors[i % colors.length]}
-                              strokeWidth="3.5"
-                              strokeDasharray={strokeDash}
-                              strokeDashoffset={strokeOffset}
-                              className="transition-all duration-1000"
-                            />
-                          );
-                        });
-                      })()}
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-bold text-white">{stats.total_animals}</span>
-                      <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-4">
-                  {Object.entries(stats.animals_by_sex).map(([sex, count], i) => {
-                    const total = Object.values(stats.animals_by_sex).reduce((a, b) => a + b, 0);
-                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                    const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500'];
-                    return (
-                      <div key={sex} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${colors[i % colors.length]}`} />
-                          <span className="text-xs text-slate-400">{sex}</span>
+                      ) : (
+                        <div className="py-8 text-center text-xs text-slate-600">
+                          Sem avaliações nesta plataforma
                         </div>
-                        <span className="text-xs font-bold text-white">{count} ({pct}%)</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
+                      )}
+                    </GlassCard>
+                  );
+                })}
+
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card variant="bento" className="p-6">
-                 <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Métricas de Peso</h4>
-                 <div className="space-y-6">
-                    <MetricRow label="Desmama (210d)" value={stats.avg_p210} color="text-blue-400" bg="bg-blue-400/10" />
-                    <MetricRow label="Ano (365d)" value={stats.avg_p365} color="text-emerald-400" bg="bg-emerald-400/10" />
-                    <MetricRow label="Sobreano (450d)" value={stats.avg_p450} color="text-violet-400" bg="bg-violet-400/10" />
-                 </div>
-              </Card>
+            {/* Top Animals & Breed Averages Block */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              <Card variant="bento" className="lg:col-span-2 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-white">Performance de Dados</h3>
-                    <p className="text-slate-500 text-sm">Uploads recentes e integridade</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold text-emerald-400">{stats.recent_uploads}</span>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">Uploads / 30d</p>
-                  </div>
+              {/* Top 10 Best Animals Table */}
+              <GlassCard className="lg:col-span-7 p-6 overflow-hidden">
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-white">Top 10 Animais do Rebanho</h3>
+                  <p className="text-slate-500 text-xs">Melhores pontuações por Índice Principal</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Top Fontes</p>
-                    {Object.entries(stats.animals_by_source).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([source, count]) => (
-                      <div key={source} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-white/5">
-                        <span className="text-sm text-white font-medium">{source}</span>
-                        <span className="text-sm font-bold text-cyan-400">{count}</span>
-                      </div>
-                    ))}
+                {stats.top_animals.length > 0 ? (
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/5 text-slate-400 font-bold">
+                          <th className="py-3 px-2">Rank</th>
+                          <th className="py-3 px-2">RGN</th>
+                          <th className="py-3 px-2">Nome</th>
+                          <th className="py-3 px-2 text-center">Sexo</th>
+                          <th className="py-3 px-2">Plataforma</th>
+                          <th className="py-3 px-2 text-right">Índice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.top_animals.map((an, idx) => (
+                          <tr key={an.rgn + idx} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-2 font-bold text-cyan-400">#{idx + 1}</td>
+                            <td className="py-3 px-2 font-mono text-slate-200">{an.rgn}</td>
+                            <td className="py-3 px-2 font-semibold text-white max-w-[120px] truncate">{an.nome}</td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${an.sexo === 'M' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                {an.sexo}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-slate-400">{an.fonte}</td>
+                            <td className="py-3 px-2 text-right font-black text-white font-mono">
+                              {an.indice?.toFixed(2)} <span className="text-[9px] text-slate-500 font-normal">{an.indice_label}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="flex items-center justify-center p-6 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700">
-                    <div className="text-center">
-                       <CheckBadgeIcon className="w-12 h-12 text-emerald-500/20 mx-auto mb-2" />
-                       <p className="text-xs text-slate-500 italic">"Sincronização ativa e dados validados para o ciclo 2026."</p>
-                    </div>
+                ) : (
+                  <div className="py-12 text-center text-slate-500">
+                    Nenhum animal qualificado com índice principal encontrado
+                  </div>
+                )}
+              </GlassCard>
+
+              {/* Breed Averages Comparison Table */}
+              <GlassCard className="lg:col-span-5 p-6">
+                <div className="mb-4 flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Médias por Raça</h3>
+                    <p className="text-slate-500 text-xs">Média geral das avaliações de peso por raça</p>
+                  </div>
+                  {Object.keys(stats.breed_averages).length > 10 && (
+                    <button
+                      onClick={() => {
+                        setBreedPage(1);
+                        setIsBreedModalOpen(true);
+                      }}
+                      className="text-[11px] bg-white/5 hover:bg-white/10 text-cyan-400 border border-cyan-500/10 hover:border-cyan-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-semibold transition-all shadow-md"
+                    >
+                      Expandir
+                      <ArrowRightIcon className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                
+                {Object.keys(stats.breed_averages).length > 0 ? (
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/5 text-slate-400 font-bold">
+                          <th className="py-3 px-2">Raça</th>
+                          <th className="py-3 px-2 text-right">P210 (Desmama)</th>
+                          <th className="py-3 px-2 text-right">P450 (Sobreano)</th>
+                          <th className="py-3 px-2 text-right">Índice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(stats.breed_averages).slice(0, 10).map(([breed, val]) => (
+                          <tr key={breed} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-2 font-bold text-white">{breed}</td>
+                            <td className="py-3 px-2 text-right font-mono text-slate-300">
+                              {val.p210 ? `${val.p210.toFixed(2)} kg` : '—'}
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-slate-300">
+                              {val.p450 ? `${val.p450.toFixed(2)} kg` : '—'}
+                            </td>
+                            <td className="py-3 px-2 text-right font-black text-emerald-400 font-mono">
+                              {val.indice ? val.indice.toFixed(2) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-slate-500">
+                    Nenhum dado por raça disponível
+                  </div>
+                )}
+              </GlassCard>
+
+            </div>
+
+            {/* Auxiliary status cards (Genotyping / CSG / Recent Uploads activity) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              <GlassCard className="p-6 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white">CSG (Certificado Superior de Genética)</h4>
+                  <p className="text-slate-500 text-xs">Percentual de animais certificados no rebanho</p>
+                </div>
+                <div className="flex items-center gap-6 pt-4">
+                  <div className="text-3xl font-black text-cyan-400 font-mono">{stats.summary.csg_rate}%</div>
+                  <div className="h-2 flex-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${stats.summary.csg_rate}%` }} />
                   </div>
                 </div>
-              </Card>
+              </GlassCard>
+
+              <GlassCard className="p-6 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white">Genotipagem Completa</h4>
+                  <p className="text-slate-500 text-xs">Taxa de animais genotipados para análises avançadas</p>
+                </div>
+                <div className="flex items-center gap-6 pt-4">
+                  <div className="text-3xl font-black text-emerald-400 font-mono">{stats.summary.genotyping_rate}%</div>
+                  <div className="h-2 flex-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${stats.summary.genotyping_rate}%` }} />
+                  </div>
+                </div>
+              </GlassCard>
+
+              <GlassCard className="p-6 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white">Atividade Recente de Dados</h4>
+                  <p className="text-slate-500 text-xs">Lotes de planilhas integradas à plataforma</p>
+                </div>
+                <div className="flex justify-between gap-2 text-center pt-4 text-xs">
+                  <div className="flex-1 bg-white/[0.02] border border-white/5 p-2 rounded-xl">
+                    <p className="text-slate-500 text-[10px] uppercase">30d</p>
+                    <p className="text-base font-extrabold text-white font-mono">{stats.upload_activity.last_30d}</p>
+                  </div>
+                  <div className="flex-1 bg-white/[0.02] border border-white/5 p-2 rounded-xl">
+                    <p className="text-slate-500 text-[10px] uppercase">60d</p>
+                    <p className="text-base font-extrabold text-white font-mono">{stats.upload_activity.last_60d}</p>
+                  </div>
+                  <div className="flex-1 bg-white/[0.02] border border-white/5 p-2 rounded-xl">
+                    <p className="text-slate-500 text-[10px] uppercase">90d</p>
+                    <p className="text-base font-extrabold text-white font-mono">{stats.upload_activity.last_90d}</p>
+                  </div>
+                </div>
+              </GlassCard>
+
             </div>
-          </>
+
+            {/* Modal de Médias por Raça Expandido */}
+            <AnimatePresence>
+              {isBreedModalOpen && (
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                  onClick={() => setIsBreedModalOpen(false)}
+                >
+                  {/* Backdrop */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                  />
+
+                  {/* Modal Content */}
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-950/95 backdrop-blur-xl p-6 shadow-2xl flex flex-col max-h-[90vh]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-4 mb-5">
+                      <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                          <GlobeAltIcon className="w-5 h-5 text-cyan-400" />
+                          Médias por Raça Completo
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Lista completa com paginação e médias gerais de desempenho
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setIsBreedModalOpen(false)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Table Area (scrollable) */}
+                    <div className="overflow-y-auto flex-1 w-full pr-1">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/5 text-slate-400 font-bold sticky top-0 bg-slate-950/95 z-10">
+                            <th className="py-3 px-2">Raça</th>
+                            <th className="py-3 px-2 text-right">P210 (Desmama)</th>
+                            <th className="py-3 px-2 text-right">P450 (Sobreano)</th>
+                            <th className="py-3 px-2 text-right">Índice</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(stats.breed_averages)
+                            .slice((breedPage - 1) * 10, breedPage * 10)
+                            .map(([breed, val]) => (
+                              <tr key={'modal-' + breed} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                                <td className="py-3 px-2 font-bold text-white text-sm">{breed}</td>
+                                <td className="py-3 px-2 text-right font-mono text-slate-300 text-sm">
+                                  {val.p210 ? `${val.p210.toFixed(2)} kg` : '—'}
+                                </td>
+                                <td className="py-3 px-2 text-right font-mono text-slate-300 text-sm">
+                                  {val.p450 ? `${val.p450.toFixed(2)} kg` : '—'}
+                                </td>
+                                <td className="py-3 px-2 text-right font-black text-emerald-400 font-mono text-sm">
+                                  {val.indice ? val.indice.toFixed(2) : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer / Pagination */}
+                    <div className="border-t border-white/5 mt-5 pt-4 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">
+                        Mostrando {(breedPage - 1) * 10 + 1} a {Math.min(breedPage * 10, Object.keys(stats.breed_averages).length)} de {Object.keys(stats.breed_averages).length} raças
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={breedPage === 1}
+                          onClick={() => setBreedPage((p) => Math.max(1, p - 1))}
+                          className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                        >
+                          <ChevronLeftIcon className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs text-white font-semibold px-2">
+                          {breedPage} / {Math.ceil(Object.keys(stats.breed_averages).length / 10)}
+                        </span>
+                        <button
+                          disabled={breedPage >= Math.ceil(Object.keys(stats.breed_averages).length / 10)}
+                          onClick={() => setBreedPage((p) => p + 1)}
+                          className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                        >
+                          <ChevronRightIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+
+          </div>
         )}
+
       </div>
     </DashboardLayout>
   );
@@ -280,58 +678,5 @@ export default function AnalyticsPage() {
     <Suspense fallback={<p className="text-slate-400 p-8">Carregando análises...</p>}>
       <AnalyticsContent />
     </Suspense>
-  );
-}
-
-function StatCard({ title, value, trend, icon, color }: any) {
-  const colors: Record<string, string> = {
-    blue: 'bg-blue-600/10 text-blue-400 border-blue-500/20',
-    emerald: 'bg-emerald-600/10 text-emerald-400 border-emerald-500/20',
-    purple: 'bg-purple-600/10 text-purple-400 border-purple-500/20',
-    amber: 'bg-amber-600/10 text-amber-400 border-amber-500/20',
-  };
-
-  return (
-    <Card variant="bento" className="p-6">
-      <div className="flex justify-between items-start mb-4">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${colors[color]}`}>
-          {icon}
-        </div>
-        <span className="text-xs font-bold px-2 py-1 rounded-md bg-slate-800 text-slate-400">
-          {trend}
-        </span>
-      </div>
-      <div className="space-y-1">
-        <p className="text-slate-500 text-sm font-medium uppercase tracking-widest">{title}</p>
-        <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-      </div>
-    </Card>
-  );
-}
-
-function DistributionRow({ label, percentage, color }: any) {
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center text-sm">
-        <span className="text-slate-300 font-medium">{label}</span>
-        <span className="text-white font-bold">{percentage}%</span>
-      </div>
-      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full`} style={{ width: `${percentage}%` }}></div>
-      </div>
-    </div>
-  );
-}
-
-function MetricRow({ label, value, color, bg }: any) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-slate-500 font-medium">{label}</span>
-      <div className={`px-3 py-1 rounded-lg ${bg} border border-white/5`}>
-        <span className={`text-sm font-bold ${color}`}>
-          {value ? `${value.toFixed(1)} kg` : '—'}
-        </span>
-      </div>
-    </div>
   );
 }
