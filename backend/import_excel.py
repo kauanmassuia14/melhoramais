@@ -256,7 +256,7 @@ def upsert_evaluation(conn, farm_id: str, animal_id: str, safra: int, fonte: str
         {eg}, {pg}, {mg},
         {p120_info}, {p210_info}, {p365_info}, {p450_info}
     )
-    ON CONFLICT (farm_id, animal_id, safra) DO UPDATE SET
+    ON CONFLICT (animal_id, safra, fonte_origem) DO UPDATE SET
         iabczg = EXCLUDED.iabczg,
         deca_index = EXCLUDED.deca_index,
         pn_ed = EXCLUDED.pn_ed,

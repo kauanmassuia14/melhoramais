@@ -688,7 +688,7 @@ class GeneticDataProcessor:
                         INSERT INTO genetics.genetic_evaluations 
                         (id, animal_id, farm_id, safra, fonte_origem, indice_principal, rank_principal, percentil_principal, metrics, progeny_stats, phenotypes, upload_id)
                         VALUES %s
-                        ON CONFLICT (animal_id, fonte_origem, safra) DO UPDATE SET
+                        ON CONFLICT (animal_id, safra, fonte_origem) DO UPDATE SET
                             indice_principal = EXCLUDED.indice_principal,
                             rank_principal = EXCLUDED.rank_principal,
                             percentil_principal = EXCLUDED.percentil_principal,

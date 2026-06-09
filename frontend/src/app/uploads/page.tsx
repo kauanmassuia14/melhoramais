@@ -104,7 +104,10 @@ export default function UploadsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
-    const date = new Date(dateStr);
+    const cleanDateStr = dateStr.includes("Z") || dateStr.includes("+") || (dateStr.includes("-") && dateStr.lastIndexOf("-") > 7)
+      ? dateStr
+      : `${dateStr}Z`;
+    const date = new Date(cleanDateStr);
     return date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",

@@ -103,7 +103,17 @@ export default function HistoryPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('pt-BR');
+    const cleanDateStr = dateStr.includes("Z") || dateStr.includes("+") || (dateStr.includes("-") && dateStr.lastIndexOf("-") > 7)
+      ? dateStr
+      : `${dateStr}Z`;
+    const date = new Date(cleanDateStr);
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   return (

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { GlassCard } from "@/components/ui/glass-card";
-import { api, DashboardStats } from "@/lib/api";
+import { api, DashboardStats, GeneticsFarm } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import {
   Squares2X2Icon,
   DocumentArrowUpIcon,
@@ -21,23 +22,41 @@ import { DashboardPlatformChart } from "@/components/features/DashboardPlatformC
 import type { DashboardPlatformData } from "@/lib/mock-comparison-data";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [platformData, setPlatformData] = useState<DashboardPlatformData | null>(null);
   const [platformLoading, setPlatformLoading] = useState(true);
+  const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
+  const [farms, setFarms] = useState<GeneticsFarm[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
-      loadStats();
-      loadPlatformData();
+      loadStats(selectedFarm);
+      loadPlatformData(selectedFarm);
     }
-  }, []);
+  }, [selectedFarm]);
 
-  const loadPlatformData = async () => {
+  useEffect(() => {
+    if (user?.role === "admin") {
+      loadFarms();
+    }
+  }, [user]);
+
+  const loadFarms = async () => {
+    try {
+      const data = await api.getGeneticsFarms();
+      setFarms(data);
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const loadPlatformData = async (farmId: string | null) => {
     setPlatformLoading(true);
     try {
-      const data = await api.getPlatformOverviewStats();
+      const data = await api.getPlatformOverviewStats(farmId ? { farmId } : undefined);
       setPlatformData(data);
     } catch {
       // Silently fail — chart won't render
@@ -46,11 +65,11 @@ export default function DashboardPage() {
     }
   };
 
-  const loadStats = async () => {
+  const loadStats = async (farmId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getStatsV2();
+      const data = await api.getStatsV2(farmId || undefined);
       setStats(data);
     } catch (err: any) {
       try {
@@ -75,13 +94,31 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-white tracking-tight">
-              Olá, Kauan
+              Olá, {user?.nome || "Kauan"}
             </h1>
             <p className="text-text-secondary mt-1">
               Bem-vindo ao Melhora+. Aqui está o que está acontecendo hoje.
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+             {/* Farm Selector for Admins */}
+             {user?.role === "admin" && farms.length > 0 && (
+               <div className="relative">
+                 <select
+                   value={selectedFarm || ""}
+                   onChange={(e) => setSelectedFarm(e.target.value || null)}
+                   className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
+                 >
+                   <option value="" className="bg-slate-900 text-white">Todas as fazendas</option>
+                   {farms.map((farm) => (
+                     <option key={farm.id} value={farm.id} className="bg-slate-900 text-white">
+                       {farm.nome}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+             )}
+
              <Link href="/upload">
                 <GlowButton variant="secondary" size="sm">
                   <ArrowUpTrayIcon className="w-4 h-4" />
@@ -268,7 +305,7 @@ export default function DashboardPage() {
             <ExclamationTriangleIcon className="w-12 h-12 text-rose-neon-400 mx-auto mb-4" />
             <p className="text-text-primary font-medium mb-2">Erro ao carregar dados</p>
             <p className="text-text-secondary text-sm mb-6">{error}</p>
-            <GlowButton onClick={loadStats} variant="ghost" size="sm">
+            <GlowButton onClick={() => { loadStats(selectedFarm); loadPlatformData(selectedFarm); }} variant="ghost" size="sm">
               Tentar Novamente
             </GlowButton>
           </GlassCard>

@@ -14,18 +14,26 @@ if not db_url:
 engine = create_engine(db_url)
 
 with engine.connect() as conn:
-    print("=== Sample of 10 animals in genetics.animals ===")
-    query = text("""
-        SELECT id, rgn, serie, nome, created_at
-        FROM genetics.animals
-        ORDER BY created_at DESC
-        LIMIT 10;
-    """)
-    res = conn.execute(query).fetchall()
+    print("=== Total Animals in DB ===")
+    total = conn.execute(text("SELECT COUNT(*) FROM genetics.animals;")).scalar()
+    print(f"Total: {total}")
+    
+    print("\n=== Animals per Farm ===")
+    res = conn.execute(text("""
+        SELECT f.nome, COUNT(a.id)
+        FROM genetics.farms f
+        LEFT JOIN genetics.animals a ON a.farm_id = f.id
+        GROUP BY f.nome
+        ORDER BY COUNT(a.id) DESC;
+    """)).fetchall()
     for row in res:
-        print(f"ID: {row[0]}")
-        print(f"  RGN: {row[1]}")
-        print(f"  Serie: {row[2]}")
-        print(f"  Nome: {row[3]}")
-        print(f"  Created At: {row[4]}")
-        print("-" * 50)
+        print(f"  Farm '{row[0]}': {row[1]}")
+        
+    print("\n=== Upload Sessions ===")
+    uploads = conn.execute(text("""
+        SELECT upload_id, nome, id_farm, total_registros, rows_inserted, rows_updated, status, data_upload
+        FROM genetics.uploads
+        ORDER BY data_upload DESC;
+    """)).fetchall()
+    for u in uploads:
+        print(f"  Upload: ID={u[0]}, name={u[1]}, farm_id={u[2]}, total={u[3]}, inserted={u[4]}, updated={u[5]}, status={u[6]}, data_upload={u[7]}")
