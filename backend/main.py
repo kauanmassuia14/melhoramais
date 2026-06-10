@@ -1442,6 +1442,19 @@ def get_unread_count(
     return {"count": count}
 
 
+@app.put("/notifications/read-all")
+def mark_all_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db.query(Notification).filter(
+        Notification.id_user == current_user.id,
+        Notification.is_read == False,
+    ).update({"is_read": True})
+    db.commit()
+    return {"message": "All notifications marked as read"}
+
+
 @app.put("/notifications/{notification_id}", response_model=NotificationResponse)
 def mark_notification_read(
     notification_id: int,
@@ -1462,19 +1475,6 @@ def mark_notification_read(
     db.commit()
     db.refresh(notification)
     return notification
-
-
-@app.put("/notifications/read-all")
-def mark_all_read(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    db.query(Notification).filter(
-        Notification.id_user == current_user.id,
-        Notification.is_read == False,
-    ).update({"is_read": True})
-    db.commit()
-    return {"message": "All notifications marked as read"}
 
 
 @app.delete("/notifications/clear-read", status_code=200)
