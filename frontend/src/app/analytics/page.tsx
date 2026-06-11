@@ -127,16 +127,6 @@ function AnalyticsContent() {
                 : 'Métricas globais consolidadas de todas as fazendas registradas'}
             </p>
           </div>
-          {selectedFarm && (
-            <Link
-              href={`/benchmarking?farm_id=${selectedFarm.id}`}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-violet-500/20 transition-all transform hover:-translate-y-0.5"
-            >
-              <SparklesIcon className="w-5 h-5 animate-pulse" />
-              Ver Benchmarking
-              <ArrowRightIcon className="w-4 h-4" />
-            </Link>
-          )}
         </section>
 
         {/* ─── Farm Selector Dropdown ────────────────────────────────────── */}
