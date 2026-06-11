@@ -162,12 +162,18 @@ def get_animal_comparison(
     """Retorna dados de comparação cross-platform para um animal específico.
     Formato compatível com AnimalComparisonData do frontend."""
     import uuid as _uuid
+    
+    animal = None
     try:
         animal_uuid = _uuid.UUID(animal_id)
+        animal = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal_uuid).first()
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"ID inválido: '{animal_id}'")
+        # Fallback: buscar por RGN
+        query = db.query(GeneticsAnimal).filter(GeneticsAnimal.rgn == animal_id)
+        if current_user.role != "admin" and current_user.id_farm:
+            query = query.filter(GeneticsAnimal.farm_id == current_user.id_farm)
+        animal = query.first()
 
-    animal = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal_uuid).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Animal não encontrado")
 
@@ -1267,13 +1273,18 @@ def get_animal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    import uuid as _uuid
+    animal = None
     try:
-        import uuid as _uuid
         animal_uuid = _uuid.UUID(animal_id)
+        animal = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal_uuid).first()
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"ID inválido: '{animal_id}' não é um UUID válido")
+        # Fallback: buscar por RGN
+        query = db.query(GeneticsAnimal).filter(GeneticsAnimal.rgn == animal_id)
+        if current_user.role != "admin" and current_user.id_farm:
+            query = query.filter(GeneticsAnimal.farm_id == current_user.id_farm)
+        animal = query.first()
 
-    animal = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal_uuid).first()
     if not animal:
         raise HTTPException(status_code=404, detail="Animal não encontrado")
 
