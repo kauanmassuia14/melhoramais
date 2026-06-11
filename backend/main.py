@@ -435,6 +435,18 @@ async def process_genetic_data(
         
         logger.info(f"Processamento concluído: {len(df_cleaned)} linhas, inserted={inserted}, updated={updated}, failed={failed}")
         
+        # Invalida o cache do dashboard para esta fazenda e para 'ALL'
+        try:
+            from sqlalchemy import text
+            db.execute(
+                text("DELETE FROM genetics.dashboard_stats_cache WHERE farm_id = :fid OR farm_id = 'ALL'"),
+                {"fid": str(effective_farm_id)}
+            )
+            db.commit()
+            logger.info(f"Cache do dashboard invalidado com sucesso para a fazenda {effective_farm_id} e ALL")
+        except Exception as cache_err:
+            logger.error(f"Erro ao invalidar cache do dashboard: {cache_err}")
+
         if download_excel:
             excel_data = await loop.run_in_executor(
                 None,
@@ -605,8 +617,20 @@ def delete_logs(
         
         # Delete the log
         db.delete(log)
-    
     db.commit()
+
+    # Invalida o cache para as fazendas afetadas e ALL
+    try:
+        from sqlalchemy import text
+        for log in logs:
+            db.execute(
+                text("DELETE FROM genetics.dashboard_stats_cache WHERE farm_id = :fid OR farm_id = 'ALL'"),
+                {"fid": str(log.id_farm)}
+            )
+        db.commit()
+    except Exception as cache_err:
+        logger.error(f"Erro ao invalidar cache apos delete_logs: {cache_err}")
+
     return {"message": f"{len(logs)} logs and associated data deleted successfully"}
 
 
@@ -690,6 +714,18 @@ def delete_log(
     # Delete the log
     db.delete(log)
     db.commit()
+
+    # Invalida o cache
+    try:
+        from sqlalchemy import text
+        db.execute(
+            text("DELETE FROM genetics.dashboard_stats_cache WHERE farm_id = :fid OR farm_id = 'ALL'"),
+            {"fid": str(log.id_farm)}
+        )
+        db.commit()
+    except Exception as cache_err:
+        logger.error(f"Erro ao invalidar cache apos delete_log: {cache_err}")
+
     return {"message": "Log and associated data deleted successfully"}
 
 
@@ -858,6 +894,17 @@ def delete_upload(
     try:
         db.delete(upload)
         db.commit()
+
+        # Invalida o cache
+        try:
+            from sqlalchemy import text
+            db.execute(
+                text("DELETE FROM genetics.dashboard_stats_cache WHERE farm_id = :fid OR farm_id = 'ALL'"),
+                {"fid": str(upload.id_farm)}
+            )
+            db.commit()
+        except Exception as cache_err:
+            logger.error(f"Erro ao invalidar cache apos delete_upload: {cache_err}")
     except Exception as e:
         db.rollback()
         logger.error(f"Error finalizing upload deletion: {e}")
@@ -904,6 +951,17 @@ def delete_upload_genetics(
         )
     
     db.commit()
+    
+    # Invalida o cache
+    try:
+        from sqlalchemy import text
+        db.execute(
+            text("DELETE FROM genetics.dashboard_stats_cache WHERE farm_id = :fid OR farm_id = 'ALL'"),
+            {"fid": str(upload.id_farm)}
+        )
+        db.commit()
+    except Exception as cache_err:
+        logger.error(f"Erro ao invalidar cache apos delete_upload_genetics: {cache_err}")
     
     return {"message": f"Deleted {len(animal_ids)} genetics animals and their evaluations"}
 
