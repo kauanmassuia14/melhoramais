@@ -472,7 +472,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
             COUNT(*) as total_animals,
             COUNT(CASE WHEN genotipado::text = 'SIM' THEN 1 END) as genotyped,
             COUNT(CASE WHEN csg::text = 'SIM' THEN 1 END) as csg_count,
-            COUNT(DISTINCT serie) as total_breeds
+            COUNT(DISTINCT COALESCE(NULLIF(raca, ''), 'Não Informado')) as total_breeds
         FROM genetics.animals
         {farm_filter_animals}
     """)
@@ -499,7 +499,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
 
     # Breed distribution
     breed_sql = text(f"""
-        SELECT COALESCE(NULLIF(serie, ''), 'Não Informado') as breed, COUNT(*) as cnt
+        SELECT COALESCE(NULLIF(raca, ''), 'Não Informado') as breed, COUNT(*) as cnt
         FROM genetics.animals
         {farm_filter_animals}
         GROUP BY breed
@@ -620,7 +620,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
             {"WHERE farm_id = :farm_id" if farm_id else ""}
         )
         SELECT 
-            COALESCE(NULLIF(a.serie, ''), 'Não Informado') as breed,
+            COALESCE(NULLIF(a.raca, ''), 'Não Informado') as breed,
             AVG(le.indice_principal) as avg_idx,
             AVG(CASE 
                 WHEN le.fonte_origem = 'PMGZ' THEN (le.metrics->'PD-EDg'->>'dep')::numeric
@@ -762,6 +762,257 @@ def get_cached_field(db: Session, farm_id_key: str, field_name: str, background_
     return getattr(cache_row, field_name)
 
 
+# ── Comparação Fazenda vs ANCP Top 10 ────────────────────────────
+@router.get("/stats/ancp-comparison")
+def get_ancp_comparison(
+    farm_id: Optional[str] = Query(None),
+    safra: Optional[int] = Query(None, description="Ano da safra para comparação"),
+    fonte_origem: Optional[str] = Query(None, description="Filtro por plataforma: ANCP, PMGZ, GENEPLUS ou null para todas"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compara as médias da fazenda com as médias ANCP Top 10 na safra selecionada com suporte multiplataforma."""
+    from backend.ancp_reference import ANCP_TOP10_AVERAGES, find_top_percentile
+
+    # Determina farm_id efetivo
+    effective_farm_id = None
+    if farm_id and farm_id not in ["all", "todas"]:
+        effective_farm_id = farm_id
+    elif not farm_id and current_user.role != "admin" and current_user.id_farm:
+        effective_farm_id = str(current_user.id_farm)
+
+    # Safras disponíveis (2000 até 2026 conforme solicitado)
+    available_safras = list(range(2000, 2027))
+
+    # Lista de DEPs para comparação com mapeamento multiplataforma
+    DEP_CONFIG = {
+        "MGTe":    {"type": "indice"},
+        "D3P":     {"ANCP": "D3P"},
+        "DIPP":    {"ANCP": "DIPP", "PMGZ": "IPPg", "GENEPLUS": "IPP"},
+        "DPE365":  {"ANCP": "DPE365", "PMGZ": "PE-365g", "GENEPLUS": "PES"},
+        "DPE450":  {"ANCP": "DPE450"},
+        "DPN":     {"ANCP": "DPN", "PMGZ": "PN-EDg", "GENEPLUS": "PN"},
+        "DSTAY":   {"ANCP": "DSTAY", "PMGZ": "STAYg", "GENEPLUS": "STAY"},
+        "DSTAY54": {"ANCP": "DSTAY54"},
+        "MP120":   {"ANCP": "MP120"},
+        "DP210":   {"ANCP": "DP210", "PMGZ": "PD-EDg", "GENEPLUS": "PD"},
+        "DP450":   {"ANCP": "DP450", "PMGZ": "PS-EDg", "GENEPLUS": "PS"},
+        "DAOL":    {"ANCP": "DAOL", "PMGZ": "AOLg", "GENEPLUS": "AOL"},
+        "DACAB":   {"ANCP": "DACAB", "PMGZ": "ACABg", "GENEPLUS": "EGS"},
+        "DMAR":    {"ANCP": "DMAR", "PMGZ": "MARg", "GENEPLUS": "MAR"},
+    }
+
+    # Busca safras disponíveis na fazenda
+    farm_filter = ""
+    params = {}
+    if effective_farm_id:
+        farm_filter = "AND ge.farm_id = :farm_id"
+        params["farm_id"] = effective_farm_id
+
+    platform_filter = ""
+    if fonte_origem:
+        platform_filter = "AND ge.fonte_origem = :fonte"
+        params["fonte"] = fonte_origem
+
+    # Busca safras baseadas nos filtros
+    safras_sql = text(f"""
+        SELECT DISTINCT safra FROM genetics.genetic_evaluations ge
+        WHERE 1=1 {farm_filter} {platform_filter}
+        ORDER BY safra DESC
+    """)
+    farm_safras = [r[0] for r in db.execute(safras_sql, params).fetchall()]
+
+    # Se não especificou safra, usa a mais recente
+    target_safra = safra if safra else (farm_safras[0] if farm_safras else 2024)
+
+    # Referência ANCP Top 10 para a safra (com limites entre 2015 e 2024)
+    ref_safra = target_safra
+    if ref_safra < 2015:
+        ref_safra = 2015
+    elif ref_safra > 2024:
+        ref_safra = 2024
+    ancp_ref = ANCP_TOP10_AVERAGES.get(ref_safra, {})
+
+    # Determina as plataformas ativas para calcular as médias da fazenda
+    active_platforms = [fonte_origem] if fonte_origem else ["ANCP", "PMGZ", "GENEPLUS"]
+
+    # Calcula médias da fazenda para cada DEP
+    dep_cases = []
+    for dep, config in DEP_CONFIG.items():
+        if config.get("type") == "indice":
+            cases = []
+            for platform in active_platforms:
+                cases.append(f"WHEN ge.fonte_origem = '{platform}' THEN ge.indice_principal")
+            if cases:
+                cases_sql = " ".join(cases)
+                dep_cases.append(f"AVG(CASE {cases_sql} END) as avg_{dep}")
+            else:
+                dep_cases.append(f"NULL as avg_{dep}")
+        else:
+            cases = []
+            for platform in active_platforms:
+                json_key = config.get(platform)
+                if json_key:
+                    cases.append(f"WHEN ge.fonte_origem = '{platform}' THEN (ge.metrics->'{json_key}'->>'dep')::numeric")
+            if cases:
+                cases_sql = " ".join(cases)
+                dep_cases.append(f"AVG(CASE {cases_sql} END) as avg_{dep}")
+            else:
+                dep_cases.append(f"NULL as avg_{dep}")
+
+    fields = ", ".join(dep_cases)
+    avg_sql = text(f"""
+        SELECT {fields}
+        FROM genetics.genetic_evaluations ge
+        WHERE safra = :safra {farm_filter} {platform_filter}
+    """)
+    params["safra"] = target_safra
+    row = db.execute(avg_sql, params).fetchone()
+
+    comparisons = {}
+    if row:
+        row_dict = row._asdict() if hasattr(row, "_asdict") else {}
+        for dep in DEP_CONFIG.keys():
+            col_name = f"avg_{dep}"
+            farm_avg = row_dict.get(col_name.lower()) or row_dict.get(col_name)
+            farm_avg_float = round(float(farm_avg), 3) if farm_avg is not None else None
+
+            ancp_val = ancp_ref.get(dep)
+            diff_pct = None
+            if farm_avg_float is not None and ancp_val is not None and ancp_val != 0:
+                diff_pct = round(((farm_avg_float - ancp_val) / abs(ancp_val)) * 100, 2)
+
+            top_val = find_top_percentile(dep, farm_avg_float) if farm_avg_float is not None else None
+
+            comparisons[dep] = {
+                "fazenda_avg": farm_avg_float,
+                "ancp_top10": ancp_val,
+                "diff_pct": diff_pct,
+                "top": top_val,
+            }
+
+    return {
+        "safra": target_safra,
+        "available_safras": available_safras,
+        "farm_safras": farm_safras,
+        "comparisons": comparisons,
+    }
+
+
+# ── Desempenho de DEPs (gráfico + tabela com TOP) ───────────────
+@router.get("/stats/dep-performance")
+def get_dep_performance(
+    farm_id: Optional[str] = Query(None),
+    fonte_origem: Optional[str] = Query(None, description="Filtro por plataforma: ANCP, PMGZ, GENEPLUS ou null para todas"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna avg/min/max de todas as DEPs com TOP percentil da média."""
+    from backend.ancp_reference import find_top_percentile
+
+    effective_farm_id = None
+    if farm_id and farm_id not in ["all", "todas"]:
+        effective_farm_id = farm_id
+    elif not farm_id and current_user.role != "admin" and current_user.id_farm:
+        effective_farm_id = str(current_user.id_farm)
+
+    # Mapeamento de DEPs por plataforma (chaves no JSONB metrics)
+    DEP_CONFIG = {
+        "MGTe":    {"type": "indice", "label": "Mérito Genético Total"},
+        "D3P":     {"ANCP": "D3P", "label": "Prob. Parto aos 3 anos"},
+        "DIPP":    {"ANCP": "DIPP", "PMGZ": "IPPg", "GENEPLUS": "IPP", "label": "Idade 1º Parto"},
+        "DPE365":  {"ANCP": "DPE365", "PMGZ": "PE-365g", "GENEPLUS": "PES", "label": "Perímetro Escrotal 365d"},
+        "DPE450":  {"ANCP": "DPE450", "label": "Perímetro Escrotal 450d"},
+        "DPN":     {"ANCP": "DPN", "PMGZ": "PN-EDg", "GENEPLUS": "PN", "label": "Peso Nascimento"},
+        "DSTAY":   {"ANCP": "DSTAY", "PMGZ": "STAYg", "GENEPLUS": "STAY", "label": "Stayability"},
+        "DSTAY54": {"ANCP": "DSTAY54", "label": "Stayability 54 meses"},
+        "MP120":   {"ANCP": "MP120", "label": "Mat. Peso 120d"},
+        "DP210":   {"ANCP": "DP210", "PMGZ": "PD-EDg", "GENEPLUS": "PD", "label": "Peso Desmama 210d"},
+        "DP450":   {"ANCP": "DP450", "PMGZ": "PS-EDg", "GENEPLUS": "PS", "label": "Peso Sobreano 450d"},
+        "DAOL":    {"ANCP": "DAOL", "PMGZ": "AOLg", "GENEPLUS": "AOL", "label": "Área Olho Lombo"},
+        "DACAB":   {"ANCP": "DACAB", "PMGZ": "ACABg", "GENEPLUS": "EGS", "label": "Acabamento"},
+        "DMAR":    {"ANCP": "DMAR", "PMGZ": "MARg", "GENEPLUS": "MAR", "label": "Marmoreio"},
+    }
+
+    filters = []
+    params = {}
+
+    if effective_farm_id:
+        filters.append("ge.farm_id = :farm_id")
+        params["farm_id"] = effective_farm_id
+
+    if fonte_origem:
+        filters.append("ge.fonte_origem = :fonte")
+        params["fonte"] = fonte_origem
+
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+
+    # Determina quais plataformas considerar
+    active_platforms = [fonte_origem] if fonte_origem else ["ANCP", "PMGZ", "GENEPLUS"]
+
+    select_parts = []
+    for dep_name, config in DEP_CONFIG.items():
+        if config.get("type") == "indice":
+            # MGTe = indice_principal para ANCP
+            cases = []
+            if "ANCP" in active_platforms:
+                cases.append("WHEN ge.fonte_origem = 'ANCP' THEN ge.indice_principal")
+            cases_sql = " ".join(cases) if cases else "WHEN 1=0 THEN NULL"
+            select_parts.append(f"AVG(CASE {cases_sql} END) as avg_{dep_name}")
+            select_parts.append(f"MIN(CASE {cases_sql} END) as min_{dep_name}")
+            select_parts.append(f"MAX(CASE {cases_sql} END) as max_{dep_name}")
+            select_parts.append(f"COUNT(CASE {cases_sql} END) as cnt_{dep_name}")
+        else:
+            cases = []
+            for platform in active_platforms:
+                json_key = config.get(platform)
+                if json_key:
+                    cases.append(f"WHEN ge.fonte_origem = '{platform}' THEN (ge.metrics->'{json_key}'->>'dep')::numeric")
+            if not cases:
+                select_parts.append(f"NULL as avg_{dep_name}")
+                select_parts.append(f"NULL as min_{dep_name}")
+                select_parts.append(f"NULL as max_{dep_name}")
+                select_parts.append(f"0 as cnt_{dep_name}")
+                continue
+            cases_sql = " ".join(cases)
+            select_parts.append(f"AVG(CASE {cases_sql} END) as avg_{dep_name}")
+            select_parts.append(f"MIN(CASE {cases_sql} END) as min_{dep_name}")
+            select_parts.append(f"MAX(CASE {cases_sql} END) as max_{dep_name}")
+            select_parts.append(f"COUNT(CASE {cases_sql} END) as cnt_{dep_name}")
+
+    fields_clause = ",\n            ".join(select_parts)
+    sql = text(f"""
+        SELECT {fields_clause}
+        FROM genetics.genetic_evaluations ge
+        {where_clause}
+    """)
+
+    row = db.execute(sql, params).fetchone()
+    dep_metrics = {}
+
+    if row:
+        row_dict = row._asdict() if hasattr(row, "_asdict") else {}
+        for dep_name, config in DEP_CONFIG.items():
+            avg_val = row_dict.get(f"avg_{dep_name}") or row_dict.get(f"avg_{dep_name}".lower())
+            min_val = row_dict.get(f"min_{dep_name}") or row_dict.get(f"min_{dep_name}".lower())
+            max_val = row_dict.get(f"max_{dep_name}") or row_dict.get(f"max_{dep_name}".lower())
+            cnt_val = row_dict.get(f"cnt_{dep_name}") or row_dict.get(f"cnt_{dep_name}".lower()) or 0
+
+            avg_float = round(float(avg_val), 3) if avg_val is not None else None
+            top_val = find_top_percentile(dep_name, avg_float) if avg_float is not None else None
+
+            dep_metrics[dep_name] = {
+                "avg": avg_float,
+                "min": round(float(min_val), 3) if min_val is not None else None,
+                "max": round(float(max_val), 3) if max_val is not None else None,
+                "count": int(cnt_val),
+                "top": top_val,
+                "label": config.get("label", dep_name),
+            }
+
+    return {"dep_metrics": dep_metrics}
+
+
 # ── Estatísticas por plataforma (Dashboard Overview) ──────────
 @router.get("/stats/platform-comparison")
 def get_platform_comparison_stats(
@@ -878,9 +1129,9 @@ def get_analytics_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Retorna estatísticas detalhadas e profundas sobre as avaliações genéticas e animais."""
-    if farm_id:
+    if farm_id and farm_id not in ["all", "todas"]:
         farm_id_key = farm_id
-    elif current_user.role != "admin" and current_user.id_farm:
+    elif not farm_id and current_user.role != "admin" and current_user.id_farm:
         farm_id_key = str(current_user.id_farm)
     else:
         farm_id_key = "ALL"

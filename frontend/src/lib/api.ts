@@ -57,6 +57,29 @@ export interface AnalyticsStats {
   };
 }
 
+export interface AncpComparisonData {
+  safra: number;
+  available_safras: number[];
+  farm_safras: number[];
+  comparisons: Record<string, {
+    fazenda_avg: number | null;
+    ancp_top10: number | null;
+    diff_pct: number | null;
+    top: number | null;
+  }>;
+}
+
+export interface DepPerformanceData {
+  dep_metrics: Record<string, {
+    avg: number | null;
+    min: number | null;
+    max: number | null;
+    count: number;
+    top: number | null;
+    label: string;
+  }>;
+}
+
 export interface ProcessingLog {
   id: number;
   id_farm: number;
@@ -693,6 +716,21 @@ export const api = {
     const params = new URLSearchParams();
     if (farmId) params.set('farm_id', farmId);
     return fetchApi<AnalyticsStats>(`/v2/animals/stats/analytics?${params.toString()}`);
+  },
+
+  getAncpComparison: (opts?: { farmId?: string; safra?: number; fonteOrigem?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
+    if (opts?.safra) params.set('safra', String(opts.safra));
+    if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
+    return fetchApi<AncpComparisonData>(`/v2/animals/stats/ancp-comparison?${params.toString()}`);
+  },
+
+  getDepPerformance: (opts?: { farmId?: string; fonteOrigem?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.farmId) params.set('farm_id', opts.farmId);
+    if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
+    return fetchApi<DepPerformanceData>(`/v2/animals/stats/dep-performance?${params.toString()}`);
   },
 
   deleteAnimalsV2: (animalIds: string[]) =>

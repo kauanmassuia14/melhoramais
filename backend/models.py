@@ -542,6 +542,7 @@ class GeneticsAnimal(Base):
     serie = Column(String(50))
     rgn = Column(String(50), nullable=False)
     sexo = Column(String(1))
+    raca = Column(String(100))
     nascimento = Column(Date)
     genotipado = Column(Boolean, default=False)
     csg = Column(Boolean, default=False)

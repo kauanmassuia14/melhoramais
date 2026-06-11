@@ -324,7 +324,7 @@ class GeneticDataProcessor:
             df["data_nascimento"] = pd.to_datetime(df["data_nascimento"], dayfirst=True, errors="coerce").dt.date
 
         if "raca" in df.columns:
-            df["raca"] = df["raca"].fillna("Nelore").replace(["", "nan", "None", "-"], "Nelore")
+            df["raca"] = df["raca"].fillna("Não Informado").replace(["", "nan", "None", "-"], "Não Informado")
 
         if "fonte_origem" not in df.columns:
             df["fonte_origem"] = source_system
@@ -531,6 +531,7 @@ class GeneticDataProcessor:
                     'nome': safe_str(get_val(row, 'nome_animal') or get_val(row, 'nome')),
                     'serie': serie_str,
                     'sexo': safe_str(get_val(row, 'sexo')),
+                    'raca': safe_str(get_val(row, 'raca') or get_val(row, 'raça')),
                     'nascimento': nasc_val,
                     'genotipado': safe_bool(get_val(row, 'genotipado') or get_val(row, 'genotipado_animal')),
                     'csg': safe_bool(get_val(row, 'csg') or get_val(row, 'csg_animal')),
@@ -546,11 +547,12 @@ class GeneticDataProcessor:
                 with raw_conn.cursor() as cur:
                     # Upsert Animals
                     animal_sql = """
-                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, nascimento, genotipado, csg, upload_id)
+                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, raca, nascimento, genotipado, csg, upload_id)
                         VALUES %s
                         ON CONFLICT (farm_id, rgn, serie) DO UPDATE SET
                             nome = EXCLUDED.nome,
                             sexo = COALESCE(EXCLUDED.sexo, genetics.animals.sexo),
+                            raca = COALESCE(EXCLUDED.raca, genetics.animals.raca),
                             nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
                             genotipado = EXCLUDED.genotipado,
                             csg = EXCLUDED.csg,
@@ -571,11 +573,11 @@ class GeneticDataProcessor:
 
                         animal_tuples.append((
                             a['id'], a['farm_id'], a['rgn'], a['nome'], a['serie'],
-                            a['sexo'], a['nascimento'], gen_status, csg_status, a['upload_id']
+                            a['sexo'], a['raca'], a['nascimento'], gen_status, csg_status, a['upload_id']
                         ))
                     
                     # Usa template para cast dos tipos customizados do schema genetics
-                    template = "(%s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s)"
+                    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s)"
                     execute_values(cur, animal_sql, animal_tuples, template=template)
                 inserted += len(animals_data)
 
@@ -615,13 +617,17 @@ class GeneticDataProcessor:
                     # Mantém nomes originais da ANCP para não confundir as plataformas
                     dep_map = {
                         "DPN": ("DPN", "ACC_DPN", "TOP_DPN", None),
+                        "D3P": ("D3P", "ACC_D3P", "TOP_D3P", None),
                         "DP210": ("DP210", "ACC_DP210", "TOP_DP210", None),
                         "DP365": ("DP365", "ACC_DP365", "TOP_DP365", None),
                         "DP450": ("DP450", "ACC_DP450", "TOP_DP450", None),
                         "DIPM": ("DIPM", "ACC_DIPM", "TOP_DIPM", None),
                         "DIPP": ("DIPP", "ACC_DIPP", "TOP_DIPP", None),
                         "DSTAY": ("DSTAY", "ACC_DSTAY", "TOP_DSTAY", None),
+                        "DSTAY54": ("DSTAY54", "ACC_DSTAY54", "TOP_DSTAY54", None),
                         "DPE365": ("DPE365", "ACC_DPE365", "TOP_DPE365", None),
+                        "DPE450": ("DPE450", "ACC_DPE450", "TOP_DPE450", None),
+                        "MP120": ("MP120", "ACC_MP120", "TOP_MP120", None),
                         "DAOL": ("DAOL", "ACC_DAOL", "TOP_DAOL", None),
                         "DACAB": ("DACAB", "ACC_DACAB", "TOP_DACAB", None),
                         "DMAR": ("DMAR", "ACC_DMAR", "TOP_DMAR", None),

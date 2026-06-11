@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { GlassCard } from '@/components/ui/glass-card';
-import { api, type AnalyticsStats, type GeneticsFarm as Farm } from '@/lib/api';
+import { api, type AnalyticsStats, type AncpComparisonData, type DepPerformanceData, type GeneticsFarm as Farm } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChartBarIcon,
@@ -37,6 +38,7 @@ import {
 
 function AnalyticsContent() {
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const farmIdParam = searchParams.get('farm_id');
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,30 +48,49 @@ function AnalyticsContent() {
   const [isBreedModalOpen, setIsBreedModalOpen] = useState(false);
   const [breedPage, setBreedPage] = useState(1);
 
+  // DEP Performance & ANCP Comparison state
+  const [depPerf, setDepPerf] = useState<DepPerformanceData | null>(null);
+  const [ancpComp, setAncpComp] = useState<AncpComparisonData | null>(null);
+  const [depPlatformFilter, setDepPlatformFilter] = useState<string>('');
+  const [ancpPlatformFilter, setAncpPlatformFilter] = useState<string>('');
+  const [ancpSafra, setAncpSafra] = useState<number | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // 'asc' = best to worst (TOP 0.1% first)
+
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
       const farmId = farmIdParam || undefined;
       setLoading(true);
-      api.getAnalyticsStats(farmId)
-        .then(setStats)
+      Promise.all([
+        api.getAnalyticsStats(farmId),
+        api.getDepPerformance({ farmId, fonteOrigem: depPlatformFilter || undefined }),
+        api.getAncpComparison({ farmId, safra: ancpSafra, fonteOrigem: ancpPlatformFilter || undefined }),
+      ])
+        .then(([statsData, depData, ancpData]) => {
+          setStats(statsData);
+          setDepPerf(depData);
+          setAncpComp(ancpData);
+        })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }
-  }, [farmIdParam]);
+  }, [farmIdParam, depPlatformFilter, ancpPlatformFilter, ancpSafra]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
       api.getGeneticsFarms()
         .then((data) => {
           setFarms(data);
-          if (farmIdParam) {
-            const farm = data.find((f) => String(f.id) === farmIdParam);
+          const effectiveId = farmIdParam || (user && user.role !== 'admin' && user.id_farm ? String(user.id_farm) : 'all');
+          if (effectiveId && effectiveId !== 'all') {
+            const farm = data.find((f) => String(f.id) === effectiveId);
             if (farm) setSelectedFarm(farm);
+          } else {
+            setSelectedFarm(null);
           }
         })
         .catch(console.error);
     }
-  }, [farmIdParam]);
+  }, [farmIdParam, user]);
 
   // Color mappings
   const COLORS = ['#06b6d4', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#6366f1'];
@@ -124,14 +145,14 @@ function AnalyticsContent() {
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-slate-300">Selecionar Fazenda:</span>
               <select
-                value={farmIdParam || ''}
+                value={farmIdParam || (user && user.role !== 'admin' && user.id_farm ? String(user.id_farm) : 'all')}
                 onChange={(e) => {
                   const id = e.target.value;
-                  window.location.href = id ? `/analytics?farm_id=${id}` : '/analytics';
+                  window.location.href = `/analytics?farm_id=${id}`;
                 }}
                 className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
               >
-                <option value="" className="bg-slate-900 text-white">Todas as fazendas</option>
+                <option value="all" className="bg-slate-900 text-white">Todas as fazendas</option>
                 {farms.map((farm) => (
                   <option key={farm.id} value={farm.id} className="bg-slate-900 text-white">
                     {farm.nome}
@@ -342,6 +363,205 @@ function AnalyticsContent() {
               </GlassCard>
 
             </div>
+
+            {/* ─── DEP Performance Section ──────────────────────────────────── */}
+            {depPerf && Object.keys(depPerf.dep_metrics).length > 0 && (() => {
+              // Sorting logic
+              const sortedDeps = Object.entries(depPerf.dep_metrics).sort(([aKey, aM], [bKey, bM]) => {
+                const aTop = aM.top;
+                const bTop = bM.top;
+                if (aTop === null || aTop === undefined) return 1;
+                if (bTop === null || bTop === undefined) return -1;
+                return sortOrder === 'asc' ? aTop - bTop : bTop - aTop;
+              });
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Desempenho de DEPs</h3>
+                      <p className="text-slate-500 text-xs">Média e percentil TOP de cada DEP do rebanho</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Sort toggle */}
+                      <button
+                        onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white hover:bg-white/10 transition-all font-medium flex items-center gap-2"
+                      >
+                        Ordenação: <span className="text-cyan-400 font-bold">{sortOrder === 'asc' ? 'Melhor ao Pior' : 'Pior ao Melhor'}</span>
+                      </button>
+
+                      {/* Platform filter */}
+                      <select
+                        value={depPlatformFilter}
+                        onChange={(e) => setDepPlatformFilter(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-fit"
+                      >
+                        <option value="" className="bg-slate-900 text-white">Todas Plataformas</option>
+                        <option value="ANCP" className="bg-slate-900 text-white">ANCP</option>
+                        <option value="PMGZ" className="bg-slate-900 text-white">PMGZ</option>
+                        <option value="GENEPLUS" className="bg-slate-900 text-white">GENEPLUS</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <GlassCard className="p-6 overflow-hidden">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/5 text-slate-400 font-bold">
+                            <th className="py-3 px-2">DEP</th>
+                            <th className="py-3 px-2">Descrição</th>
+                            <th className="py-3 px-2 text-right">Média</th>
+                            <th className="py-3 px-2 text-right">N</th>
+                            <th className="py-3 px-2 text-center">TOP %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedDeps.map(([key, m]) => (
+                            <tr key={key} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                              <td className="py-3 px-2 font-bold text-cyan-400 font-mono">{key}</td>
+                              <td className="py-3 px-2 text-slate-400 max-w-[160px] truncate">{m.label}</td>
+                              <td className="py-3 px-2 text-right font-black text-white font-mono">{m.avg?.toFixed(2) ?? '—'}</td>
+                              <td className="py-3 px-2 text-right text-slate-500 font-mono">{m.count}</td>
+                              <td className="py-3 px-2 text-center">
+                                {m.top !== null && m.top !== undefined ? (
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                    m.top <= 5 ? 'bg-emerald-500/20 text-emerald-400' :
+                                    m.top <= 20 ? 'bg-cyan-500/20 text-cyan-400' :
+                                    m.top <= 50 ? 'bg-amber-500/20 text-amber-400' :
+                                    'bg-rose-500/20 text-rose-400'
+                                  }`}>
+                                    TOP {m.top}%
+                                  </span>
+                                ) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </GlassCard>
+                </div>
+              );
+            })()}
+
+            {/* ─── ANCP Comparison Section ──────────────────────────────────── */}
+            {ancpComp && Object.keys(ancpComp.comparisons).length > 0 && (() => {
+              // Sorting logic
+              const sortedComparisons = Object.entries(ancpComp.comparisons).sort(([aKey, aData], [bKey, bData]) => {
+                const aTop = aData.top;
+                const bTop = bData.top;
+                if (aTop === null || aTop === undefined) return 1;
+                if (bTop === null || bTop === undefined) return -1;
+                return sortOrder === 'asc' ? aTop - bTop : bTop - aTop;
+              });
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Comparação com ANCP Top 10</h3>
+                      <p className="text-slate-500 text-xs">Média da fazenda vs média ANCP Top 10 por safra</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Platform Filter */}
+                      <select
+                        value={ancpPlatformFilter}
+                        onChange={(e) => setAncpPlatformFilter(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-fit"
+                      >
+                        <option value="" className="bg-slate-900 text-white">Todas Plataformas (Dados Fazenda)</option>
+                        <option value="ANCP" className="bg-slate-900 text-white">ANCP</option>
+                        <option value="PMGZ" className="bg-slate-900 text-white">PMGZ</option>
+                        <option value="GENEPLUS" className="bg-slate-900 text-white">GENEPLUS</option>
+                      </select>
+
+                      {/* Safra Picker */}
+                      <select
+                        value={ancpComp.safra}
+                        onChange={(e) => setAncpSafra(Number(e.target.value))}
+                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-fit"
+                      >
+                        {ancpComp.available_safras.map((s) => (
+                          <option key={s} value={s} className="bg-slate-900 text-white">Safra {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {sortedComparisons.map(([dep, data]) => {
+                      const isAbove = data.diff_pct !== null && data.diff_pct >= 0;
+                      const hasBothValues = data.fazenda_avg !== null && data.ancp_top10 !== null;
+                      const maxBarVal = hasBothValues ? Math.max(Math.abs(data.fazenda_avg!), Math.abs(data.ancp_top10!)) : 1;
+
+                      return (
+                        <GlassCard key={dep} className="p-4 relative overflow-hidden group">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-white">{dep}</span>
+                            {data.diff_pct !== null && (
+                              <span className={`text-lg font-black ${
+                                isAbove ? 'text-emerald-400' : 'text-rose-400'
+                              }`}>
+                                {isAbove ? '+' : ''}{data.diff_pct.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Fazenda bar */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400 w-20 shrink-0 font-semibold">Sua Fazenda</span>
+                              <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden relative">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: hasBothValues ? `${Math.max(5, (Math.abs(data.fazenda_avg!) / maxBarVal) * 100)}%` : '0%' }}
+                                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                                  className={`h-full rounded-full ${isAbove ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-gradient-to-r from-rose-600 to-rose-400'}`}
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white font-mono">
+                                  {data.fazenda_avg?.toFixed(2) ?? '—'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* ANCP Top 10 bar */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400 w-20 shrink-0 font-semibold">ANCP Top 10</span>
+                              <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden relative">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: hasBothValues ? `${Math.max(5, (Math.abs(data.ancp_top10!) / maxBarVal) * 100)}%` : '0%' }}
+                                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                                  className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-400"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white font-mono">
+                                  {data.ancp_top10?.toFixed(2) ?? '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {data.top !== null && data.top !== undefined && (
+                            <div className="mt-2 text-right">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+                                data.top <= 5 ? 'bg-emerald-500/20 text-emerald-400' :
+                                data.top <= 20 ? 'bg-cyan-500/20 text-cyan-400' :
+                                data.top <= 50 ? 'bg-amber-500/20 text-amber-400' :
+                                'bg-rose-500/20 text-rose-400'
+                              }`}>
+                                TOP {data.top}%
+                              </span>
+                            </div>
+                          )}
+                        </GlassCard>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Platform Genetic Indices Detailed Info */}
             <div className="space-y-4">
