@@ -691,9 +691,28 @@ class GeneticDataProcessor:
 
                 rank_int = int(round(rank_val)) if rank_val is not None else None
 
+                # Determinar a safra com base no ano da safra ou data de nascimento do animal
+                safra_raw = get_val(row, 'safra') or get_val(row, 'ano_safra')
+                safra_val = None
+                if safra_raw is not None:
+                    try:
+                        safra_val = int(float(str(safra_raw).replace(",", ".").strip()))
+                    except:
+                        pass
+                
+                if not safra_val:
+                    nasc_raw = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
+                    nasc_val = safe_date(nasc_raw)
+                    if nasc_val:
+                        safra_val = nasc_val.year
+
+                if not safra_val:
+                    # Fallback padrão seguro
+                    safra_val = datetime.now().year
+
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),
-                    2026, source_system, indice_val, rank_int, rank_val, json.dumps(metrics_data),
+                    safra_val, source_system, indice_val, rank_int, rank_val, json.dumps(metrics_data),
                     json.dumps({}), json.dumps({}), upload_id_val
                 ))
 
