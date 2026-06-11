@@ -32,11 +32,19 @@ if not IS_SQLITE:
     if "sslmode=disable" in DATABASE_URL or "sslmode=disable" in os.getenv("DATABASE_URL", ""):
         connect_args = {
             "connect_timeout": 5,
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
         }
     else:
         connect_args = {
             "connect_timeout": 5,
             "sslmode": "require",
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
         }
     pool_settings["poolclass"] = QueuePool
     pool_settings["pool_size"] = 5
@@ -67,4 +75,7 @@ def get_db():
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as e:
+            logger.warning(f"Erro ao fechar sessao do banco de dados (provavelmente conexao encerrada): {e}")
