@@ -20,7 +20,8 @@ import {
   UserGroupIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  XMarkIcon
+  XMarkIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -55,6 +56,8 @@ function AnalyticsContent() {
   const [ancpPlatformFilter, setAncpPlatformFilter] = useState<string>('');
   const [ancpSafra, setAncpSafra] = useState<number | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // 'asc' = best to worst (TOP 0.1% first)
+  const [isSafraOpen, setIsSafraOpen] = useState(false);
+  const [isPlatformOpen, setIsPlatformOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
@@ -455,28 +458,80 @@ function AnalyticsContent() {
                       <p className="text-slate-500 text-xs">Média da fazenda vs média ANCP Top 10 por safra</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* Platform Filter */}
-                      <select
-                        value={ancpPlatformFilter}
-                        onChange={(e) => setAncpPlatformFilter(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-fit"
-                      >
-                        <option value="" className="bg-slate-900 text-white">Todas Plataformas (Dados Fazenda)</option>
-                        <option value="ANCP" className="bg-slate-900 text-white">ANCP</option>
-                        <option value="PMGZ" className="bg-slate-900 text-white">PMGZ</option>
-                        <option value="GENEPLUS" className="bg-slate-900 text-white">GENEPLUS</option>
-                      </select>
+                      {/* Platform Filter Custom */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsPlatformOpen(!isPlatformOpen)}
+                          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-64 flex items-center justify-between gap-2"
+                        >
+                          <span className="truncate">
+                            {ancpPlatformFilter === "" ? "Todas Plataformas (Dados Fazenda)" : ancpPlatformFilter}
+                          </span>
+                          <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isPlatformOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isPlatformOpen && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsPlatformOpen(false)} />
+                            <div className="absolute right-0 mt-2 w-64 bg-slate-900/95 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md">
+                              {[
+                                { val: "", label: "Todas Plataformas (Dados Fazenda)" },
+                                { val: "ANCP", label: "ANCP" },
+                                { val: "PMGZ", label: "PMGZ" },
+                                { val: "GENEPLUS", label: "GENEPLUS" }
+                              ].map((opt) => (
+                                <button
+                                  type="button"
+                                  key={opt.val}
+                                  onClick={() => {
+                                    setAncpPlatformFilter(opt.val);
+                                    setIsPlatformOpen(false);
+                                  }}
+                                  className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/10 transition-colors ${
+                                    ancpPlatformFilter === opt.val ? 'text-cyan-400 bg-white/5 font-bold' : 'text-slate-300'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
 
-                      {/* Safra Picker */}
-                      <select
-                        value={ancpComp.safra}
-                        onChange={(e) => setAncpSafra(Number(e.target.value))}
-                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-fit"
-                      >
-                        {ancpComp.available_safras.map((s) => (
-                          <option key={s} value={s} className="bg-slate-900 text-white">Safra {s}</option>
-                        ))}
-                      </select>
+                      {/* Safra Picker Custom */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsSafraOpen(!isSafraOpen)}
+                          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-glow/50 transition-all cursor-pointer hover:bg-white/10 font-medium w-36 flex items-center justify-between gap-2"
+                        >
+                          <span>Safra {ancpComp.safra}</span>
+                          <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isSafraOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isSafraOpen && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsSafraOpen(false)} />
+                            <div className="absolute right-0 mt-2 w-36 bg-slate-900/95 border border-white/10 rounded-xl shadow-2xl z-20 max-h-60 overflow-y-auto backdrop-blur-md">
+                              {ancpComp.available_safras.map((s) => (
+                                <button
+                                  type="button"
+                                  key={s}
+                                  onClick={() => {
+                                    setAncpSafra(s);
+                                    setIsSafraOpen(false);
+                                  }}
+                                  className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/10 transition-colors ${
+                                    ancpComp.safra === s ? 'text-cyan-400 bg-white/5 font-bold' : 'text-slate-300'
+                                  }`}
+                                >
+                                  Safra {s}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -489,7 +544,12 @@ function AnalyticsContent() {
                       return (
                         <GlassCard key={dep} className="p-4 relative overflow-hidden group">
                           <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-bold text-white">{dep}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white">{dep}</span>
+                              {data.lower_is_better && (
+                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-bold uppercase tracking-wider">↓ menor = melhor</span>
+                              )}
+                            </div>
                             {data.diff_pct !== null && (
                               <span className={`text-lg font-black ${
                                 isAbove ? 'text-emerald-400' : 'text-rose-400'

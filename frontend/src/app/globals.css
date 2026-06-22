@@ -71,16 +71,19 @@
 /* ============================================
    BASE RESET
    ============================================ */
-:root {
-  color-scheme: light;
+html {
+  background-color: var(--color-deep-dark);
+  color-scheme: dark;
+  overflow-x: hidden;
 }
 
 body {
-  background: var(--color-light-surface);
-  color: var(--color-light-text);
+  background-color: var(--color-deep-dark);
+  color: var(--color-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 /* ============================================

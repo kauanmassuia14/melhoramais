@@ -778,7 +778,7 @@ def get_ancp_comparison(
     current_user: User = Depends(get_current_user),
 ):
     """Compara as médias da fazenda com as médias ANCP Top 10 na safra selecionada com suporte multiplataforma."""
-    from backend.ancp_reference import ANCP_TOP10_AVERAGES, find_top_percentile
+    from backend.ancp_reference import ANCP_TOP10_AVERAGES, find_top_percentile, _LOWER_IS_BETTER
 
     # Determina farm_id efetivo
     effective_farm_id = None
@@ -787,8 +787,7 @@ def get_ancp_comparison(
     elif not farm_id and current_user.role != "admin" and current_user.id_farm:
         effective_farm_id = str(current_user.id_farm)
 
-    # Safras disponíveis (2000 até 2026 conforme solicitado)
-    available_safras = list(range(2000, 2027))
+    # Safras disponíveis serão extraídas dinamicamente do banco (definidas abaixo)
 
     # Lista de DEPs para comparação com mapeamento multiplataforma
     DEP_CONFIG = {
@@ -806,6 +805,7 @@ def get_ancp_comparison(
         "DAOL":    {"ANCP": "DAOL", "PMGZ": "AOLg", "GENEPLUS": "AOL"},
         "DACAB":   {"ANCP": "DACAB", "PMGZ": "ACABg", "GENEPLUS": "EGS"},
         "DMAR":    {"ANCP": "DMAR", "PMGZ": "MARg", "GENEPLUS": "MAR"},
+        "CAR":     {"ANCP": "CAR", "GENEPLUS": "CAR"},
     }
 
     # Busca safras disponíveis na fazenda
@@ -885,8 +885,13 @@ def get_ancp_comparison(
 
             ancp_val = ancp_ref.get(dep)
             diff_pct = None
+            is_lower_better = dep in _LOWER_IS_BETTER
             if farm_avg_float is not None and ancp_val is not None and ancp_val != 0:
-                diff_pct = round(((farm_avg_float - ancp_val) / abs(ancp_val)) * 100, 2)
+                if is_lower_better:
+                    # Para DIPP, DPN, CAR: quanto menor melhor. Se fazenda < referência = melhor = positivo
+                    diff_pct = round(((ancp_val - farm_avg_float) / abs(ancp_val)) * 100, 2)
+                else:
+                    diff_pct = round(((farm_avg_float - ancp_val) / abs(ancp_val)) * 100, 2)
 
             top_val = find_top_percentile(dep, farm_avg_float) if farm_avg_float is not None else None
 
@@ -895,11 +900,12 @@ def get_ancp_comparison(
                 "ancp_top10": ancp_val,
                 "diff_pct": diff_pct,
                 "top": top_val,
+                "lower_is_better": is_lower_better,
             }
 
     return {
         "safra": target_safra,
-        "available_safras": available_safras,
+        "available_safras": farm_safras,
         "farm_safras": farm_safras,
         "comparisons": comparisons,
     }
@@ -938,6 +944,7 @@ def get_dep_performance(
         "DAOL":    {"ANCP": "DAOL", "PMGZ": "AOLg", "GENEPLUS": "AOL", "label": "Área Olho Lombo"},
         "DACAB":   {"ANCP": "DACAB", "PMGZ": "ACABg", "GENEPLUS": "EGS", "label": "Acabamento"},
         "DMAR":    {"ANCP": "DMAR", "PMGZ": "MARg", "GENEPLUS": "MAR", "label": "Marmoreio"},
+        "CAR":     {"ANCP": "CAR", "GENEPLUS": "CAR", "label": "Consumo Alimentar Residual"},
     }
 
     filters = []

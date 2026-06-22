@@ -634,7 +634,7 @@ class GeneticDataProcessor:
                         "DES": ("DES", "ACC_DES", "TOP_DES", None),
                         "DPS": ("DPS", "ACC_DPS", "TOP_DPS", None),
                         "DMS": ("DMS", "ACC_DMS", "TOP_DMS", None),
-                        "CAR": ("CAR", "ACC_CAR", "TOP_CAR", None),
+                        "CAR": ("DCAR", "ACC_DCAR", "TOP_DCAR", None),
                         "IMS": ("IMS", "ACC_IMS", "TOP_IMS", None),
                     }
                 elif source_system == "GENEPLUS":
@@ -692,7 +692,10 @@ class GeneticDataProcessor:
                 rank_int = int(round(rank_val)) if rank_val is not None else None
 
                 # Determinar a safra com base no ano da safra ou data de nascimento do animal
-                safra_raw = get_val(row, 'safra') or get_val(row, 'ano_safra')
+                safra_raw = (get_val(row, 'safra') or get_val(row, 'ano_safra') 
+                             or get_val(row, 'Safra') or get_val(row, 'Ano') 
+                             or get_val(row, 'ano') or get_val(row, 'ano_nascimento')
+                             or get_val(row, 'AnoNasc'))
                 safra_val = None
                 if safra_raw is not None:
                     try:
@@ -704,11 +707,17 @@ class GeneticDataProcessor:
                     nasc_raw = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
                     nasc_val = safe_date(nasc_raw)
                     if nasc_val:
-                        safra_val = nasc_val.year
+                        # Safra pecuária: nascidos de 01/07/ANO até 30/06/(ANO+1) pertencem à safra ANO.
+                        # Exemplo: nascido em Maio/2026 -> Safra 2025. Nascido em Agosto/2025 -> Safra 2025.
+                        if nasc_val.month < 7:
+                            safra_val = nasc_val.year - 1
+                        else:
+                            safra_val = nasc_val.year
 
                 if not safra_val:
-                    # Fallback padrão seguro
-                    safra_val = datetime.now().year
+                    # Fallback seguro: usa o último ano com dados de referência ANCP
+                    # Evita usar datetime.now().year que pode gerar safras futuras sem referência
+                    safra_val = 2024
 
                 eval_to_insert.append((
                     str(uuid.uuid4()), str(animal_id), str(genetics_farm_id),

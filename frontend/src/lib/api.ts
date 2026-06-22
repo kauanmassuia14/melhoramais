@@ -66,6 +66,7 @@ export interface AncpComparisonData {
     ancp_top10: number | null;
     diff_pct: number | null;
     top: number | null;
+    lower_is_better?: boolean;
   }>;
 }
 

@@ -53,7 +53,7 @@ ANCP_TOP_PERCENTILE_TABLE = [
 # DEPs onde MAIOR valor = MELHOR (normal)
 _HIGHER_IS_BETTER = {"MGTe", "D3P", "DPE365", "DPE450", "DSTAY", "DSTAY54", "MP120", "DP210", "DP450", "DAOL", "DACAB", "DMAR"}
 # DEPs onde MENOR valor = MELHOR (invertido)
-_LOWER_IS_BETTER = {"DIPP", "DPN"}
+_LOWER_IS_BETTER = {"DIPP", "DPN", "CAR"}
 
 
 def find_top_percentile(dep_name: str, value: float) -> float:
