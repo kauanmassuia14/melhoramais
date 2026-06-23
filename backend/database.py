@@ -79,3 +79,15 @@ def get_db():
             db.close()
         except Exception as e:
             logger.warning(f"Erro ao fechar sessao do banco de dados (provavelmente conexao encerrada): {e}")
+
+
+def get_max_completed_safra() -> int:
+    from datetime import datetime
+    now = datetime.now()
+    # A crop year Y ends on June 30th (month 6) of year Y+1.
+    # Therefore, crop year Y is only complete on or after July 1st (month 7) of year Y+1.
+    if now.month < 7:
+        return now.year - 2
+    else:
+        return now.year - 1
+

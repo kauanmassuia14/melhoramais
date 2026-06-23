@@ -6,7 +6,7 @@ import json
 import logging
 
 from backend.models import GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
-from backend.database import get_db
+from backend.database import get_db, get_max_completed_safra
 from backend.auth.dependencies import get_current_user
 from backend.models import User
 
@@ -177,9 +177,13 @@ def get_animal_comparison(
     if not animal:
         raise HTTPException(status_code=404, detail="Animal não encontrado")
 
+    max_safra = get_max_completed_safra()
     evaluations = (
         db.query(GeneticsGeneticEvaluation)
-        .filter(GeneticsGeneticEvaluation.animal_id == animal.id)
+        .filter(
+            GeneticsGeneticEvaluation.animal_id == animal.id,
+            GeneticsGeneticEvaluation.safra <= max_safra
+        )
         .order_by(GeneticsGeneticEvaluation.safra.desc())
         .all()
     )
@@ -283,9 +287,11 @@ def compute_stats_v2_internal(db: Session, farm_id: Optional[str]) -> dict:
     # Subconsulta para filtrar animais
     animal_subq = query.with_entities(GeneticsAnimal.id).subquery()
     
+    max_safra = get_max_completed_safra()
     eval_counts = (
         db.query(GeneticsGeneticEvaluation.fonte_origem, func.count())
         .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_subq))
+        .filter(GeneticsGeneticEvaluation.safra <= max_safra)
         .group_by(GeneticsGeneticEvaluation.fonte_origem)
         .all()
     )
@@ -303,9 +309,9 @@ def compute_stats_v2_internal(db: Session, farm_id: Optional[str]) -> dict:
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+            WHERE safra <= :max_safra AND animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
-        {"fid": farm_id, "is_admin": farm_id is None}
+        {"fid": farm_id, "is_admin": farm_id is None, "max_safra": max_safra}
     ).scalar()
     
     # P365 (Ano)
@@ -320,9 +326,9 @@ def compute_stats_v2_internal(db: Session, farm_id: Optional[str]) -> dict:
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+            WHERE safra <= :max_safra AND animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
-        {"fid": farm_id, "is_admin": farm_id is None}
+        {"fid": farm_id, "is_admin": farm_id is None, "max_safra": max_safra}
     ).scalar()
 
     # P450 (Sobreano)
@@ -337,9 +343,9 @@ def compute_stats_v2_internal(db: Session, farm_id: Optional[str]) -> dict:
                 END
             )
             FROM genetics.genetic_evaluations
-            WHERE animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
+            WHERE safra <= :max_safra AND animal_id IN (SELECT id FROM genetics.animals WHERE farm_id = :fid OR :is_admin)
         """),
-        {"fid": farm_id, "is_admin": farm_id is None}
+        {"fid": farm_id, "is_admin": farm_id is None, "max_safra": max_safra}
     ).scalar()
 
     avg_p210 = round(float(p210), 2) if p210 else None
@@ -384,8 +390,9 @@ def compute_platform_comparison_internal(db: Session, farm_id: Optional[str]) ->
         "mar":   {"PMGZ": "MARg",    "ANCP": "DMAR",  "GENEPLUS": "MAR"},
     }
 
+    max_safra = get_max_completed_safra()
     farm_filter = ""
-    params: dict = {}
+    params: dict = {"max_safra": max_safra}
     if farm_id:
         farm_filter = "AND ge.farm_id = :farm_id"
         params["farm_id"] = farm_id
@@ -413,7 +420,7 @@ def compute_platform_comparison_internal(db: Session, farm_id: Optional[str]) ->
         SELECT 
             {fields_clause}
         FROM genetics.genetic_evaluations ge
-        WHERE 1=1 {farm_filter}
+        WHERE safra <= :max_safra {farm_filter}
         GROUP BY fonte_origem
     """)
 
@@ -464,12 +471,13 @@ def compute_platform_comparison_internal(db: Session, farm_id: Optional[str]) ->
 
 
 def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
+    max_safra = get_max_completed_safra()
     farm_filter_animals = ""
-    farm_filter_evals = ""
-    params = {}
+    farm_filter_evals = "WHERE safra <= :max_safra"
+    params = {"max_safra": max_safra}
     if farm_id:
         farm_filter_animals = "WHERE farm_id = :farm_id"
-        farm_filter_evals = "WHERE farm_id = :farm_id"
+        farm_filter_evals = "WHERE safra <= :max_safra AND farm_id = :farm_id"
         params["farm_id"] = farm_id
 
     # Summary
@@ -595,7 +603,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
             e.percentil_principal
         FROM genetics.genetic_evaluations e
         JOIN genetics.animals a ON e.animal_id = a.id
-        WHERE {"e.farm_id = :farm_id" if farm_id else "1=1"} AND e.indice_principal IS NOT NULL
+        WHERE e.safra <= :max_safra AND {"e.farm_id = :farm_id" if farm_id else "1=1"} AND e.indice_principal IS NOT NULL
         ORDER BY e.indice_principal DESC
         LIMIT 10
     """)
@@ -623,7 +631,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
                 metrics,
                 ROW_NUMBER() OVER(PARTITION BY animal_id ORDER BY safra DESC) as rn
             FROM genetics.genetic_evaluations
-            {"WHERE farm_id = :farm_id" if farm_id else ""}
+            WHERE safra <= :max_safra {"AND farm_id = :farm_id" if farm_id else ""}
         )
         SELECT 
             COALESCE(NULLIF(a.raca, ''), 'Não Informado') as breed,
@@ -820,16 +828,20 @@ def get_ancp_comparison(
         platform_filter = "AND ge.fonte_origem = :fonte"
         params["fonte"] = fonte_origem
 
+    max_safra = get_max_completed_safra()
     # Busca safras baseadas nos filtros
     safras_sql = text(f"""
         SELECT DISTINCT safra FROM genetics.genetic_evaluations ge
-        WHERE 1=1 {farm_filter} {platform_filter}
+        WHERE safra <= :max_safra {farm_filter} {platform_filter}
         ORDER BY safra DESC
     """)
+    params["max_safra"] = max_safra
     farm_safras = [r[0] for r in db.execute(safras_sql, params).fetchall()]
 
     # Se não especificou safra, usa a mais recente
-    target_safra = safra if safra else (farm_safras[0] if farm_safras else 2024)
+    target_safra = safra if safra else (farm_safras[0] if farm_safras else max_safra)
+    if target_safra > max_safra:
+        target_safra = max_safra
 
     # Referência ANCP Top 10 para a safra (com limites entre 2015 e 2024)
     ref_safra = target_safra
@@ -1078,6 +1090,7 @@ def get_animal_ranking(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    max_safra = get_max_completed_safra()
     subquery = db.query(
         GeneticsGeneticEvaluation.animal_id,
         GeneticsGeneticEvaluation.iabczg,
@@ -1085,7 +1098,7 @@ def get_animal_ranking(
             partition_by=GeneticsGeneticEvaluation.animal_id,
             order_by=GeneticsGeneticEvaluation.safra.desc()
         ).label("rn")
-    ).subquery()
+    ).filter(GeneticsGeneticEvaluation.safra <= max_safra).subquery()
 
     query = db.query(
         GeneticsAnimal.id,
@@ -1199,7 +1212,11 @@ def list_animals(
     animal_ids = [a.id for a in animals]
     all_evals = []
     if animal_ids:
-        evals_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+        max_safra = get_max_completed_safra()
+        evals_query = db.query(GeneticsGeneticEvaluation).filter(
+            GeneticsGeneticEvaluation.animal_id.in_(animal_ids),
+            GeneticsGeneticEvaluation.safra <= max_safra
+        )
         if fonte_origem:
             evals_query = evals_query.filter(GeneticsGeneticEvaluation.fonte_origem == fonte_origem)
         all_evals = evals_query.order_by(GeneticsGeneticEvaluation.safra.desc()).all()
@@ -1295,9 +1312,13 @@ def get_animal(
     if not animal:
         raise HTTPException(status_code=404, detail="Animal não encontrado")
 
+    max_safra = get_max_completed_safra()
     evaluations = (
         db.query(GeneticsGeneticEvaluation)
-        .filter(GeneticsGeneticEvaluation.animal_id == animal.id)
+        .filter(
+            GeneticsGeneticEvaluation.animal_id == animal.id,
+            GeneticsGeneticEvaluation.safra <= max_safra
+        )
         .order_by(GeneticsGeneticEvaluation.safra.desc())
         .all()
     )

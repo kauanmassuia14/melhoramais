@@ -11,7 +11,7 @@ from datetime import datetime
 import io
 import statistics
 
-from backend.database import get_db
+from backend.database import get_db, get_max_completed_safra
 from backend.models import Farm as SilverFarm, User, Upload
 from backend.models import GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
 from backend.auth.dependencies import get_current_user
@@ -190,8 +190,10 @@ def generate_custom_report(
         all_animals = query.all()
         filtered_ids = []
         for a in all_animals:
+            max_safra = get_max_completed_safra()
             latest = db.query(GeneticsGeneticEvaluation).filter(
-                GeneticsGeneticEvaluation.animal_id == a.id
+                GeneticsGeneticEvaluation.animal_id == a.id,
+                GeneticsGeneticEvaluation.safra <= max_safra
             ).order_by(GeneticsGeneticEvaluation.safra.desc()).first()
             if latest:
                 metrics = latest.metrics or {}
@@ -218,9 +220,11 @@ def generate_custom_report(
         all_animals = query.all()
         animal_ids_with_evals = []
         for a in all_animals:
+            max_safra = get_max_completed_safra()
             evals = db.query(GeneticsGeneticEvaluation).filter(
                 GeneticsGeneticEvaluation.animal_id == a.id,
-                GeneticsGeneticEvaluation.fonte_origem.in_(valid_platforms)
+                GeneticsGeneticEvaluation.fonte_origem.in_(valid_platforms),
+                GeneticsGeneticEvaluation.safra <= max_safra
             ).first()
             if evals:
                 animal_ids_with_evals.append(a.id)
@@ -234,8 +238,10 @@ def generate_custom_report(
     # Preparar dados para o relatório - buscar avaliações
     animal_data = []
     for a in animals:
+        max_safra = get_max_completed_safra()
         latest = db.query(GeneticsGeneticEvaluation).filter(
-            GeneticsGeneticEvaluation.animal_id == a.id
+            GeneticsGeneticEvaluation.animal_id == a.id,
+            GeneticsGeneticEvaluation.safra <= max_safra
         ).order_by(GeneticsGeneticEvaluation.safra.desc()).first()
         
         data = {

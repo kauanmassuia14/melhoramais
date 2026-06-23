@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 
 from backend.models import User
-from backend.database import get_db
+from backend.database import get_db, get_max_completed_safra
 from backend.schemas import (
     DashboardStats,
 )
@@ -54,11 +54,12 @@ def get_dashboard_stats(
     else:
         total_farms = 1 if current_user.id_farm else 0
 
+    max_safra = get_max_completed_safra()
     # Animals by source (fonte_origem vem das avaliações)
     source_subq = db.query(
         GeneticsGeneticEvaluation.animal_id,
         GeneticsGeneticEvaluation.fonte_origem
-    ).distinct().subquery()
+    ).filter(GeneticsGeneticEvaluation.safra <= max_safra).distinct().subquery()
     
     source_counts = (
         db.query(source_subq.c.fonte_origem, func.count(source_subq.c.animal_id))
@@ -88,12 +89,13 @@ def get_dashboard_stats(
 
     # Pesos médios das avaliações
     # Buscar últimas avaliações e extrair métricas do bloco JSONB
+    max_safra = get_max_completed_safra()
     latest_evals = db.query(
         GeneticsGeneticEvaluation.animal_id,
         GeneticsGeneticEvaluation.metrics
     ).join(
         GeneticsAnimal, GeneticsAnimal.id == GeneticsGeneticEvaluation.animal_id
-    )
+    ).filter(GeneticsGeneticEvaluation.safra <= max_safra)
     
     if current_user.role != "admin" and genetics_farm_id:
         latest_evals = latest_evals.filter(GeneticsAnimal.farm_id == genetics_farm_id)

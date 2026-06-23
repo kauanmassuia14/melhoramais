@@ -294,7 +294,7 @@ export default function DashboardPage() {
                   </div>
                   
                   <div className="mt-6 space-y-3">
-                    <SuggestionItem icon={ArrowUpTrayIcon} text="Importe novos dados da safra 2026" />
+                    <SuggestionItem icon={ArrowUpTrayIcon} text="Importe novos dados de avaliações" />
                     <SuggestionItem icon={ChartBarIcon} text="Analise o desvio padrão de peso desmama" />
                   </div>
                </GlassCard>

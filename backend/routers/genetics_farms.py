@@ -5,7 +5,7 @@ from typing import List
 import uuid
 
 from backend.models import GeneticsFarm, GeneticsGeneticEvaluation, User
-from backend.database import get_db
+from backend.database import get_db, get_max_completed_safra
 from backend.schemas import GeneticsFarmCreate, GeneticsFarmUpdate, GeneticsFarmResponse, GeneticsFarmWithPlatformsResponse
 from backend.auth.dependencies import get_current_user, require_role
 
@@ -47,12 +47,16 @@ def list_farms(
 
     # Query SELECT-only: busca plataformas (fonte_origem) distintas por fazenda
     farm_ids = [f.id for f in farms]
+    max_safra = get_max_completed_safra()
     platform_rows = (
         db.query(
             GeneticsGeneticEvaluation.farm_id,
             GeneticsGeneticEvaluation.fonte_origem,
         )
-        .filter(GeneticsGeneticEvaluation.farm_id.in_(farm_ids))
+        .filter(
+            GeneticsGeneticEvaluation.farm_id.in_(farm_ids),
+            GeneticsGeneticEvaluation.safra <= max_safra
+        )
         .distinct()
         .all()
     )
