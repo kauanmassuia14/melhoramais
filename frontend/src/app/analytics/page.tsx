@@ -49,6 +49,95 @@ function AnalyticsContent() {
   const [isBreedModalOpen, setIsBreedModalOpen] = useState(false);
   const [breedPage, setBreedPage] = useState(1);
 
+  // Pedigree & Offspring states
+  const [selectedSireForOffspring, setSelectedSireForOffspring] = useState<{
+    id: string;
+    nome: string | null;
+    rgn: string;
+    serie: string | null;
+    sexo?: string;
+  } | null>(null);
+  const [offspringList, setOffspringList] = useState<any[]>([]);
+  const [offspringLoading, setOffspringLoading] = useState(false);
+  const [offspringPage, setOffspringPage] = useState(1);
+  const [offspringTotal, setOffspringTotal] = useState(0);
+
+  const [activeAnimalId, setActiveAnimalId] = useState<string | null>(null);
+  const [activeAnimalDetail, setActiveAnimalDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const fmt = (v: number | null | undefined, d = 2) =>
+    v != null ? Number(v).toFixed(d) : null;
+
+  const fmtDate = (d: string | null) => {
+    if (!d) return null;
+    return new Date(d).toLocaleDateString("pt-BR");
+  };
+
+  const getSexLabel = (s: string | null) => {
+    if (s === "M") return "Macho";
+    if (s === "F") return "Fêmea";
+    return "—";
+  };
+
+  const getIndexLabel = (src: string | null | undefined) => {
+    if (src === "ANCP") return "MGTe";
+    if (src === "GENEPLUS") return "IQG";
+    return "iABCZ";
+  };
+
+  const getDecaLabel = (src: string | null | undefined) => {
+    if (src === "ANCP") return "TOP";
+    if (src === "GENEPLUS") return "Percentil";
+    return "DECA";
+  };
+
+  useEffect(() => {
+    if (!selectedSireForOffspring) {
+      setOffspringList([]);
+      setOffspringTotal(0);
+      return;
+    }
+    const fetchOffspring = async () => {
+      setOffspringLoading(true);
+      try {
+        const isFemale = selectedSireForOffspring.sexo === 'F' || selectedSireForOffspring.nome?.toLowerCase().includes('matriz') || false;
+        const res = await api.getAnimalsV2({
+          sireId: !isFemale ? selectedSireForOffspring.id : undefined,
+          damId: isFemale ? selectedSireForOffspring.id : undefined,
+          limit: 10,
+          offset: (offspringPage - 1) * 10
+        });
+        setOffspringList(res.data || []);
+        setOffspringTotal(res.total || 0);
+      } catch (err) {
+        console.error("Erro ao carregar filhos:", err);
+      } finally {
+        setOffspringLoading(false);
+      }
+    };
+    fetchOffspring();
+  }, [selectedSireForOffspring, offspringPage]);
+
+  useEffect(() => {
+    if (!activeAnimalId) {
+      setActiveAnimalDetail(null);
+      return;
+    }
+    const fetchDetail = async () => {
+      setDetailLoading(true);
+      try {
+        const data = await api.getAnimalV2(activeAnimalId);
+        setActiveAnimalDetail(data);
+      } catch (err) {
+        console.error("Erro ao carregar detalhes do animal:", err);
+      } finally {
+        setDetailLoading(false);
+      }
+    };
+    fetchDetail();
+  }, [activeAnimalId]);
+
   // DEP Performance & ANCP Comparison state
   const [depPerf, setDepPerf] = useState<DepPerformanceData | null>(null);
   const [ancpComp, setAncpComp] = useState<AncpComparisonData | null>(null);
@@ -719,14 +808,14 @@ function AnalyticsContent() {
                 )}
               </GlassCard>
 
-              {/* Breed Averages Comparison Table */}
+              {/* Top 10 Sires (Most Used Bulls) Table */}
               <GlassCard className="lg:col-span-5 p-6">
                 <div className="mb-4 flex justify-between items-start">
                   <div>
-                    <h3 className="text-lg font-bold text-white">Médias por Raça</h3>
-                    <p className="text-slate-500 text-xs">Média geral das avaliações de peso por raça</p>
+                    <h3 className="text-lg font-bold text-white">Top 10 Touros Mais Utilizados</h3>
+                    <p className="text-slate-500 text-xs">Ranking dos pais mais frequentes no rebanho</p>
                   </div>
-                  {Object.keys(stats.breed_averages).length > 10 && (
+                  {stats.top_sires && stats.top_sires.length > 10 && (
                     <button
                       onClick={() => {
                         setBreedPage(1);
@@ -740,29 +829,40 @@ function AnalyticsContent() {
                   )}
                 </div>
                 
-                {Object.keys(stats.breed_averages).length > 0 ? (
+                {stats.top_sires && stats.top_sires.length > 0 ? (
                   <div className="overflow-x-auto w-full">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-white/5 text-slate-400 font-bold">
-                          <th className="py-3 px-2">Raça</th>
-                          <th className="py-3 px-2 text-right">P210 (Desmama)</th>
-                          <th className="py-3 px-2 text-right">P450 (Sobreano)</th>
-                          <th className="py-3 px-2 text-right">Índice</th>
+                          <th className="py-3 px-2">Touro</th>
+                          <th className="py-3 px-2">RGN / Série</th>
+                          <th className="py-3 px-2 text-right">Qtd. Filhos</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(stats.breed_averages).slice(0, 10).map(([breed, val]) => (
-                          <tr key={breed} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
-                            <td className="py-3 px-2 font-bold text-white">{breed}</td>
-                            <td className="py-3 px-2 text-right font-mono text-slate-300">
-                              {val.p210 ? `${val.p210.toFixed(2)} kg` : '—'}
+                        {stats.top_sires.slice(0, 10).map((sire) => (
+                          <tr
+                            key={sire.sire_id}
+                            onClick={() => {
+                              setSelectedSireForOffspring({
+                                id: sire.sire_id,
+                                nome: sire.sire_nome,
+                                rgn: sire.sire_rgn,
+                                serie: sire.sire_serie,
+                                sexo: 'M'
+                              });
+                              setOffspringPage(1);
+                            }}
+                            className="border-b border-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                          >
+                            <td className="py-3 px-2 font-bold text-white group-hover:text-cyan-400 transition-colors">
+                              {sire.sire_nome || `TOURO ${sire.sire_rgn}`}
                             </td>
-                            <td className="py-3 px-2 text-right font-mono text-slate-300">
-                              {val.p450 ? `${val.p450.toFixed(2)} kg` : '—'}
+                            <td className="py-3 px-2 text-slate-400 font-mono">
+                              {sire.sire_rgn} {sire.sire_serie ? `/ ${sire.sire_serie}` : ''}
                             </td>
-                            <td className="py-3 px-2 text-right font-black text-emerald-400 font-mono">
-                              {val.indice ? val.indice.toFixed(2) : '—'}
+                            <td className="py-3 px-2 text-right font-black text-cyan-400 font-mono">
+                              {sire.count}
                             </td>
                           </tr>
                         ))}
@@ -771,7 +871,7 @@ function AnalyticsContent() {
                   </div>
                 ) : (
                   <div className="py-12 text-center text-slate-500">
-                    Nenhum dado por raça disponível
+                    Nenhum touro registrado ou dados indisponíveis
                   </div>
                 )}
               </GlassCard>
@@ -830,7 +930,7 @@ function AnalyticsContent() {
 
             </div>
 
-            {/* Modal de Médias por Raça Expandido */}
+            {/* Modal de Touros Expandido */}
             <AnimatePresence>
               {isBreedModalOpen && (
                 <div
@@ -858,10 +958,10 @@ function AnalyticsContent() {
                       <div>
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
                           <GlobeAltIcon className="w-5 h-5 text-cyan-400" />
-                          Médias por Raça Completo
+                          Ranking Completo de Touros Utilizados
                         </h2>
                         <p className="text-xs text-slate-400 mt-1">
-                          Lista completa com paginação e médias gerais de desempenho
+                          Lista completa com todos os touros identificados e suas respectivas contagens de filhos no rebanho
                         </p>
                       </div>
                       <button
@@ -877,26 +977,38 @@ function AnalyticsContent() {
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="border-b border-white/5 text-slate-400 font-bold sticky top-0 bg-slate-950/95 z-10">
-                            <th className="py-3 px-2">Raça</th>
-                            <th className="py-3 px-2 text-right">P210 (Desmama)</th>
-                            <th className="py-3 px-2 text-right">P450 (Sobreano)</th>
-                            <th className="py-3 px-2 text-right">Índice</th>
+                            <th className="py-3 px-2">Touro</th>
+                            <th className="py-3 px-2">RGN / Série</th>
+                            <th className="py-3 px-2 text-right">Qtd. Filhos</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {Object.entries(stats.breed_averages)
+                          {(stats.top_sires || [])
                             .slice((breedPage - 1) * 10, breedPage * 10)
-                            .map(([breed, val]) => (
-                              <tr key={'modal-' + breed} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
-                                <td className="py-3 px-2 font-bold text-white text-sm">{breed}</td>
-                                <td className="py-3 px-2 text-right font-mono text-slate-300 text-sm">
-                                  {val.p210 ? `${val.p210.toFixed(2)} kg` : '—'}
+                            .map((sire) => (
+                              <tr
+                                key={'modal-' + sire.sire_id}
+                                onClick={() => {
+                                  setSelectedSireForOffspring({
+                                    id: sire.sire_id,
+                                    nome: sire.sire_nome,
+                                    rgn: sire.sire_rgn,
+                                    serie: sire.sire_serie,
+                                    sexo: 'M'
+                                  });
+                                  setOffspringPage(1);
+                                  setIsBreedModalOpen(false);
+                                }}
+                                className="border-b border-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                              >
+                                <td className="py-3 px-2 font-bold text-white text-sm group-hover:text-cyan-400 transition-colors">
+                                  {sire.sire_nome || `TOURO ${sire.sire_rgn}`}
                                 </td>
-                                <td className="py-3 px-2 text-right font-mono text-slate-300 text-sm">
-                                  {val.p450 ? `${val.p450.toFixed(2)} kg` : '—'}
+                                <td className="py-3 px-2 text-slate-400 font-mono text-sm">
+                                  {sire.sire_rgn} {sire.sire_serie ? `/ ${sire.sire_serie}` : ''}
                                 </td>
-                                <td className="py-3 px-2 text-right font-black text-emerald-400 font-mono text-sm">
-                                  {val.indice ? val.indice.toFixed(2) : '—'}
+                                <td className="py-3 px-2 text-right font-black text-cyan-400 font-mono text-sm">
+                                  {sire.count}
                                 </td>
                               </tr>
                             ))}
@@ -907,7 +1019,7 @@ function AnalyticsContent() {
                     {/* Footer / Pagination */}
                     <div className="border-t border-white/5 mt-5 pt-4 flex items-center justify-between">
                       <span className="text-xs text-slate-400">
-                        Mostrando {(breedPage - 1) * 10 + 1} a {Math.min(breedPage * 10, Object.keys(stats.breed_averages).length)} de {Object.keys(stats.breed_averages).length} raças
+                        Mostrando {(breedPage - 1) * 10 + 1} a {Math.min(breedPage * 10, (stats.top_sires || []).length)} de {(stats.top_sires || []).length} touros
                       </span>
 
                       <div className="flex items-center gap-2">
@@ -919,16 +1031,432 @@ function AnalyticsContent() {
                           <ChevronLeftIcon className="w-4 h-4" />
                         </button>
                         <span className="text-xs text-white font-semibold px-2">
-                          {breedPage} / {Math.ceil(Object.keys(stats.breed_averages).length / 10)}
+                          {breedPage} / {Math.ceil((stats.top_sires || []).length / 10)}
                         </span>
                         <button
-                          disabled={breedPage >= Math.ceil(Object.keys(stats.breed_averages).length / 10)}
+                          disabled={breedPage >= Math.ceil((stats.top_sires || []).length / 10)}
                           onClick={() => setBreedPage((p) => p + 1)}
                           className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all"
                         >
                           <ChevronRightIcon className="w-4 h-4" />
                         </button>
                       </div>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Modal de Filhos do Touro */}
+            <AnimatePresence>
+              {selectedSireForOffspring && (
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                  onClick={() => setSelectedSireForOffspring(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                  />
+
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-950/95 backdrop-blur-xl p-6 shadow-2xl flex flex-col max-h-[85vh]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-4 mb-5">
+                      <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                          <UserGroupIcon className="w-5 h-5 text-cyan-400" />
+                          Filhos de: {selectedSireForOffspring.nome || `TOURO ${selectedSireForOffspring.rgn}`}
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1 font-mono">
+                          RGN: {selectedSireForOffspring.rgn} {selectedSireForOffspring.serie ? `· Série: ${selectedSireForOffspring.serie}` : ''} · Total de Filhos: {offspringTotal}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedSireForOffspring(null)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Table Area (scrollable) */}
+                    <div className="overflow-y-auto flex-1 w-full pr-1 min-h-[300px]">
+                      {offspringLoading ? (
+                        <div className="py-20 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                          Carregando lista de filhos...
+                        </div>
+                      ) : offspringList.length > 0 ? (
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-white/5 text-slate-400 font-bold sticky top-0 bg-slate-950/95 z-10">
+                              <th className="py-3 px-2">Animal (Filho)</th>
+                              <th className="py-3 px-2">RGN / Série</th>
+                              <th className="py-3 px-2">Sexo</th>
+                              <th className="py-3 px-2 text-right">Índice Principal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {offspringList.map((animal) => {
+                              const ev = animal.latest_eval || animal.evaluations?.[0];
+                              const indexVal = ev?.iabczg ?? ev?.indice ?? null;
+                              const source = ev?.fonte_origem || '—';
+                              return (
+                                <tr
+                                  key={animal.id}
+                                  onClick={() => {
+                                    setActiveAnimalId(animal.id);
+                                  }}
+                                  className="border-b border-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                                >
+                                  <td className="py-3 px-2 font-bold text-white text-sm group-hover:text-cyan-400 transition-colors">
+                                    {animal.nome || '—'}
+                                  </td>
+                                  <td className="py-3 px-2 text-slate-400 font-mono text-sm">
+                                    {animal.rgn} {animal.serie ? `/ ${animal.serie}` : ''}
+                                  </td>
+                                  <td className="py-3 px-2 text-sm">
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                      animal.sexo === 'M' ? 'bg-blue-500/10 text-blue-400' : 'bg-pink-500/10 text-pink-400'
+                                    }`}>
+                                      {animal.sexo === 'M' ? 'Macho' : 'Fêmea'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-2 text-right font-black text-emerald-400 font-mono text-sm">
+                                    {indexVal != null ? `${indexVal.toFixed(2)} (${source})` : '—'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="py-20 text-center text-slate-500">
+                          Nenhum filho encontrado para este touro.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer / Pagination */}
+                    {offspringTotal > 10 && (
+                      <div className="border-t border-white/5 mt-5 pt-4 flex items-center justify-between">
+                        <span className="text-xs text-slate-400">
+                          Mostrando {(offspringPage - 1) * 10 + 1} a {Math.min(offspringPage * 10, offspringTotal)} de {offspringTotal} animais
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={offspringPage === 1}
+                            onClick={() => setOffspringPage((p) => Math.max(1, p - 1))}
+                            className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                          >
+                            <ChevronLeftIcon className="w-4 h-4" />
+                          </button>
+                          <span className="text-xs text-white font-semibold px-2">
+                            {offspringPage} / {Math.ceil(offspringTotal / 10)}
+                          </span>
+                          <button
+                            disabled={offspringPage >= Math.ceil(offspringTotal / 10)}
+                            onClick={() => setOffspringPage((p) => p + 1)}
+                            className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                          >
+                            <ChevronRightIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Modal de Detalhes do Animal */}
+            <AnimatePresence>
+              {activeAnimalId && (
+                <div
+                  className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+                  onClick={() => {
+                    setActiveAnimalId(null);
+                    setActiveAnimalDetail(null);
+                  }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+                  />
+
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="relative z-10 w-full max-w-3xl rounded-2xl border border-white/10 bg-slate-950/98 backdrop-blur-xl p-6 shadow-2xl flex flex-col max-h-[90vh]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-4 mb-4 border-b border-white/5 pb-3">
+                      <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                          <IdentificationIcon className="w-5 h-5 text-emerald-400" />
+                          Detalhes do Animal: <span className="font-mono text-cyan-400">{activeAnimalDetail?.rgn || '—'}</span>
+                        </h2>
+                        {activeAnimalDetail && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            {activeAnimalDetail.nome ? `${activeAnimalDetail.nome} · ` : ''}
+                            {getSexLabel(activeAnimalDetail.sexo)}
+                            {activeAnimalDetail.nascimento && ` · Nascido em ${fmtDate(activeAnimalDetail.nascimento)}`}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveAnimalId(null);
+                          setActiveAnimalDetail(null);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Content (Scrollable) */}
+                    <div className="overflow-y-auto flex-1 w-full pr-1 space-y-5">
+                      {detailLoading ? (
+                        <div className="py-24 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                          <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                          Carregando informações do animal...
+                        </div>
+                      ) : activeAnimalDetail ? (
+                        <>
+                          {/* ── Identificação e Pedigree ────────────────────── */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="rounded-xl border border-white/5 bg-white/[0.01] p-4 space-y-3">
+                              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Identificação</h3>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <span className="text-slate-500 block">Série:</span>
+                                  <span className="text-white font-mono font-medium">{activeAnimalDetail.serie || '—'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Genotipado:</span>
+                                  <span className={`font-semibold ${activeAnimalDetail.genotipado ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                    {activeAnimalDetail.genotipado ? 'Sim' : 'Não'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">CSG:</span>
+                                  <span className={`font-semibold ${activeAnimalDetail.csg ? 'text-violet-400' : 'text-slate-400'}`}>
+                                    {activeAnimalDetail.csg ? 'Sim' : 'Não'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-white/5 bg-white/[0.01] p-4 space-y-3">
+                              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pedigree / Filiação</h3>
+                              <div className="space-y-2 text-xs">
+                                <div>
+                                  <span className="text-slate-500 block mb-0.5">Pai (Touro):</span>
+                                  {activeAnimalDetail.sire ? (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedSireForOffspring({
+                                          id: activeAnimalDetail.sire.id,
+                                          nome: activeAnimalDetail.sire.nome,
+                                          rgn: activeAnimalDetail.sire.rgn,
+                                          serie: activeAnimalDetail.sire.serie,
+                                          sexo: 'M'
+                                        });
+                                        setOffspringPage(1);
+                                        setActiveAnimalId(null);
+                                        setActiveAnimalDetail(null);
+                                      }}
+                                      className="text-left font-semibold text-cyan-400 hover:text-cyan-300 hover:underline transition-all font-mono"
+                                    >
+                                      {activeAnimalDetail.sire.nome || `TOURO ${activeAnimalDetail.sire.rgn}`} ({activeAnimalDetail.sire.rgn})
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block mb-0.5">Mãe (Matriz):</span>
+                                  {activeAnimalDetail.dam ? (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedSireForOffspring({
+                                          id: activeAnimalDetail.dam.id,
+                                          nome: activeAnimalDetail.dam.nome,
+                                          rgn: activeAnimalDetail.dam.rgn,
+                                          serie: activeAnimalDetail.dam.serie,
+                                          sexo: 'F'
+                                        });
+                                        setOffspringPage(1);
+                                        setActiveAnimalId(null);
+                                        setActiveAnimalDetail(null);
+                                      }}
+                                      className="text-left font-semibold text-pink-400 hover:text-pink-300 hover:underline transition-all font-mono"
+                                    >
+                                      {activeAnimalDetail.dam.nome || `MATRIZ ${activeAnimalDetail.dam.rgn}`} ({activeAnimalDetail.dam.rgn})
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ── Avaliações Genéticas ────────────────────────── */}
+                          {activeAnimalDetail.evaluations && activeAnimalDetail.evaluations.length > 0 ? (() => {
+                            const ev = activeAnimalDetail.evaluations[0];
+                            const decanil = ev?.deca_index ?? ev?.pd?.deca ?? ev?.pn?.deca;
+                            return (
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Índices Genéticos</h3>
+                                  <span className="text-[11px] text-slate-500">
+                                    Fonte: <span className="text-white font-semibold">{ev.fonte_origem || '—'}</span>
+                                    {ev.safra && <> · Safra <span className="text-white font-semibold">{ev.safra}</span></>}
+                                  </span>
+                                </div>
+
+                                {/* Global Index */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col justify-between">
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
+                                      {getIndexLabel(ev.fonte_origem)} — Índice Global
+                                    </span>
+                                    <span className="font-mono text-2xl font-extrabold text-cyan-400">{fmt(ev.iabczg)}</span>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col justify-between">
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">
+                                      {getDecaLabel(ev.fonte_origem)} — Decil
+                                    </span>
+                                    <span className="font-mono text-2xl font-extrabold text-emerald-400">
+                                      {decanil != null ? decanil.toString() + (ev.fonte_origem === "ANCP" || ev.fonte_origem === "GENEPLUS" ? "%" : "") : '—'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Pesos DEP */}
+                                <div>
+                                  <h4 className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-bold">Pesos (DEP)</h4>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PN (Nascimento)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.pn?.dep) || '—'}</span>
+                                        {ev.pn?.dep && <span className="text-[10px] text-slate-500 font-medium">kg</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PD (Desmama)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.pd?.dep) || '—'}</span>
+                                        {ev.pd?.dep && <span className="text-[10px] text-slate-500 font-medium">kg</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PA (Ano)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.pa?.dep) || '—'}</span>
+                                        {ev.pa?.dep && <span className="text-[10px] text-slate-500 font-medium">kg</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PS (Sobreano)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.ps?.dep) || '—'}</span>
+                                        {ev.ps?.dep && <span className="text-[10px] text-slate-500 font-medium">kg</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PM (Materno)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.pm?.dep) || '—'}</span>
+                                        {ev.pm?.dep && <span className="text-[10px] text-slate-500 font-medium">kg</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Reprodução */}
+                                <div>
+                                  <h4 className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-bold">Reprodução</h4>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">IPP (Idade 1º Parto)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.ipp?.dep) || '—'}</span>
+                                        {ev.ipp?.dep && <span className="text-[10px] text-slate-500 font-medium">dias</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">STAY (Stayability)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.stay?.dep) || '—'}</span>
+                                        {ev.stay?.dep && <span className="text-[10px] text-slate-500 font-medium">%</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">PE-365 (PE Escrotal)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.pe_365?.dep) || '—'}</span>
+                                        {ev.pe_365?.dep && <span className="text-[10px] text-slate-500 font-medium">cm</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Carcaça */}
+                                <div>
+                                  <h4 className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-bold">Carcaça e Qualidade</h4>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">AOL (Área Olho Lombo)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.aol?.dep) || '—'}</span>
+                                        {ev.aol?.dep && <span className="text-[10px] text-slate-500 font-medium">cm²</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">ACAB (Acabamento)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.acab?.dep) || '—'}</span>
+                                        {ev.acab?.dep && <span className="text-[10px] text-slate-500 font-medium">mm</span>}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 flex flex-col justify-between">
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">MAR (Marmoreio)</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="font-mono text-base font-extrabold text-white">{fmt(ev.marmoreio?.dep) || '—'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })() : (
+                            <div className="py-10 text-center rounded-xl border border-dashed border-white/10 bg-white/[0.01]">
+                              <p className="text-slate-500 text-xs">Nenhuma avaliação genética registrada para este animal.</p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="py-20 text-center text-slate-500">
+                          Erro ao carregar detalhes.
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 </div>

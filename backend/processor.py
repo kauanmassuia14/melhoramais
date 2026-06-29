@@ -479,13 +479,22 @@ class GeneticDataProcessor:
             except:
                 return None
 
-        # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores)
+        # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores/accents)
         def get_val(r, col_name):
+            import unicodedata
             if not col_name: return None
             if col_name in r: return r[col_name]
-            c_norm = str(col_name).lower().replace(" ", "").replace("_", "").replace("-", "")
+            
+            def norm(text):
+                if not text: return ""
+                return "".join(
+                    c for c in unicodedata.normalize('NFD', str(text))
+                    if unicodedata.category(c) != 'Mn'
+                ).lower().replace(" ", "").replace("_", "").replace("-", "")
+
+            c_norm = norm(col_name)
             for k in r.keys():
-                if str(k).lower().replace(" ", "").replace("_", "").replace("-", "") == c_norm:
+                if norm(k) == c_norm:
                     return r[k]
             return None
 
@@ -503,7 +512,116 @@ class GeneticDataProcessor:
             batch_df = df.iloc[batch_start:batch_end]
             logger.info(f">>> Lote {batch_start} até {batch_end} de {total_rows}...")
 
+            # 1. Pre-assign IDs for children in this batch to handle self-referencing parents
+            batch_children_keys = {}
+            for _, row in batch_df.iterrows():
+                r_rgn = get_val(row, 'rgn_animal') or get_val(row, 'rgn') or get_val(row, 'registro')
+                if r_rgn and str(r_rgn).strip().lower() not in ['nan', 'none', '', 'nat']:
+                    r_rgn_str = str(r_rgn).strip().upper()
+                    r_serie_str = str(get_val(row, 'serie_animal') or get_val(row, 'serie') or get_val(row, 'série') or "").strip().upper()
+                    if (r_rgn_str, r_serie_str) not in batch_children_keys:
+                        batch_children_keys[(r_rgn_str, r_serie_str)] = str(uuid.uuid4())
 
+            # 2. Extract unique sires and dams from the batch
+            parents_to_resolve = []
+            seen_parents = set()
+
+            for _, row in batch_df.iterrows():
+                # Sire (Father)
+                sire_rgn = get_val(row, 'pai_rgn')
+                if sire_rgn and str(sire_rgn).strip().lower() not in ['nan', 'none', '']:
+                    sire_rgn_str = str(sire_rgn).strip().upper()
+                    sire_serie_str = str(get_val(row, 'pai_serie') or get_val(row, 'pai_serie_rgd') or "").strip().upper()
+                    sire_nome_str = safe_str(get_val(row, 'pai_nome'))
+                    key = ('sire', sire_rgn_str, sire_serie_str)
+                    if key not in seen_parents:
+                        seen_parents.add(key)
+                        parents_to_resolve.append({
+                            'type': 'sire',
+                            'rgn': sire_rgn_str,
+                            'serie': sire_serie_str,
+                            'nome': sire_nome_str or f"PAI: {sire_rgn_str}",
+                            'raca': safe_str(get_val(row, 'raca') or get_val(row, 'raça'))
+                        })
+
+                # Dam (Mother)
+                dam_rgn = get_val(row, 'mae_rgn')
+                if dam_rgn and str(dam_rgn).strip().lower() not in ['nan', 'none', '']:
+                    dam_rgn_str = str(dam_rgn).strip().upper()
+                    dam_serie_str = str(get_val(row, 'mae_serie') or get_val(row, 'mae_serie_rgd') or "").strip().upper()
+                    dam_nome_str = safe_str(get_val(row, 'mae_nome'))
+                    key = ('dam', dam_rgn_str, dam_serie_str)
+                    if key not in seen_parents:
+                        seen_parents.add(key)
+                        parents_to_resolve.append({
+                            'type': 'dam',
+                            'rgn': dam_rgn_str,
+                            'serie': dam_serie_str,
+                            'nome': dam_nome_str or f"MÃE: {dam_rgn_str}",
+                            'raca': safe_str(get_val(row, 'raca') or get_val(row, 'raça'))
+                        })
+
+            # 3. Query existing parents in database to map their IDs
+            parent_ids_map = {}
+            if parents_to_resolve:
+                parent_rgns = list({p['rgn'] for p in parents_to_resolve})
+                existing_parents = self.db.execute(
+                    text("SELECT rgn, COALESCE(serie, ''), id FROM genetics.animals WHERE rgn = ANY(:rgns) AND farm_id = :fid"),
+                    {"rgns": parent_rgns, "fid": str(genetics_farm_id)}
+                ).fetchall()
+                for row_rgn, row_serie, uid in existing_parents:
+                    parent_ids_map[(row_rgn, row_serie)] = str(uid)
+
+            # 4. Insert missing parents as placeholders
+            parents_to_insert = []
+            for p in parents_to_resolve:
+                key = (p['rgn'], p['serie'])
+                if key in parent_ids_map:
+                    continue
+                if key in batch_children_keys:
+                    parent_ids_map[key] = batch_children_keys[key]
+                    continue
+                
+                p_uuid = str(uuid.uuid4())
+                parent_ids_map[key] = p_uuid
+                parents_to_insert.append({
+                    'id': p_uuid,
+                    'farm_id': str(genetics_farm_id),
+                    'rgn': p['rgn'],
+                    'nome': p['nome'],
+                    'serie': p['serie'],
+                    'sexo': 'M' if p['type'] == 'sire' else 'F',
+                    'raca': p['raca'],
+                    'nascimento': None,
+                    'genotipado': False,
+                    'csg': False,
+                    'upload_id': upload_id_val,
+                })
+
+            from psycopg2.extras import execute_values
+            raw_conn = self.db.connection().connection
+
+            if parents_to_insert:
+                logger.info(f"  - [TURBO] Inserindo {len(parents_to_insert)} pais temporários...")
+                with raw_conn.cursor() as cur:
+                    parent_sql = """
+                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, raca, nascimento, genotipado, csg, upload_id, sire_id, dam_id)
+                        VALUES %s
+                        ON CONFLICT (farm_id, rgn, serie) DO UPDATE SET
+                            nome = COALESCE(genetics.animals.nome, EXCLUDED.nome),
+                            sexo = COALESCE(genetics.animals.sexo, EXCLUDED.sexo),
+                            raca = COALESCE(genetics.animals.raca, EXCLUDED.raca)
+                    """
+                    parent_tuples = []
+                    for p in parents_to_insert:
+                        parent_tuples.append((
+                            p['id'], p['farm_id'], p['rgn'], p['nome'], p['serie'],
+                            p['sexo'], p['raca'], None, 'NÃO', 'NÃO', p['upload_id'], None, None
+                        ))
+                    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s, %s, %s)"
+                    execute_values(cur, parent_sql, parent_tuples, template=template)
+
+            # 5. Build child animals with linked sire_id and dam_id
             animals_data = []
             seen_rgns_in_batch = set()
 
@@ -520,12 +638,29 @@ class GeneticDataProcessor:
                     continue
                 seen_rgns_in_batch.add(combo_key)
                 
-                # Busca Nascimento (especialmente para ANCP 'Nasc')
+                # Resolve sire and dam IDs
+                sire_rgn = get_val(row, 'pai_rgn')
+                sire_id = None
+                if sire_rgn and str(sire_rgn).strip().lower() not in ['nan', 'none', '']:
+                    s_rgn_str = str(sire_rgn).strip().upper()
+                    s_serie_str = str(get_val(row, 'pai_serie') or get_val(row, 'pai_serie_rgd') or "").strip().upper()
+                    sire_id = parent_ids_map.get((s_rgn_str, s_serie_str))
+
+                dam_rgn = get_val(row, 'mae_rgn')
+                dam_id = None
+                if dam_rgn and str(dam_rgn).strip().lower() not in ['nan', 'none', '']:
+                    d_rgn_str = str(dam_rgn).strip().upper()
+                    d_serie_str = str(get_val(row, 'mae_serie') or get_val(row, 'mae_serie_rgd') or "").strip().upper()
+                    dam_id = parent_ids_map.get((d_rgn_str, d_serie_str))
+
+                # Busca Nascimento
                 nasc_raw = get_val(row, 'data_nascimento') or get_val(row, 'nascimento') or get_val(row, 'nasc')
                 nasc_val = safe_date(nasc_raw)
 
+                child_uuid = batch_children_keys.get(combo_key) or str(uuid.uuid4())
+
                 animals_data.append({
-                    'id': str(uuid.uuid4()),
+                    'id': child_uuid,
                     'farm_id': str(genetics_farm_id),
                     'rgn': rgn_str,
                     'nome': safe_str(get_val(row, 'nome_animal') or get_val(row, 'nome')),
@@ -536,18 +671,16 @@ class GeneticDataProcessor:
                     'genotipado': safe_bool(get_val(row, 'genotipado') or get_val(row, 'genotipado_animal')),
                     'csg': safe_bool(get_val(row, 'csg') or get_val(row, 'csg_animal')),
                     'upload_id': upload_id_val,
+                    'sire_id': sire_id,
+                    'dam_id': dam_id
                 })
 
             if animals_data:
                 logger.info(f"  - [TURBO] Fazendo upsert de {len(animals_data)} animais...")
-                from psycopg2.extras import execute_values
-                
-                # Obtém a conexão bruta do Psycopg2
-                raw_conn = self.db.connection().connection
                 with raw_conn.cursor() as cur:
-                    # Upsert Animals
+                    # Upsert Animals including sire_id and dam_id
                     animal_sql = """
-                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, raca, nascimento, genotipado, csg, upload_id)
+                        INSERT INTO genetics.animals (id, farm_id, rgn, nome, serie, sexo, raca, nascimento, genotipado, csg, upload_id, sire_id, dam_id)
                         VALUES %s
                         ON CONFLICT (farm_id, rgn, serie) DO UPDATE SET
                             nome = EXCLUDED.nome,
@@ -556,11 +689,10 @@ class GeneticDataProcessor:
                             nascimento = COALESCE(EXCLUDED.nascimento, genetics.animals.nascimento),
                             genotipado = EXCLUDED.genotipado,
                             csg = EXCLUDED.csg,
-                            upload_id = EXCLUDED.upload_id
+                            upload_id = EXCLUDED.upload_id,
+                            sire_id = COALESCE(EXCLUDED.sire_id, genetics.animals.sire_id),
+                            dam_id = COALESCE(EXCLUDED.dam_id, genetics.animals.dam_id)
                     """
-                    # Transforma dict em tupla para o execute_values
-                    # IMPORTANTE: o tipo genetics.boolean_status é um ENUM ('SIM', 'NÃO')
-                    # não aceita boolean direto, precisa converter para string e castar
                     animal_tuples = []
                     for a in animals_data:
                         gen_status = None
@@ -573,11 +705,11 @@ class GeneticDataProcessor:
 
                         animal_tuples.append((
                             a['id'], a['farm_id'], a['rgn'], a['nome'], a['serie'],
-                            a['sexo'], a['raca'], a['nascimento'], gen_status, csg_status, a['upload_id']
+                            a['sexo'], a['raca'], a['nascimento'], gen_status, csg_status, a['upload_id'],
+                            a['sire_id'], a['dam_id']
                         ))
                     
-                    # Usa template para cast dos tipos customizados do schema genetics
-                    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s)"
+                    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s::genetics.boolean_status, %s::genetics.boolean_status, %s, %s, %s)"
                     execute_values(cur, animal_sql, animal_tuples, template=template)
                 inserted += len(animals_data)
 

@@ -50,11 +50,20 @@ export interface AnalyticsStats {
     p365: number | null;
     p450: number | null;
   }>;
+  top_sires: SireRank[];
   upload_activity: {
     last_30d: number;
     last_60d: number;
     last_90d: number;
   };
+}
+
+export interface SireRank {
+  sire_id: string;
+  sire_rgn: string;
+  sire_nome: string | null;
+  sire_serie: string | null;
+  count: number;
 }
 
 export interface AncpComparisonData {
@@ -670,6 +679,8 @@ export const api = {
     farmId?: string;
     fonteOrigem?: string;
     sexo?: string;
+    sireId?: string;
+    damId?: string;
     search?: string;
     limit?: number;
     offset?: number;
@@ -677,11 +688,12 @@ export const api = {
     const params = new URLSearchParams();
     if (opts?.farmId) params.set('farm_id', opts.farmId);
     if (opts?.sexo) params.set('sexo', opts.sexo);
+    if (opts?.sireId) params.set('sire_id', opts.sireId);
+    if (opts?.damId) params.set('dam_id', opts.damId);
     if (opts?.search) params.set('search', opts.search);
     params.set('limit', String(opts?.limit || 50));
     params.set('offset', String(opts?.offset || 0));
     if (opts?.fonteOrigem) params.set('fonte_origem', opts.fonteOrigem);
-    if (opts?.farmId) params.set('farm_id', opts.farmId);
     return fetchApi<{
       total: number;
       limit: number;

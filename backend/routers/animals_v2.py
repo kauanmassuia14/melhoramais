@@ -665,6 +665,32 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
             "p450": round(float(r[4]), 2) if r[4] is not None else None,
         }
 
+    # Top 10 sires (most used bulls) ranking
+    sire_sql = text(f"""
+        SELECT 
+            s.id as sire_id,
+            s.rgn as sire_rgn,
+            s.nome as sire_nome,
+            s.serie as sire_serie,
+            COUNT(a.id) as offspring_count
+        FROM genetics.animals a
+        JOIN genetics.animals s ON a.sire_id = s.id
+        WHERE {"a.farm_id = :farm_id" if farm_id else "1=1"}
+        GROUP BY s.id, s.rgn, s.nome, s.serie
+        ORDER BY offspring_count DESC
+        LIMIT 10
+    """)
+    sire_rows = db.execute(sire_sql, params).fetchall()
+    top_sires = []
+    for r in sire_rows:
+        top_sires.append({
+            "sire_id": str(r[0]),
+            "sire_rgn": r[1],
+            "sire_nome": r[2] or f"TOURO {r[1]}",
+            "sire_serie": r[3] or "",
+            "count": r[4]
+        })
+
     # Upload activity
     from backend.models import Upload
     now = datetime.now(timezone.utc)
@@ -698,6 +724,7 @@ def compute_analytics_internal(db: Session, farm_id: Optional[str]) -> dict:
         "index_by_platform": index_by_platform,
         "top_animals": top_animals,
         "breed_averages": breed_averages,
+        "top_sires": top_sires,
         "upload_activity": upload_activity
     }
 
@@ -1174,6 +1201,8 @@ def list_animals(
     farm_id: Optional[str] = Query(None),
     fonte_origem: Optional[str] = Query(None),  # 'PMGZ' ou 'ANCP'
     sexo: Optional[str] = Query(None),
+    sire_id: Optional[str] = Query(None),
+    dam_id: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -1199,6 +1228,23 @@ def list_animals(
 
     if sexo:
         query = query.filter(GeneticsAnimal.sexo == sexo)
+
+    if sire_id:
+        import uuid as _uuid
+        try:
+            sire_uuid = _uuid.UUID(sire_id)
+            query = query.filter(GeneticsAnimal.sire_id == sire_uuid)
+        except ValueError:
+            pass
+
+    if dam_id:
+        import uuid as _uuid
+        try:
+            dam_uuid = _uuid.UUID(dam_id)
+            query = query.filter(GeneticsAnimal.dam_id == dam_uuid)
+        except ValueError:
+            pass
+
     if search:
         query = query.filter(
             (GeneticsAnimal.rgn.ilike(f"%{search}%"))
@@ -1325,4 +1371,28 @@ def get_animal(
 
     result = animal_to_dict(animal)
     result["evaluations"] = [eval_to_dict(e) for e in evaluations]
+    
+    # Resolver informações de pedigree
+    result["sire"] = None
+    if animal.sire_id:
+        sire = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal.sire_id).first()
+        if sire:
+            result["sire"] = {
+                "id": str(sire.id),
+                "rgn": sire.rgn,
+                "serie": sire.serie,
+                "nome": sire.nome
+            }
+
+    result["dam"] = None
+    if animal.dam_id:
+        dam = db.query(GeneticsAnimal).filter(GeneticsAnimal.id == animal.dam_id).first()
+        if dam:
+            result["dam"] = {
+                "id": str(dam.id),
+                "rgn": dam.rgn,
+                "serie": dam.serie,
+                "nome": dam.nome
+            }
+
     return result
