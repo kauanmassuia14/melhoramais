@@ -167,22 +167,25 @@ def startup_event():
         # We don't re-raise to allow the server to start even if it fails
 
 
-# Global Exception Handler to ensure CORS headers and reveal errors
+# Global Exception Handler — secure for production
+_IS_DEV = os.getenv("ENVIRONMENT", "production").lower() in ("development", "dev", "local", "test")
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     import traceback
     import sys
     
-    # FORÇAR PRINT NO CONSOLE DO RAILWAY:
-    print(f"\n[GLOBAL ERROR MIDDLEWARE] Erro capturado em {request.url}:", file=sys.stderr)
-    traceback.print_exc()
-    print("[GLOBAL ERROR MIDDLEWARE] Fim do traceback.\n", file=sys.stderr)
+    # Always log full traceback server-side
+    logger.error(f"Unhandled error at {request.url}: {exc}", exc_info=True)
     
     content = {
-        "detail": str(exc),
-        "traceback": traceback.format_exc(),  # Forçado para vermos o erro real agora
+        "detail": str(exc) if _IS_DEV else "Internal server error",
         "type": type(exc).__name__
     }
+    # Only include traceback in development
+    if _IS_DEV:
+        content["traceback"] = traceback.format_exc()
+    
     response = JSONResponse(status_code=500, content=content)
     
     # Manually add CORS if needed (Middleware might be bypassed on some crashes)
@@ -205,124 +208,9 @@ def health_check():
     return {"status": "healthy", "service": "melhoramais-backend", "version": "2.0.0"}
 
 
-# ============================================
-# Database test (public, temporary)
-# ============================================
-@app.get("/db-test")
-def db_test():
-    """Test database connection and return info."""
-    import os
-    db_url = os.getenv("DATABASE_URL", "not set")
-    # Mask password in URL
-    db_url_masked = db_url
-    if "://" in db_url and "@" in db_url:
-        try:
-            parts = db_url.split("://", 1)
-            scheme = parts[0]
-            rest = parts[1]
-            auth, host = rest.split("@", 1)
-            if ":" in auth:
-                user, _ = auth.split(":", 1)
-                db_url_masked = f"{scheme}://{user}:***@{host}"
-        except:
-            pass
-            
-    try:
-        from sqlalchemy import text, inspect
-        inspector = inspect(engine)
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT 1"))
-            db_status = "connected"
-            
-            # List tables in silver and audit
-            tables = []
-            try:
-                res = conn.execute(text("""
-                    SELECT schemaname, tablename 
-                    FROM pg_catalog.pg_tables 
-                    WHERE schemaname IN ('genetics')
-                """))
-                tables = [f"{r[0]}.{r[1]}" for r in res]
-            except:
-                pass
-
-            # Try to count users
-            try:
-                result = conn.execute(text("SELECT COUNT(*) FROM genetics.users"))
-                user_count = result.scalar()
-            except Exception as e:
-                user_count = f"error: {str(e)}"
-                
-            # Get columns for animals
-            animal_columns = []
-            try:
-                animal_columns = [c["name"] for c in inspector.get_columns("animals", schema="genetics")]
-            except:
-                pass
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-        user_count = "unknown"
-        tables = []
-        animal_columns = []
-    
-    return {
-        "database_url_masked": db_url_masked,
-        "database_status": db_status,
-        "user_count": user_count,
-        "tables": tables,
-        "animal_columns": animal_columns,
-        "is_sqlite": db_url.startswith("sqlite")
-    }
-
-
-# ============================================
-# Environment variables debug (public, temporary)
-# ============================================
-@app.get("/env-debug")
-def env_debug():
-    """Show environment variables (masked)."""
-    import os
-    
-    # List of important environment variables
-    important_vars = ["DATABASE_URL", "JWT_SECRET", "ALLOWED_ORIGINS", "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME"]
-    
-    result = {}
-    for var in important_vars:
-        value = os.getenv(var)
-        if value:
-            # Mask sensitive values
-            if "://" in value and "@" in value:
-                # URL with credentials
-                parts = value.split("://", 1)
-                if len(parts) == 2:
-                    scheme = parts[0]
-                    rest = parts[1]
-                    if "@" in rest:
-                        auth, host = rest.split("@", 1)
-                        if ":" in auth:
-                            user, _ = auth.split(":", 1)
-                            masked_auth = f"{user}:***"
-                        else:
-                            masked_auth = auth
-                        value = f"{scheme}://{masked_auth}@{host}"
-            elif "SECRET" in var or "KEY" in var or "PASSWORD" in var:
-                value = "***" if value else "not set"
-            result[var] = value
-        else:
-            result[var] = "not set"
-    
-    # Also show all Railway environment variables
-    railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY_")}
-    result["railway_vars"] = railway_vars
-    
-    # Show CORS configuration
-    result["cors_config"] = {
-        "allowed_origins": ALLOWED_ORIGINS,
-        "allowed_origins_count": len(ALLOWED_ORIGINS),
-        "raw_allowed_origins_env": os.getenv("ALLOWED_ORIGINS", "USING_DEFAULT")
-    }
-    
-    return result
+# NOTE: /db-test and /env-debug endpoints REMOVED for security.
+# Use Railway logs or direct DB access for debugging.
+# If needed in dev, set ENVIRONMENT=development and use the health endpoint.
 
 
 # ============================================
@@ -1574,20 +1462,5 @@ if __name__ == "__main__":
     uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
 
 
-# ============================================================
-# TEMPORARY ENDPOINT FOR SEEDING - REMOVE AFTER USE
-# ============================================================
-@app.post("/admin/seed-mappings")
-def seed_mappings_temp():
-    """Temporary endpoint to seed column mappings. Remove after use!"""
-    from sqlalchemy.orm import sessionmaker
-    from backend.database import engine
-    from backend.seed import seed
-    
-    # Run the seed using a fresh session
-    try:
-        seed()
-        return {"message": "Mappings seeded successfully"}
-    except Exception as e:
-        # If error, might already exist - that's ok
-        return {"message": f"Seed attempted: {str(e)[:100]}", "status": "done"}
+# NOTE: /admin/seed-mappings endpoint REMOVED for security.
+# Use `python -m backend.seed` from the CLI instead.

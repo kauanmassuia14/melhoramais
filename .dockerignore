@@ -1,0 +1,92 @@
+# Dependencies & virtual environments
+node_modules/
+venv/
+.venv/
+env/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment files (secrets)
+.env
+.env.local
+.env*.local
+
+# Build output
+.next/
+out/
+build/
+dist/
+
+# Git
+.git/
+.gitignore
+
+# Databases
+*.db
+*.sqlite
+test.db
+
+# Python caches
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+backend/venv/
+backend/.venv/
+backend/.pytest_cache/
+poetry.lock
+
+# Large binary files
+*.rpm
+*.deb
+*.exe
+
+# Test / Debug artifacts
+*.log
+*.pdf
+*.xls
+*.xlsx
+test_report*.pdf
+Relatorio_ag*.xls
+
+# IDE / Editor
+.idea/
+.vscode/
+.windsurf/
+.claude/
+.agents/
+
+# Scratch / debug scripts
+backend/scratch/
+backend/scripts/
+backend/migrate_*.py
+backend/test.db
+backend/test_report_output.pdf
+
+# Vercel
+.vercel/
+.vercelignore
+
+# Documentation (not needed in Docker image)
+*.md
+MAPPING_RULES.md
+mapeamento_pmgz.md
+database/
+
+# Standalone scripts in root
+create_admin_neon.py
+import_clientes.py
+inspect_file.py
+reset_admin_password.py
+run_pmgz_migration.py
+teste_conexao.py
+teste_motor.py
+test_admin.py
+main.py
+ddl_pmgz.sql
+skills-lock.json
+docker-desktop-x86_64.rpm

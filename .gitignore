@@ -1,20 +1,36 @@
 # Python
 __pycache__/
 *.py[cod]
-*.db
-.env
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
 
 # Node
 node_modules/
 .next/
 out/
 
-# Environment
+# Environment / Secrets
+.env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+
+# Databases
+*.db
+*.sqlite
+test.db
+backend/test.db
 
 # Logs
 *.log
@@ -23,17 +39,39 @@ npm-debug.log*
 # IDE
 .idea/
 .vscode/
+.windsurf/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Build artifacts
+# Build artifacts & test outputs
 *.pdf
 test_report.pdf
+test_report_output.pdf
+backend/test_report_output.pdf
+
+# Large binaries — NEVER commit these
+*.rpm
+*.deb
+*.exe
+*.msi
+*.dmg
+*.iso
+docker-desktop-x86_64.rpm
+
+# Data files — use separate storage
+*.xls
+*.xlsx
+*.csv
+Relatorio_ag*.xls
+
+# Deploy
+.vercel
+.vercelignore
+
+# Poetry lock (optional — pin if desired)
+# poetry.lock
 
 # Docker
-.dockerignore
-.vercel
-.env*.local
-docker-desktop-x86_64.rpm
+docker-compose.override.yml

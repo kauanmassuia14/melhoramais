@@ -1,13 +1,31 @@
 import os
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
 from jose import JWTError, jwt
 
-SECRET_KEY = os.getenv("JWT_SECRET", "CHANGE-ME-IN-PRODUCTION-use-openssl-rand-hex-32")
+_env = os.getenv("ENVIRONMENT", "production").lower()
+_default_secret = "DEV-ONLY-INSECURE-SECRET-DO-NOT-USE-IN-PROD"
+
+if _env in ("development", "dev", "local", "test"):
+    SECRET_KEY = os.getenv("JWT_SECRET", _default_secret)
+else:
+    SECRET_KEY = os.getenv("JWT_SECRET", "")
+    if not SECRET_KEY or SECRET_KEY == _default_secret:
+        raise RuntimeError(
+            "FATAL: JWT_SECRET environment variable is not set. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\" "
+            "and set it as JWT_SECRET in your environment."
+        )
+
+_logger = logging.getLogger(__name__)
+if SECRET_KEY == _default_secret:
+    _logger.warning("⚠️  Using INSECURE default JWT_SECRET — only acceptable in development!")
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Increased from 15 for better UX
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
