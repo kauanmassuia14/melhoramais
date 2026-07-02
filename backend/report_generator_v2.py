@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable, Image
+    PageBreak, HRFlowable, Image, KeepTogether
 )
 from reportlab.pdfgen import canvas
 from datetime import datetime, timezone, timedelta
@@ -836,3 +836,545 @@ class ReportGeneratorV2:
             ))
             
         return story
+
+    def _generate_radar_chart_oo(self, animals: list) -> io.BytesIO:
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        import numpy as np
+
+        categories = ['Desmama (PD)', 'Sobreano (PS)', 'Maternal (PM)', 'PE', 'AOL']
+        N = len(categories)
+        
+        angles = [n / float(N) * 2 * np.pi for n in range(N)]
+        angles += angles[:1]
+
+        fig = Figure(figsize=(4.8, 4.8), dpi=300)
+        canvas = FigureCanvasAgg(fig)
+        ax = fig.add_subplot(111, polar=True)
+
+        colors = ['#2d6a4f', '#8b5a2b', '#52b788', '#402218', '#74c69d']
+
+        for idx, a in enumerate(animals):
+            values = [
+                a.get("pd") or 0.0,
+                a.get("ps") or 0.0,
+                a.get("pm") or 0.0,
+                a.get("pe") or 0.0,
+                a.get("aol") or 0.0
+            ]
+            values += values[:1]
+            
+            color = colors[idx % len(colors)]
+            nome = a.get("nome_animal") or a.get("rgn_animal") or f"Animal {idx+1}"
+            
+            ax.plot(angles, values, color=color, linewidth=1.5, label=nome[:15])
+            ax.fill(angles, values, color=color, alpha=0.1)
+
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(categories, fontsize=8, color='#16261d', weight='bold')
+        
+        ax.tick_params(axis='y', labelsize=6, colors='#528266')
+        ax.grid(color='#d0e5da', linestyle='--', linewidth=0.5)
+        ax.spines['polar'].set_color('#a3c9b4')
+        
+        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=6, frameon=True, facecolor='white', edgecolor='none')
+        
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True)
+        buf.seek(0)
+        return buf
+
+    def _generate_benchmark_evolution_chart(self, farms_data: list, system_avg: float, safra_years: list) -> io.BytesIO:
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        import numpy as np
+
+        fig = Figure(figsize=(6, 2.8), dpi=300)
+        canvas = FigureCanvasAgg(fig)
+        ax = fig.add_subplot(111)
+
+        x = np.arange(len(safra_years))
+        width = 0.6 / max(len(farms_data), 1)
+
+        colors = ['#2d6a4f', '#8b5a2b', '#52b788', '#402218']
+
+        for idx, f in enumerate(farms_data):
+            farm_name = f.get("farm_name") or f"Fazenda {idx+1}"
+            y_vals = f.get("values") or [0.0] * len(safra_years)
+            offset = (idx - len(farms_data)/2 + 0.5) * width
+            
+            ax.bar(x + offset, y_vals, width, label=farm_name[:20], color=colors[idx % len(colors)])
+
+        ax.axhline(system_avg, color='#9c1c1c', linestyle='--', linewidth=1, label=f'Média Geral ({system_avg:.2f})')
+
+        ax.set_title('Evolução do Índice Genético Médio (Últimas 3 Safras)', fontsize=8, pad=8, weight='bold', color='#16261d')
+        ax.set_ylabel('Índice Médio', fontsize=7, color='#2b4737')
+        ax.set_xticks(x)
+        ax.set_xticklabels([str(yr) for yr in safra_years], fontsize=7, color='#2b4737')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#c1d6cc')
+        ax.spines['bottom'].set_color('#c1d6cc')
+        ax.tick_params(colors='#2b4737', labelsize=7)
+        ax.grid(axis='y', linestyle='--', alpha=0.3, color='#c1d6cc')
+        ax.legend(fontsize=6, loc='upper left', frameon=True, facecolor='white', edgecolor='none')
+
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True)
+        buf.seek(0)
+        return buf
+
+    def generate_animal_comparison_report(
+        self,
+        farm_name: str,
+        animals: list,
+    ) -> bytes:
+        """Gera o relatório comparativo de animais."""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=25 * mm,
+            bottomMargin=15 * mm,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        
+        story = []
+        
+        story.append(Paragraph("Relatório Comparativo de Animais", self.styles["ReportTitle"]))
+        story.append(Paragraph(
+            f"Fazenda: {farm_name} | Comparação de {len(animals)} animais | Gerado em {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y às %H:%M')}",
+            self.styles["ReportSubtitle"]
+        ))
+        
+        story.append(Paragraph("Análise de Equilíbrio Genético", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=4 * mm))
+        
+        try:
+            radar_buf = self._generate_radar_chart_oo(animals)
+            radar_image = Image(radar_buf, width=90 * mm, height=90 * mm)
+            
+            radar_table = Table([[radar_image]], colWidths=[180 * mm])
+            radar_table.setStyle(TableStyle([
+                ("ALIGN", (0,0), (-1,-1), "CENTER"),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ]))
+            
+            story.append(KeepTogether([radar_table, Spacer(1, 4 * mm)]))
+        except Exception as e:
+            story.append(Paragraph(f"Erro ao gerar gráfico de radar: {str(e)}", self.styles["TableCell"]))
+            
+        story.append(PageBreak())
+        
+        story.append(Paragraph("Tabela Comparativa de DEPs", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=4 * mm))
+        
+        story.append(KeepTogether([self._build_comparison_table(animals)]))
+        
+        doc.build(story, onFirstPage=self._header, onLaterPages=self._header)
+        
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    def _build_comparison_table(self, animals: list) -> Table:
+        header = [Paragraph("<b>Característica</b>", self.styles["TableHeader"])]
+        for a in animals:
+            name = a.get("nome_animal") or a.get("rgn_animal") or "Animal"
+            header.append(Paragraph(f"<b>{name[:20]}</b><br/>RGN: {a.get('rgn_animal')}", self.styles["TableHeader"]))
+            
+        rows = [header]
+        
+        traits = [
+            {"key": "pd", "label": "Desmama (PD)"},
+            {"key": "ps", "label": "Sobreano (PS)"},
+            {"key": "pm", "label": "Maternal (PM)"},
+            {"key": "pe", "label": "Perímetro Escrotal (PE)"},
+            {"key": "aol", "label": "Área Olho Lombo (AOL)"},
+        ]
+        
+        style_label = ParagraphStyle(
+            name="CompLabel",
+            parent=self.styles["TableCellLeft"],
+            fontName="Helvetica-Bold",
+            fontSize=7.5,
+        )
+        
+        style_normal = self.styles["TableCell"]
+        
+        style_best = ParagraphStyle(
+            name="CompBest",
+            parent=self.styles["TableCell"],
+            fontName="Helvetica-Bold",
+            textColor=HexColor("#2d6a4f"),
+        )
+        
+        for t in traits:
+            row = [Paragraph(t["label"], style_label)]
+            
+            vals = []
+            for a in animals:
+                val = a.get(t["key"])
+                if val is not None:
+                    try:
+                        vals.append(float(val))
+                    except ValueError:
+                        pass
+            
+            best_val = max(vals) if vals else None
+            
+            for a in animals:
+                val = a.get(t["key"])
+                if val is not None:
+                    try:
+                        f_val = float(val)
+                        is_best = (f_val == best_val)
+                        txt = f"{f_val:.2f}"
+                        style = style_best if is_best else style_normal
+                    except ValueError:
+                        txt = str(val)
+                        style = style_normal
+                else:
+                    txt = "—"
+                    style = style_normal
+                
+                row.append(Paragraph(txt, style))
+            rows.append(row)
+            
+        n_cols = len(animals) + 1
+        col_width = 180 * mm / n_cols
+        
+        table = Table(rows, colWidths=[col_width] * n_cols)
+        
+        table_styles = [
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#2d6a4f")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), white),
+            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#c1d6cc")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, HexColor("#c1d6cc")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]
+        
+        for row_idx in range(1, len(traits) + 1):
+            t = traits[row_idx - 1]
+            vals = []
+            for a in animals:
+                val = a.get(t["key"])
+                if val is not None:
+                    try:
+                        vals.append(float(val))
+                    except ValueError:
+                        pass
+            best_val = max(vals) if vals else None
+            
+            for col_idx in range(1, len(animals) + 1):
+                val = animals[col_idx - 1].get(t["key"])
+                if val is not None:
+                    try:
+                        if float(val) == best_val:
+                            table_styles.append(("BACKGROUND", (col_idx, row_idx), (col_idx, row_idx), HexColor("#eef5f1")))
+                    except ValueError:
+                        pass
+                        
+        table.setStyle(TableStyle(table_styles))
+        return table
+
+    def generate_farm_benchmark_report(
+        self,
+        farms_data: list,
+        system_avg: float,
+        safra: int,
+        safra_years: list,
+    ) -> bytes:
+        """Gera o relatório de benchmark entre fazendas."""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=25 * mm,
+            bottomMargin=15 * mm,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        
+        story = []
+        
+        story.append(Paragraph("Relatório Benchmark de Fazendas", self.styles["ReportTitle"]))
+        story.append(Paragraph(
+            f"Comparação de Desempenho | Safra Ref: {safra} | Gerado em {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y às %H:%M')}",
+            self.styles["ReportSubtitle"]
+        ))
+        
+        story.append(Paragraph("Análise Comparativa de Índices", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=4 * mm))
+        
+        try:
+            chart_buf = self._generate_benchmark_evolution_chart(farms_data, system_avg, safra_years)
+            chart_img = Image(chart_buf, width=160 * mm, height=75 * mm)
+            chart_table = Table([[chart_img]], colWidths=[180 * mm])
+            chart_table.setStyle(TableStyle([
+                ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ]))
+            story.append(KeepTogether([chart_table, Spacer(1, 4 * mm)]))
+        except Exception as e:
+            story.append(Paragraph(f"Erro ao gerar gráfico de evolução: {str(e)}", self.styles["TableCell"]))
+            
+        story.append(Spacer(1, 2 * mm))
+        
+        story.append(Paragraph(f"Tabela de Comparação de Médias - Safra {safra}", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=4 * mm))
+        
+        table_rows = [
+            [
+                Paragraph("<b>Fazenda</b>", self.styles["TableHeader"]),
+                Paragraph("<b>Total Animais</b>", self.styles["TableHeader"]),
+                Paragraph("<b>Índice Médio</b>", self.styles["TableHeader"]),
+                Paragraph("<b>Média P210 (Desmama)</b>", self.styles["TableHeader"]),
+                Paragraph("<b>Média P450 (Sobreano)</b>", self.styles["TableHeader"]),
+            ]
+        ]
+        
+        for f in farms_data:
+            table_rows.append([
+                Paragraph(f.get("farm_name") or "Fazenda", self.styles["TableCellLeft"]),
+                Paragraph(str(f.get("total_animals") or 0), self.styles["TableCell"]),
+                Paragraph(f"{f.get('avg_index'):.2f}" if f.get('avg_index') is not None else "—", self.styles["TableCell"]),
+                Paragraph(f"{f.get('avg_p210'):.2f} kg" if f.get('avg_p210') is not None else "—", self.styles["TableCell"]),
+                Paragraph(f"{f.get('avg_p450'):.2f} kg" if f.get('avg_p450') is not None else "—", self.styles["TableCell"]),
+            ])
+            
+        table_rows.append([
+            Paragraph("<b>Média Geral do Sistema (Benchmark)</b>", self.styles["TableCellLeft"]),
+            Paragraph("—", self.styles["TableCell"]),
+            Paragraph(f"<b>{system_avg:.2f}</b>", self.styles["TableCell"]),
+            Paragraph("—", self.styles["TableCell"]),
+            Paragraph("—", self.styles["TableCell"]),
+        ])
+        
+        bench_table = Table(table_rows, colWidths=[65 * mm, 25 * mm, 30 * mm, 30 * mm, 30 * mm])
+        bench_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#2d6a4f")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), white),
+            ("BACKGROUND", (0, 1), (-1, -2), white),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [white, HexColor("#eef5f1")]),
+            ("BACKGROUND", (0, -1), (-1, -1), HexColor("#d0e5da")),
+            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#c1d6cc")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, HexColor("#c1d6cc")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        
+        story.append(KeepTogether([bench_table]))
+        
+        doc.build(story, onFirstPage=self._header, onLaterPages=self._header)
+        
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    def generate_individual_animal_report(
+        self,
+        farm_name: str,
+        animal: dict,
+        pedigree: dict,
+    ) -> bytes:
+        """Gera o relatório da ficha individual do animal (página única)."""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=25 * mm,
+            bottomMargin=15 * mm,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+        )
+        
+        story = []
+        
+        story.append(Paragraph(f"Ficha Técnica Individual de Leilão", self.styles["ReportTitle"]))
+        story.append(Paragraph(
+            f"Fazenda: {farm_name} | Data de Emissão: {datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y às %H:%M')}",
+            self.styles["ReportSubtitle"]
+        ))
+        
+        story.append(Paragraph("Identificação do Animal", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=3 * mm))
+        
+        percentil = animal.get("percentil_principal")
+        badge_bg = "#52b788"
+        badge_text_color = "#16261d"
+        badge_label = "N/A"
+        
+        if percentil is not None:
+            try:
+                p_val = float(percentil)
+                if p_val <= 1.0:
+                    badge_bg = "#1b4332"
+                    badge_text_color = "#ffffff"
+                    badge_label = f"TOP {p_val:.1f}%"
+                elif p_val <= 5.0:
+                    badge_bg = "#2d6a4f"
+                    badge_text_color = "#ffffff"
+                    badge_label = f"TOP {p_val:.1f}%"
+                elif p_val <= 10.0:
+                    badge_bg = "#52b788"
+                    badge_text_color = "#16261d"
+                    badge_label = f"TOP {p_val:.1f}%"
+                else:
+                    badge_bg = "#d0e5da"
+                    badge_text_color = "#2b4737"
+                    badge_label = f"TOP {p_val:.1f}%"
+            except ValueError:
+                pass
+                
+        style_badge = ParagraphStyle(
+            name="BadgeText",
+            fontName="Helvetica-Bold",
+            fontSize=10,
+            textColor=HexColor(badge_text_color),
+            alignment=TA_CENTER,
+        )
+        
+        badge_para = Paragraph(f"<b>{badge_label}</b>", style_badge)
+        
+        info_data = [
+            [
+                Paragraph("<b>Nome do Animal:</b>", self.styles["TableCellLeft"]),
+                Paragraph(animal.get("nome") or "—", self.styles["TableCellLeft"]),
+                Paragraph("<b>Classificação:</b>", self.styles["TableCellLeft"]),
+                badge_para
+            ],
+            [
+                Paragraph("<b>RGN:</b>", self.styles["TableCellLeft"]),
+                Paragraph(animal.get("rgn") or "—", self.styles["TableCellLeft"]),
+                Paragraph("<b>Sexo:</b>", self.styles["TableCellLeft"]),
+                Paragraph("Macho" if animal.get("sexo") == "M" else "Fêmea" if animal.get("sexo") == "F" else "—", self.styles["TableCellLeft"]),
+            ],
+            [
+                Paragraph("<b>Raça / Série:</b>", self.styles["TableCellLeft"]),
+                Paragraph(animal.get("raca") or animal.get("serie") or "—", self.styles["TableCellLeft"]),
+                Paragraph("<b>Nascimento:</b>", self.styles["TableCellLeft"]),
+                Paragraph(animal.get("nascimento") or "—", self.styles["TableCellLeft"]),
+            ],
+            [
+                Paragraph("<b>Genotipado:</b>", self.styles["TableCellLeft"]),
+                Paragraph("Sim" if animal.get("genotipado") else "Não", self.styles["TableCellLeft"]),
+                Paragraph("<b>CSG:</b>", self.styles["TableCellLeft"]),
+                Paragraph("Sim" if animal.get("csg") else "Não", self.styles["TableCellLeft"]),
+            ]
+        ]
+        
+        info_table = Table(info_data, colWidths=[35 * mm, 55 * mm, 35 * mm, 55 * mm])
+        info_table.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#c1d6cc")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, HexColor("#c1d6cc")),
+            ("BACKGROUND", (0, 0), (-1, -1), white),
+            ("BACKGROUND", (3, 0), (3, 0), HexColor(badge_bg)),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        
+        story.append(info_table)
+        story.append(Spacer(1, 6 * mm))
+        
+        story.append(Paragraph("Árvore Genealógica (Pedigree)", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=3 * mm))
+        
+        style_ped_bold = ParagraphStyle(
+            name="PedBold",
+            parent=self.styles["TableCell"],
+            fontName="Helvetica-Bold",
+            fontSize=7.5,
+        )
+        
+        style_ped = ParagraphStyle(
+            name="PedNormal",
+            parent=self.styles["TableCell"],
+            fontSize=7.0,
+            leading=9,
+        )
+        
+        def format_anc(anc):
+            if not anc:
+                return "—"
+            return f"<b>{anc.get('nome') or 'Sem Nome'}</b><br/>RGN: {anc.get('rgn') or '—'}"
+            
+        ped_data = [
+            [
+                Paragraph(f"<b>{animal.get('nome') or 'Animal'}</b><br/>RGN: {animal.get('rgn')}", style_ped_bold), 
+                Paragraph(format_anc(pedigree.get("sire")), style_ped), 
+                Paragraph(format_anc(pedigree.get("sire_sire")), style_ped)
+            ],
+            [
+                "", 
+                "", 
+                Paragraph(format_anc(pedigree.get("sire_dam")), style_ped)
+            ],
+            [
+                "", 
+                Paragraph(format_anc(pedigree.get("dam")), style_ped), 
+                Paragraph(format_anc(pedigree.get("dam_sire")), style_ped)
+            ],
+            [
+                "", 
+                "", 
+                Paragraph(format_anc(pedigree.get("dam_dam")), style_ped)
+            ],
+        ]
+        
+        ped_table = Table(ped_data, colWidths=[60 * mm, 60 * mm, 60 * mm], rowHeights=[14 * mm] * 4)
+        ped_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (0, 3)),
+            ('SPAN', (1, 0), (1, 1)),
+            ('SPAN', (1, 2), (1, 3)),
+            ('GRID', (0, 0), (-1, -1), 0.5, HexColor("#c1d6cc")),
+            ('BACKGROUND', (0, 0), (0, 3), HexColor("#eef5f1")),
+            ('BACKGROUND', (1, 0), (1, 1), HexColor("#fafbfc")),
+            ('BACKGROUND', (1, 2), (1, 3), HexColor("#fafbfc")),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        
+        story.append(ped_table)
+        story.append(Spacer(1, 6 * mm))
+        
+        story.append(Paragraph("Desempenho Genético", self.styles["SectionTitle"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=HexColor("#2d6a4f"), spaceAfter=3 * mm))
+        
+        eval_data = [
+            [
+                Paragraph("<b>Plataforma Origem:</b>", self.styles["TableCellLeft"]),
+                Paragraph(animal.get("fonte_origem") or "—", self.styles["TableCellLeft"]),
+                Paragraph("<b>Safra Avaliação:</b>", self.styles["TableCellLeft"]),
+                Paragraph(str(animal.get("safra") or "—"), self.styles["TableCellLeft"]),
+            ],
+            [
+                Paragraph("<b>Índice Principal:</b>", self.styles["TableCellLeft"]),
+                Paragraph(f"{animal.get('indice_principal'):.2f}" if animal.get('indice_principal') is not None else "—", self.styles["TableCellLeft"]),
+                Paragraph("<b>Percentil / Rank:</b>", self.styles["TableCellLeft"]),
+                Paragraph(f"{animal.get('percentil_principal'):.2f}%" if animal.get('percentil_principal') is not None else "—", self.styles["TableCellLeft"]),
+            ]
+        ]
+        
+        eval_table = Table(eval_data, colWidths=[40 * mm, 50 * mm, 40 * mm, 50 * mm])
+        eval_table.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#c1d6cc")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, HexColor("#c1d6cc")),
+            ("BACKGROUND", (0, 0), (-1, -1), white),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        
+        story.append(eval_table)
+        
+        doc.build(story, onFirstPage=self._header, onLaterPages=self._header)
+        
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes

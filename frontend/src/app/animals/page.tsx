@@ -77,8 +77,58 @@ function AnimalsContent() {
   const [total, setTotal] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
   const { showToast } = useToast();
+
+  const handleDownloadFicha = async (id: string, rgn: string) => {
+    try {
+      setDownloadingId(id);
+      showToast(`Gerando ficha do animal ${rgn}...`, "info");
+      const blob = await api.downloadAnimalDatasheet(id);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ficha_animal_${rgn}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      showToast("Ficha técnica baixada com sucesso", "success");
+    } catch (err: any) {
+      showToast(err.message || "Erro ao baixar ficha técnica", "error");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleCompareSelected = async () => {
+    if (selectedIds.size < 2 || selectedIds.size > 5) return;
+    try {
+      setComparing(true);
+      showToast("Gerando comparativo de animais...", "info");
+      const idsArray = Array.from(selectedIds);
+      const blob = await api.downloadAnimalComparisonReport(idsArray);
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comparativo_animais_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      showToast("Comparativo baixado com sucesso", "success");
+    } catch (err: any) {
+      showToast(err.message || "Erro ao gerar comparativo", "error");
+    } finally {
+      setComparing(false);
+    }
+  };
 
   useEffect(() => {
     api.getGeneticsFarms().then(setFarms).catch(console.error);
@@ -547,14 +597,28 @@ function AnimalsContent() {
                           )}
                         </td>
 
-                        {/* Link */}
+                        {/* Link & Download Ficha */}
                         <td className="px-4 py-3">
-                          <Link
-                             href={`/animals/${animal.id}`}
-                            className="text-xs text-emerald-glow-400 opacity-0 group-hover:opacity-100 hover:text-emerald-glow-300 transition-all"
-                          >
-                            Detalhes →
-                          </Link>
+                          <div className="flex items-center gap-3 justify-end">
+                            <button
+                              onClick={() => handleDownloadFicha(animal.id, animal.rgn)}
+                              disabled={downloadingId === animal.id}
+                              className="text-text-muted hover:text-emerald-glow-400 disabled:opacity-50 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                              title="Baixar Ficha Técnica (PDF)"
+                            >
+                              {downloadingId === animal.id ? (
+                                <ArrowPathIcon className="w-4 h-4 animate-spin text-emerald-glow" />
+                              ) : (
+                                <ArrowDownTrayIcon className="w-4 h-4" />
+                              )}
+                            </button>
+                            <Link
+                               href={`/animals/${animal.id}`}
+                              className="text-xs text-emerald-glow-400 opacity-0 group-hover:opacity-100 hover:text-emerald-glow-300 transition-all"
+                            >
+                              Detalhes →
+                            </Link>
+                          </div>
                         </td>
                       </motion.tr>
                     );
@@ -592,6 +656,35 @@ function AnimalsContent() {
         </GlassCard>
       </div>
       {dialog}
+      {/* Floating Action Bar */}
+      {selectedIds.size >= 2 && selectedIds.size <= 5 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-4 rounded-2xl bg-deep-dark/95 border border-emerald-glow/20 backdrop-blur-xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-white">
+              {selectedIds.size} {selectedIds.size === 1 ? 'animal selecionado' : 'animais selecionados'}
+            </span>
+            <span className="text-[10px] text-text-muted">Selecione de 2 a 5 para comparar</span>
+          </div>
+          <div className="h-6 w-[1px] bg-white/10" />
+          <button
+            onClick={handleCompareSelected}
+            disabled={comparing}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-glow text-deep-dark text-sm font-bold hover:brightness-110 disabled:opacity-50 transition-all cursor-pointer"
+          >
+            {comparing ? (
+              <>
+                <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                Comparando...
+              </>
+            ) : (
+              <>
+                <BeakerIcon className="w-4 h-4" />
+                Comparar Animais (PDF)
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

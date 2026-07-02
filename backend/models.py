@@ -574,13 +574,13 @@ class GeneticsGeneticEvaluation(Base):
     percentil_principal = Column(Numeric(10, 4))
 
     # Metrics JSONB: { "PN-EDg": { "dep": 0.5, "acc": 80, "rank": 1, "perc": 2.5 } }
-    metrics = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
+    metrics = Column(JSONB if not IS_SQLITE else JSON, nullable=False, server_default='{}')
 
     # Progeny Stats: { "NF120": 10, "NR120": 2 }
-    progeny_stats = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
+    progeny_stats = Column(JSONB if not IS_SQLITE else JSON, nullable=False, server_default='{}')
 
     # Phenotypes: { "peso_desmama": 210.5 }
-    phenotypes = Column(JSONB if not IS_SQLITE else Text, nullable=False, server_default='{}')
+    phenotypes = Column(JSONB if not IS_SQLITE else JSON, nullable=False, server_default='{}')
 
     upload_id = Column(String(36))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

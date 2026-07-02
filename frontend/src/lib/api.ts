@@ -790,4 +790,88 @@ export const api = {
 
     return res.blob();
   },
+
+  downloadAnimalComparisonReport: async (animalIds: string[]): Promise<Blob> => {
+    const token = getAccessToken();
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/compare/animals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ animal_ids: animalIds }),
+      });
+    };
+
+    let res = await doDownload(token);
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+    return res.blob();
+  },
+
+  downloadFarmBenchmarkReport: async (farmIds: string[], safra: number): Promise<Blob> => {
+    const token = getAccessToken();
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/compare/farms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ farm_ids: farmIds, safra }),
+      });
+    };
+
+    let res = await doDownload(token);
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download do relatório falhou', res.status);
+    }
+    return res.blob();
+  },
+
+  downloadAnimalDatasheet: async (animalId: string): Promise<Blob> => {
+    const token = getAccessToken();
+    const doDownload = async (accessToken: string | null): Promise<Response> => {
+      return fetch(`${API_BASE}/reports/animal/${animalId}`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    };
+
+    let res = await doDownload(token);
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        res = await doDownload(newToken);
+      } else {
+        throw new ApiError('Sessão expirada', 401);
+      }
+    }
+
+    if (!res.ok) {
+      throw new ApiError('Download da ficha do animal falhou', res.status);
+    }
+    return res.blob();
+  },
 };

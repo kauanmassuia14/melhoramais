@@ -14,7 +14,10 @@ import {
   ArrowUpTrayIcon,
   ChartBarIcon,
   ExclamationTriangleIcon,
+  ChevronDownIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
+import { useToast } from "@/components/ui/Toast";
 import { GlowButton } from "@/components/ui/glow-button";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -23,6 +26,7 @@ import type { DashboardPlatformData } from "@/lib/mock-comparison-data";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +34,12 @@ export default function DashboardPage() {
   const [platformLoading, setPlatformLoading] = useState(true);
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [farms, setFarms] = useState<GeneticsFarm[]>([]);
+
+  // Benchmark filters states
+  const [selectedFarmIds, setSelectedFarmIds] = useState<string[]>([]);
+  const [selectedSafra, setSelectedSafra] = useState<number>(2024);
+  const [exportingBenchmark, setExportingBenchmark] = useState(false);
+  const [isFarmDropdownOpen, setIsFarmDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("access_token")) {
@@ -39,10 +49,35 @@ export default function DashboardPage() {
   }, [selectedFarm]);
 
   useEffect(() => {
-    if (user?.role === "admin") {
-      loadFarms();
+    loadFarms();
+  }, []);
+
+  const handleExportBenchmark = async () => {
+    if (selectedFarmIds.length === 0) {
+      showToast("Selecione pelo menos uma fazenda para exportar o benchmark", "error");
+      return;
     }
-  }, [user]);
+    try {
+      setExportingBenchmark(true);
+      showToast("Gerando relatório de benchmark das fazendas...", "info");
+      
+      const blob = await api.downloadFarmBenchmarkReport(selectedFarmIds, selectedSafra);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `benchmark_fazendas_safra_${selectedSafra}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      showToast("Relatório de benchmark baixado com sucesso", "success");
+    } catch (err: any) {
+      showToast(err.message || "Erro ao baixar benchmark de fazendas", "error");
+    } finally {
+      setExportingBenchmark(false);
+    }
+  };
 
   const loadFarms = async () => {
     try {
@@ -109,14 +144,115 @@ export default function DashboardPage() {
                    onChange={(e) => setSelectedFarm(e.target.value || null)}
                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
                  >
-                   <option value="" className="bg-slate-900 text-white">Todas as fazendas</option>
+                   <option value="" className="bg-slate-900 text-white">Filtrar: Todas</option>
                    {farms.map((farm) => (
                      <option key={farm.id} value={farm.id} className="bg-slate-900 text-white">
-                       {farm.nome}
+                       Filtrar: {farm.nome}
                      </option>
                    ))}
                  </select>
                </div>
+             )}
+
+             {/* Benchmark Multi-select and Export Controls */}
+             {farms.length > 0 && (
+               <>
+                 {/* Multi-select Dropdown */}
+                 <div className="relative">
+                   <button
+                     type="button"
+                     onClick={() => setIsFarmDropdownOpen(!isFarmDropdownOpen)}
+                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium flex items-center gap-2"
+                   >
+                     <span className="max-w-[150px] truncate">
+                       {selectedFarmIds.length === 0
+                         ? "Benchmark: Fazendas"
+                         : selectedFarmIds.length === farms.length
+                         ? "Todas as Fazendas"
+                         : `${selectedFarmIds.length} Fazenda(s)`}
+                     </span>
+                     <ChevronDownIcon className="w-4 h-4 text-slate-400" />
+                   </button>
+                   {isFarmDropdownOpen && (
+                     <>
+                       <div className="fixed inset-0 z-10" onClick={() => setIsFarmDropdownOpen(false)} />
+                       <div className="absolute right-0 mt-2 w-64 bg-slate-950 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md max-h-60 overflow-y-auto">
+                         <div className="p-2 border-b border-white/5 flex justify-between gap-2">
+                           <button
+                             type="button"
+                             onClick={() => setSelectedFarmIds(farms.map(f => String(f.id)))}
+                             className="text-[10px] text-cyan-glow-400 hover:underline font-bold cursor-pointer"
+                           >
+                             Todas
+                           </button>
+                           <button
+                             type="button"
+                             onClick={() => setSelectedFarmIds([])}
+                             className="text-[10px] text-text-muted hover:underline font-bold cursor-pointer"
+                           >
+                             Limpar
+                           </button>
+                         </div>
+                         {farms.map((farm) => {
+                           const isSelected = selectedFarmIds.includes(String(farm.id));
+                           return (
+                             <label
+                               key={farm.id}
+                               className="flex items-center gap-3 px-4 py-2 hover:bg-white/5 transition-colors cursor-pointer select-none"
+                             >
+                               <input
+                                 type="checkbox"
+                                 checked={isSelected}
+                                 onChange={() => {
+                                   if (isSelected) {
+                                     setSelectedFarmIds(selectedFarmIds.filter(id => id !== String(farm.id)));
+                                   } else {
+                                     setSelectedFarmIds([...selectedFarmIds, String(farm.id)]);
+                                   }
+                                 }}
+                                 className="rounded border-white/15 text-emerald-glow bg-white/5 focus:ring-emerald-glow w-4 h-4 cursor-pointer"
+                               />
+                               <span className="text-xs text-slate-300">{farm.nome}</span>
+                             </label>
+                           );
+                         })}
+                       </div>
+                     </>
+                   )}
+                 </div>
+
+                 {/* Safra Select */}
+                 <select
+                   value={selectedSafra}
+                   onChange={(e) => setSelectedSafra(Number(e.target.value))}
+                   className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
+                 >
+                   {[2024, 2023, 2022, 2021, 2020].map((safra) => (
+                     <option key={safra} value={safra} className="bg-slate-900 text-white">
+                       Safra {safra}
+                     </option>
+                   ))}
+                 </select>
+
+                 {/* Export Benchmark Button */}
+                 <button
+                   onClick={handleExportBenchmark}
+                   disabled={exportingBenchmark || selectedFarmIds.length === 0}
+                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-glow text-deep-dark text-sm font-bold hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-lg shadow-emerald-glow/20"
+                 >
+                   {exportingBenchmark ? (
+                     <>
+                       <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                       Gerando...
+                     </>
+                   ) : (
+                     <>
+                       <DocumentArrowUpIcon className="w-4 h-4" />
+                       Exportar Benchmark
+                     </>
+                   )}
+                 </button>
+               </>
              )}
 
              <Link href="/upload">
@@ -271,6 +407,129 @@ export default function DashboardPage() {
                     <p className="text-sm text-slate-500">Nenhum dado de avaliação genética disponível.</p>
                   </div>
                 )}
+              </GlassCard>
+            </div>
+
+            {/* Benchmark Comparativo de Fazendas */}
+            <div className="grid grid-cols-1 gap-6">
+              <GlassCard className="p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-emerald-glow/10 rounded-full blur-3xl pointer-events-none" />
+                
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Benchmark Comparativo de Fazendas</h3>
+                    <p className="text-sm text-text-secondary mt-1">
+                      Compare e exporte a evolução de múltiplas fazendas agregadas por safra.
+                    </p>
+                  </div>
+                  
+                  {/* Export Button (top-right of the card) */}
+                  <button
+                    onClick={handleExportBenchmark}
+                    disabled={exportingBenchmark || selectedFarmIds.length === 0}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-glow text-deep-dark text-sm font-bold hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-lg shadow-emerald-glow/20"
+                  >
+                    {exportingBenchmark ? (
+                      <>
+                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                        Exportando...
+                      </>
+                    ) : (
+                      <>
+                        <DocumentArrowUpIcon className="w-4 h-4" />
+                        Exportar Benchmark (PDF)
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                  {/* Multi-select Fazendas */}
+                  <div className="relative">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-2">
+                      Fazendas Selecionadas ({selectedFarmIds.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsFarmDropdownOpen(!isFarmDropdownOpen)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white hover:bg-white/10 transition-all font-medium cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {selectedFarmIds.length === 0
+                          ? "Selecione as fazendas..."
+                          : selectedFarmIds.length === farms.length
+                          ? "Todas as fazendas selecionadas"
+                          : `${selectedFarmIds.length} fazenda(s) selecionada(s)`}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isFarmDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isFarmDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIsFarmDropdownOpen(false)} />
+                        <div className="absolute left-0 mt-2 w-full bg-slate-950 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20 backdrop-blur-md max-h-60 overflow-y-auto">
+                          <div className="p-2 border-b border-white/5 flex justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFarmIds(farms.map(f => String(f.id)))}
+                              className="text-[10px] text-cyan-glow-400 hover:underline font-bold"
+                            >
+                              Selecionar Todas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFarmIds([])}
+                              className="text-[10px] text-text-muted hover:underline font-bold"
+                            >
+                              Limpar
+                            </button>
+                          </div>
+                          {farms.map((farm) => {
+                            const isSelected = selectedFarmIds.includes(String(farm.id));
+                            return (
+                              <label
+                                key={farm.id}
+                                className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors cursor-pointer select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    if (isSelected) {
+                                      setSelectedFarmIds(selectedFarmIds.filter(id => id !== String(farm.id)));
+                                    } else {
+                                      setSelectedFarmIds([...selectedFarmIds, String(farm.id)]);
+                                    }
+                                  }}
+                                  className="rounded border-white/15 text-emerald-glow bg-white/5 focus:ring-emerald-glow w-4 h-4 cursor-pointer"
+                                />
+                                <span className="text-sm text-slate-300">{farm.nome}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Selector Safra */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-2">
+                      Safra de Análise
+                    </label>
+                    <select
+                      value={selectedSafra}
+                      onChange={(e) => setSelectedSafra(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-glow/50 focus:ring-2 focus:ring-cyan-glow/10 transition-all cursor-pointer hover:bg-white/10 font-medium"
+                    >
+                      {[2024, 2023, 2022, 2021, 2020].map((safra) => (
+                        <option key={safra} value={safra} className="bg-slate-950 text-white">
+                          Safra {safra}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </GlassCard>
             </div>
 
