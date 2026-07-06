@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, or_, func, text
 from sqlalchemy.orm import Session, aliased, load_only
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from uuid import UUID
 import io
@@ -16,13 +16,26 @@ import json
 import statistics
 
 from backend.database import get_db, get_max_completed_safra, IS_SQLITE
-from backend.models import Farm as SilverFarm, User, Upload
+from backend.models import User, Upload, ProcessingLog, RawAnimalData
 from backend.models import GeneticsAnimal, GeneticsGeneticEvaluation, GeneticsFarm
+from backend.schemas import UploadDetailResponse, ProcessingLogResponse, AnimalResponse
+
+class ReportAnimal:
+    """Mock class that supports both attribute access and dict-like get() access
+    for compatibility with ReportGenerator.
+    """
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+            
+    def get(self, key, default=None):
+        return getattr(self, key, default)
 from backend.auth.dependencies import get_current_user
+from backend.report_generator import ReportGenerator
 from backend.report_generator_v2 import ReportGeneratorV2
 
-
 router = APIRouter(prefix="/reports", tags=["Reports"])
+router_no_prefix = APIRouter(tags=["Reports"])
 
 
 # ==============================================================================
@@ -138,7 +151,7 @@ def get_platform_columns(
 
 @router.post("/generate")
 def generate_custom_report(
-    farm_id: int = Query(..., description="ID da fazenda"),
+    farm_id: str = Query(..., description="ID da fazenda"),
     platforms: List[str] = Query(..., description="Plataformas a incluir (ANCP, GENEPLUS, PMGZ)"),
     include_basic: bool = Query(True, description="Incluir dados básicos (RGN, sexo, pesos)"),
     include_genealogy: bool = Query(False, description="Incluir genealogia"),
@@ -159,9 +172,14 @@ def generate_custom_report(
     - platforms=ANCP,PMGZ&columns=anc_mg,pmg_iabc
     """
     
-    # Verificar acesso à fazenda (silver)
-    farm = db.query(SilverFarm).filter(SilverFarm.id_farm == farm_id).first()
-    if not farm:
+    # Verificar acesso à fazenda (Genetics)
+    try:
+        farm_uuid = UUID(farm_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de fazenda inválido")
+        
+    genetics_farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+    if not genetics_farm:
         raise HTTPException(status_code=404, detail="Fazenda não encontrada")
     
     # Usuário não-admin só pode ver sua própria fazenda
@@ -172,15 +190,6 @@ def generate_custom_report(
     valid_platforms = [p for p in platforms if p in PLATFORMS]
     if not valid_platforms:
         raise HTTPException(status_code=400, detail="Nenhuma plataforma válida informada")
-    
-    # Mapear para genetics
-    genetics_farm = db.query(GeneticsFarm).filter(
-        GeneticsFarm.nome.ilike(f"%{farm.nome_farm}%")
-    ).first()
-    
-    if not genetics_farm:
-        raise HTTPException(status_code=404, detail="Fazenda não encontrada no genetics - importe dados primeiro")
-    
     # Travas de segurança DoS - se não houver filtros restritivos de peso, forçar limite menor
     if min_p210 is None and max_p210 is None:
         limit = min(limit, 200)
@@ -307,7 +316,7 @@ def generate_custom_report(
             if isinstance(metrics, str):
                 try:
                     metrics = json.loads(metrics)
-                except:
+                except Exception:
                     metrics = {}
                 
             # Mapeia métricas para o formato esperado pelo gerador de PDF
@@ -515,7 +524,7 @@ def compare_animals(
             if isinstance(metrics, str):
                 try:
                     metrics = json.loads(metrics)
-                except:
+                except Exception:
                     metrics = {}
 
         pd = _extract_trait(metrics, ["PD-EDg", "DP210", "DP120"])
@@ -593,7 +602,7 @@ def compare_farms(
                 else:
                     try:
                         metrics = json.loads(m_str)
-                    except:
+                    except Exception:
                         metrics = {}
                         
             p210 = _extract_trait(metrics, ["PD-EDg", "DP210", "DP120"])
@@ -818,5 +827,400 @@ def get_animal_datasheet(
         headers={
             "Content-Disposition": f"attachment; filename={filename}",
             "Access-Control-Expose-Headers": "Content-Disposition"
+        },
+    )
+
+
+# ==============================================================================
+# REPORT ENDPOINTS FROM MAIN.PY (MODULARIZED & REFACTORED TO V2)
+# ==============================================================================
+
+@router_no_prefix.get("/report/dashboard")
+def generate_dashboard_report(
+    farm_id: Optional[str] = Query(None),
+    include_animals: bool = Query(False),
+    include_logs: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import uuid as _uuid
+    import statistics
+    import json
+
+    # Access Control
+    if current_user.role != "admin" and current_user.id_farm:
+        farm_id = str(current_user.id_farm)
+
+    if not farm_id:
+        raise HTTPException(status_code=400, detail="Farm ID is required")
+
+    try:
+        farm_uuid = _uuid.UUID(str(farm_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Farm UUID")
+
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm not found")
+
+    farm_name = farm.nome
+
+    # Get all animals in the farm
+    animal_query = db.query(GeneticsAnimal).filter(GeneticsAnimal.farm_id == farm_uuid)
+    total_animals = animal_query.count()
+
+    # Sex Breakdown
+    sex_counts_query = (
+        db.query(GeneticsAnimal.sexo, func.count(GeneticsAnimal.id))
+        .filter(GeneticsAnimal.farm_id == farm_uuid)
+        .group_by(GeneticsAnimal.sexo)
+        .all()
+    )
+    animals_by_sex = {s or "unknown": c for s, c in sex_counts_query}
+
+    # Source Platform Breakdown & Evaluations
+    eval_query = db.query(GeneticsGeneticEvaluation).filter(GeneticsGeneticEvaluation.farm_id == farm_uuid)
+    source_counts_query = (
+        db.query(GeneticsGeneticEvaluation.fonte_origem, func.count(GeneticsGeneticEvaluation.id))
+        .filter(GeneticsGeneticEvaluation.farm_id == farm_uuid)
+        .group_by(GeneticsGeneticEvaluation.fonte_origem)
+        .all()
+    )
+    animals_by_source = {s or "unknown": c for s, c in source_counts_query}
+
+    # Calculate weight statistics (P210, P365, P450)
+    all_evals = eval_query.all()
+
+    p210_list = []
+    p365_list = []
+    p450_list = []
+
+    for ev in all_evals:
+        metrics = ev.metrics if isinstance(ev.metrics, dict) else {}
+        if isinstance(ev.metrics, str):
+            try:
+                metrics = json.loads(ev.metrics)
+            except Exception:
+                metrics = {}
+
+        pd_m = metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")
+        if pd_m and pd_m.get("dep") is not None:
+            p210_list.append(float(pd_m["dep"]))
+
+        pa_m = metrics.get("PA-EDg") or metrics.get("DP365")
+        if pa_m and pa_m.get("dep") is not None:
+            p365_list.append(float(pa_m["dep"]))
+
+        ps_m = metrics.get("PS-EDg") or metrics.get("DP450")
+        if ps_m and ps_m.get("dep") is not None:
+            p450_list.append(float(ps_m["dep"]))
+
+    avg_p210 = statistics.mean(p210_list) if p210_list else None
+    avg_p365 = statistics.mean(p365_list) if p365_list else None
+    avg_p450 = statistics.mean(p450_list) if p450_list else None
+
+    # Recent Uploads (past 30 days)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    recent_uploads = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.id_farm == farm_id, ProcessingLog.started_at >= thirty_days_ago)
+        .count()
+    )
+
+    stats = {
+        "total_animals": total_animals,
+        "total_farms": 1,
+        "animals_by_source": animals_by_source,
+        "animals_by_sex": animals_by_sex,
+        "recent_uploads": recent_uploads,
+        "avg_p210": avg_p210,
+        "avg_p365": avg_p365,
+        "avg_p450": avg_p450,
+    }
+
+    # Fetch animals if requested
+    animals_data = None
+    if include_animals:
+        animals_list = animal_query.all()
+        animals_data = []
+        
+        # Optimize N+1 Query: Fetch all evaluations in a single query
+        animal_ids = [a.id for a in animals_list]
+        eval_map = {}
+        if animal_ids:
+            all_evals_for_list = (
+                db.query(GeneticsGeneticEvaluation)
+                .filter(GeneticsGeneticEvaluation.animal_id.in_(animal_ids))
+                .all()
+            )
+            for ev in all_evals_for_list:
+                existing = eval_map.get(ev.animal_id)
+                if not existing or (ev.safra and (not existing.safra or ev.safra > existing.safra)):
+                    eval_map[ev.animal_id] = ev
+
+        for a in animals_list:
+            latest_eval = eval_map.get(a.id)
+
+            p210_val = None
+            p365_val = None
+            p450_val = None
+            metrics = {}
+            if latest_eval:
+                metrics = latest_eval.metrics if isinstance(latest_eval.metrics, dict) else {}
+                if isinstance(latest_eval.metrics, str):
+                    try:
+                        metrics = json.loads(latest_eval.metrics)
+                    except Exception:
+                        metrics = {}
+
+                pd_m = metrics.get("PD-EDg") or metrics.get("DP210") or metrics.get("DP120")
+                if pd_m and pd_m.get("dep") is not None:
+                    p210_val = float(pd_m["dep"])
+                pa_m = metrics.get("PA-EDg") or metrics.get("DP365")
+                if pa_m and pa_m.get("dep") is not None:
+                    p365_val = float(pa_m["dep"])
+                ps_m = metrics.get("PS-EDg") or metrics.get("DP450")
+                if ps_m and ps_m.get("dep") is not None:
+                    p450_val = float(ps_m["dep"])
+
+            animals_data.append({
+                "rgn_animal": a.rgn,
+                "nome_animal": a.nome or "—",
+                "sexo": a.sexo or "—",
+                "raca": a.serie or "—",
+                "p210_peso_desmama": p210_val,
+                "p365_peso_ano": p365_val,
+                "p450_peso_sobreano": p450_val,
+                "fonte_origem": latest_eval.fonte_origem if latest_eval else "—",
+                "metrics": metrics,
+            })
+
+    # Generate PDF
+    generator = ReportGeneratorV2()
+    pdf_bytes = generator.generate_dashboard_report(
+        stats=stats,
+        animals=animals_data,
+        farm_name=farm_name,
+    )
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=relatorio_dashboard_{datetime.now(timezone(timedelta(hours=-3))).strftime('%Y%m%d_%H%M')}.pdf"
+        },
+    )
+
+
+@router.get("/upload/{log_id}", response_model=UploadDetailResponse)
+def get_upload_detail(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Processing log not found")
+    
+    if current_user.role != "admin" and log.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Refactored to query GeneticsAnimal
+    try:
+        farm_uuid = UUID(log.id_farm)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid Farm ID in log")
+
+    # We try to get animals from genetics.animals that match the farm
+    # Filtering by source_system from the evaluations is more robust
+    from sqlalchemy import exists
+    animals_query = db.query(GeneticsAnimal).filter(
+        GeneticsAnimal.farm_id == farm_uuid,
+        exists().where(
+            (GeneticsGeneticEvaluation.animal_id == GeneticsAnimal.id) &
+            (GeneticsGeneticEvaluation.fonte_origem == log.source_system)
+        )
+    ).order_by(GeneticsAnimal.created_at.desc()).limit(100)
+    animals = animals_query.all()
+    
+    # Map to legacy AnimalResponse fields
+    mapped_animals = [
+        AnimalResponse(
+            id_animal=0,
+            id_farm=0,
+            rgn_animal=a.rgn,
+            nome_animal=a.nome,
+            sexo=a.sexo,
+            raca=a.raca or a.serie,
+            data_nascimento=a.nascimento,
+            upload_id=a.upload_id
+        ) for a in animals
+    ]
+    
+    return UploadDetailResponse(
+        log=ProcessingLogResponse.model_validate(log),
+        animals_preview=mapped_animals,
+        total_count=log.total_rows,
+    )
+
+
+@router.get("/upload/{log_id}/pdf")
+def generate_upload_report(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log = db.query(ProcessingLog).filter(ProcessingLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Processing log not found")
+    
+    if current_user.role != "admin" and log.id_farm != current_user.id_farm:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        farm_uuid = UUID(log.id_farm)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid Farm ID in log")
+
+    from sqlalchemy import exists
+    animals = db.query(GeneticsAnimal).filter(
+        GeneticsAnimal.farm_id == farm_uuid,
+        exists().where(
+            (GeneticsGeneticEvaluation.animal_id == GeneticsAnimal.id) &
+            (GeneticsGeneticEvaluation.fonte_origem == log.source_system)
+        )
+    ).all()
+    
+    # Map to ReportAnimal properties for ReportGenerator
+    mapped_animals = [
+        ReportAnimal(
+            rgn_animal=a.rgn,
+            nome_animal=a.nome or "—",
+            sexo=a.sexo or "—",
+            raca=a.raca or a.serie or "—",
+            data_nascimento=a.nascimento,
+            upload_id=a.upload_id,
+            p210_peso_desmama=None,
+            p365_peso_ano=None,
+            p450_peso_sobreano=None,
+            fonte_origem=log.source_system
+        ) for a in animals
+    ]
+    
+    farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+    farm_name = farm.nome if farm else None
+    
+    generator = ReportGenerator()
+    pdf_bytes = generator.generate_upload_report(
+        log=log,
+        animals=mapped_animals,
+        farm_name=farm_name,
+    )
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=relatorio_upload_{log_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        },
+    )
+
+
+@router.get("/benchmark/pdf")
+def generate_benchmark_report(
+    platform_code: str = Query(..., description="Platform code (ANCP, GENEPLUS, PMGZ)"),
+    characteristic: str = Query(..., description="Characteristic code"),
+    farm_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from backend.benchmark import PLATFORMS, get_evaluation_value
+    
+    if platform_code not in PLATFORMS:
+        raise HTTPException(status_code=404, detail=f"Platform {platform_code} not found")
+    
+    platform = PLATFORMS[platform_code]
+    char_info = None
+    for char in platform["characteristics"]:
+        if char["code"] == characteristic:
+            char_info = char
+            break
+    
+    if not char_info:
+        raise HTTPException(status_code=404, detail=f"Characteristic {characteristic} not found")
+    
+    column_name = char_info["column"]
+    
+    query = db.query(GeneticsGeneticEvaluation, GeneticsAnimal).join(
+        GeneticsAnimal, GeneticsGeneticEvaluation.animal_id == GeneticsAnimal.id
+    ).filter(
+        GeneticsGeneticEvaluation.fonte_origem == platform_code
+    )
+    if farm_id:
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
+    elif current_user.role != "admin" and current_user.id_farm:
+        query = query.filter(GeneticsAnimal.farm_id == str(current_user.id_farm))
+    
+    evaluations_and_animals = query.all()
+    
+    max_safra = get_max_completed_safra()
+    latest_map = {}
+    for ev, anim in evaluations_and_animals:
+        if ev.safra > max_safra:
+            continue
+        if anim.id not in latest_map:
+            latest_map[anim.id] = (ev, anim)
+        else:
+            existing_ev, _ = latest_map[anim.id]
+            if (ev.safra, ev.created_at) > (existing_ev.safra, existing_ev.created_at):
+                latest_map[anim.id] = (ev, anim)
+                
+    class BenchmarkItem:
+        def __init__(self, animal_id, sexo, value, column_name):
+            self.animal_id = animal_id
+            self.sexo = sexo
+            setattr(self, column_name, value)
+            
+    items = []
+    for ev, anim in latest_map.values():
+        val = get_evaluation_value(ev, characteristic)
+        if val is not None:
+            items.append(BenchmarkItem(
+                animal_id=anim.rgn,
+                sexo=anim.sexo or "—",
+                value=val,
+                column_name=column_name
+            ))
+    
+    farm_name = None
+    if farm_id:
+        try:
+            farm_uuid = UUID(farm_id)
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            farm_name = farm.nome if farm else None
+        except ValueError:
+            pass
+    elif current_user.id_farm:
+        try:
+            farm_uuid = UUID(str(current_user.id_farm))
+            farm = db.query(GeneticsFarm).filter(GeneticsFarm.id == farm_uuid).first()
+            farm_name = farm.nome if farm else None
+        except ValueError:
+            pass
+    
+    generator = ReportGenerator()
+    pdf_bytes = generator.generate_benchmark_report(
+        platform_code=platform_code,
+        platform_name=platform["name"],
+        characteristic=char_info,
+        evaluations=items,
+        farm_name=farm_name,
+    )
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=relatorio_benchmark_{platform_code}_{characteristic}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
         },
     )

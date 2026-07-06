@@ -53,7 +53,7 @@ class BaseLoader(ABC):
 
         try:
             return pd.to_datetime(valor, dayfirst=True).date()
-        except:
+        except Exception:
             return None
 
     def _converter_booleanos(self, df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:

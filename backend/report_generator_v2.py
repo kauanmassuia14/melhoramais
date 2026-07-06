@@ -138,7 +138,7 @@ class ReportGeneratorV2:
         ))
         try:
             canvas_obj.drawImage(logo_path, 15 * mm, A4[1] - 20 * mm, width=15 * mm, height=15 * mm, mask='auto')
-        except:
+        except Exception:
             # Fallback if logo not found
             canvas_obj.setFillColor(white)
             canvas_obj.setFont("Helvetica-Bold", 14)
@@ -589,7 +589,7 @@ class ReportGeneratorV2:
                 if m and m.get("dep") is not None:
                     try:
                         values.append(float(m["dep"]))
-                    except:
+                    except Exception:
                         pass
             return statistics.mean(values) if values else 0.0
             

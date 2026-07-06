@@ -1,0 +1,30 @@
+Nested Loop Semi Join  (cost=5774.13..6050.75 rows=79 width=50) (actual time=147.600..281.152 rows=20171 loops=1)
+  ->  Hash Join  (cost=5773.71..6000.72 rows=79 width=66) (actual time=147.579..240.552 rows=20171 loops=1)
+        Hash Cond: ((genetic_evaluations_1.animal_id = animals.id) AND (genetic_evaluations_1.safra = (SubPlan 2)))
+        ->  HashAggregate  (cost=1891.84..1896.94 rows=510 width=20) (actual time=56.384..74.038 rows=73847 loops=1)
+              Group Key: genetic_evaluations_1.animal_id, genetic_evaluations_1.safra
+              Batches: 5  Memory Usage: 8241kB  Disk Usage: 248kB
+              ->  Bitmap Heap Scan on genetic_evaluations genetic_evaluations_1  (cost=13.65..1889.29 rows=510 width=20) (actual time=8.560..34.993 rows=73847 loops=1)
+                    Recheck Cond: ((COALESCE(((metrics['PD-EDg'::text] ->> 'dep'::text))::double precision, ((metrics['DP210'::text] ->> 'dep'::text))::double precision, ((metrics['DP120'::text] ->> 'dep'::text))::double precision) >= '5'::double precision) AND (COALESCE(((metrics['PD-EDg'::text] ->> 'dep'::text))::double precision, ((metrics['DP210'::text] ->> 'dep'::text))::double precision, ((metrics['DP120'::text] ->> 'dep'::text))::double precision) <= '25'::double precision))
+                    Heap Blocks: exact=22127
+                    ->  Bitmap Index Scan on idx_eval_metrics_pd_dep_float  (cost=0.00..13.52 rows=510 width=0) (actual time=5.313..5.314 rows=73847 loops=1)
+                          Index Cond: ((COALESCE(((metrics['PD-EDg'::text] ->> 'dep'::text))::double precision, ((metrics['DP210'::text] ->> 'dep'::text))::double precision, ((metrics['DP120'::text] ->> 'dep'::text))::double precision) >= '5'::double precision) AND (COALESCE(((metrics['PD-EDg'::text] ->> 'dep'::text))::double precision, ((metrics['DP210'::text] ->> 'dep'::text))::double precision, ((metrics['DP120'::text] ->> 'dep'::text))::double precision) <= '25'::double precision))
+        ->  Hash  (cost=3405.45..3405.45 rows=31761 width=50) (actual time=91.067..91.069 rows=31553 loops=1)
+              Buckets: 32768  Batches: 1  Memory Usage: 2880kB
+              ->  Bitmap Heap Scan on animals  (cost=398.44..3405.45 rows=31761 width=50) (actual time=0.652..6.701 rows=31553 loops=1)
+                    Recheck Cond: (farm_id = 'a00de392-c819-4b79-bfdf-c1860a2d026d'::uuid)
+                    Heap Blocks: exact=718
+                    ->  Bitmap Index Scan on idx_animals_farm_sexo  (cost=0.00..390.50 rows=31761 width=0) (actual time=0.571..0.571 rows=31553 loops=1)
+                          Index Cond: (farm_id = 'a00de392-c819-4b79-bfdf-c1860a2d026d'::uuid)
+              SubPlan 2
+                ->  Result  (cost=8.44..8.45 rows=1 width=4) (actual time=0.002..0.002 rows=1 loops=51724)
+                      InitPlan 1
+                        ->  Limit  (cost=0.42..8.44 rows=1 width=4) (actual time=0.002..0.002 rows=1 loops=51724)
+                              ->  Index Only Scan Backward using uix_animal_safra_fonte on genetic_evaluations genetic_evaluations_2  (cost=0.42..8.44 rows=1 width=4) (actual time=0.002..0.002 rows=1 loops=51724)
+                                    Index Cond: ((animal_id = animals.id) AND (safra <= 2025))
+                                    Heap Fetches: 56
+  ->  Index Only Scan using uix_animal_safra_fonte on genetic_evaluations  (cost=0.42..0.62 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=20171)
+        Index Cond: ((animal_id = animals.id) AND (safra <= 2025) AND (fonte_origem = ANY ('{ANCP,PMGZ}'::text[])))
+        Heap Fetches: 4
+Planning Time: 5.946 ms
+Execution Time: 282.788 ms

@@ -1,6 +1,6 @@
 import logging
 from typing import Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ class PMGZProcessor:
             source_system="PMGZ",
             filename=filename,
             status="processing",
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
         self.db.add(log)
         self.db.commit()
@@ -51,7 +51,7 @@ class PMGZProcessor:
             log.rows_updated = updated
             log.rows_failed = failed
             log.status = "completed"
-            log.completed_at = datetime.utcnow()
+            log.completed_at = datetime.now(timezone.utc)
 
             if self.upload_id:
                 upload = self.db.query(Upload).filter(
@@ -62,7 +62,7 @@ class PMGZProcessor:
                     upload.rows_inserted = inserted
                     upload.rows_updated = updated
                     upload.status = "completed"
-                    upload.completed_at = datetime.utcnow()
+                    upload.completed_at = datetime.now(timezone.utc)
                     upload.arquivo_nome_original = filename
 
             self.db.commit()
@@ -78,7 +78,7 @@ class PMGZProcessor:
                 if failed_log:
                     failed_log.status = "failed"
                     failed_log.error_message = str(e)[:1000]
-                    failed_log.completed_at = datetime.utcnow()
+                    failed_log.completed_at = datetime.now(timezone.utc)
                     fresh_db.commit()
 
                 if self.upload_id:
@@ -88,7 +88,7 @@ class PMGZProcessor:
                     if failed_upload:
                         failed_upload.status = "failed"
                         failed_upload.error_message = str(e)[:1000]
-                        failed_upload.completed_at = datetime.utcnow()
+                        failed_upload.completed_at = datetime.now(timezone.utc)
                         fresh_db.commit()
             except Exception:
                 fresh_db.rollback()

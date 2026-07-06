@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from backend.models import Farm, GeneticsFarm, User
+from backend.models import GeneticsFarm, User
 from backend.database import get_db
 from backend.schemas import (
     FarmCreate, FarmUpdate, FarmResponse, FarmResponseFromGenetics,

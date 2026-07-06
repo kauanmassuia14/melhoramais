@@ -2,7 +2,7 @@ import pandas as pd
 import io
 import logging
 from typing import Dict, List, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.models import ColumnMapping, ProcessingLog, Upload, IS_SQLITE, GeneticsAnimal, GeneticsFarm
@@ -114,7 +114,7 @@ class GeneticDataProcessor:
                     upload.rows_inserted = inserted
                     upload.rows_updated = updated
                     upload.status = "completed"
-                    upload.completed_at = datetime.utcnow()
+                    upload.completed_at = datetime.now(timezone.utc)
                     upload.arquivo_nome_original = filename
 
             self.db.commit()
@@ -147,7 +147,7 @@ class GeneticDataProcessor:
                     if failed_upload:
                         failed_upload.status = "failed"
                         failed_upload.error_message = str(e)[:1000]
-                        failed_upload.completed_at = datetime.utcnow()
+                        failed_upload.completed_at = datetime.now(timezone.utc)
                         fresh_db.commit()
             except Exception as inner_e:
                 logger.error(f"Error updating failed upload status: {inner_e}")
@@ -282,13 +282,13 @@ class GeneticDataProcessor:
                             # Fallback: maybe it's a CSV with .xls extension
                             try:
                                 df = pd.read_csv(content_io, sep=";", encoding="utf-8")
-                            except:
+                            except Exception:
                                 content_io.seek(0)
                                 df = pd.read_csv(content_io, sep=",", encoding="utf-8")
             elif filename.lower().endswith(".csv"):
                 try:
                     df = pd.read_csv(content_io, sep=";", encoding="utf-8")
-                except:
+                except Exception:
                     content_io.seek(0)
                     df = pd.read_csv(content_io, sep=",", encoding="utf-8")
             elif filename.lower().endswith(".pag"):
@@ -297,7 +297,7 @@ class GeneticDataProcessor:
                 # Try guessing
                 try:
                     df = pd.read_excel(content_io)
-                except:
+                except Exception:
                     content_io.seek(0)
                     df = pd.read_csv(content_io, sep=";")
         except Exception as e:
@@ -383,7 +383,7 @@ class GeneticDataProcessor:
             if col in float_columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
-                except:
+                except Exception:
                     pass
 
         # Enforce 3-decimal precision for deepCAR / CAR columns
@@ -391,7 +391,7 @@ class GeneticDataProcessor:
             if "CAR" in str(col).upper():
                 try:
                     df[col] = pd.to_numeric(df[col], errors="coerce").round(3)
-                except:
+                except Exception:
                     pass
 
         return df
@@ -441,7 +441,7 @@ class GeneticDataProcessor:
                 dt = pd.to_datetime(v, dayfirst=True, errors='coerce')
                 if pd.notna(dt):
                     return dt.date()
-            except:
+            except Exception:
                 pass
             return None
 
@@ -465,19 +465,10 @@ class GeneticDataProcessor:
                 if not s or s in ['-', 'NAN', 'NONE', '', 'NAT']:
                     return None
                 return float(s)
-            except:
+            except Exception:
                 return None
 
-        def safe_date(v):
-            if pd.isna(v) or not v:
-                return None
-            try:
-                if isinstance(v, datetime):
-                    return v.date()
-                # Prioridade para formato DD/MM/YYYY
-                return pd.to_datetime(v, dayfirst=True).date()
-            except:
-                return None
+        # NOTE: safe_date already defined above (line ~425) — duplicate removed
 
         # Helper para busca robusta de colunas (case-insensitive, ignore spaces/underscores/accents)
         def get_val(r, col_name):
@@ -832,7 +823,7 @@ class GeneticDataProcessor:
                 if safra_raw is not None:
                     try:
                         safra_val = int(float(str(safra_raw).replace(",", ".").strip()))
-                    except:
+                    except Exception:
                         pass
                 
                 if not safra_val:

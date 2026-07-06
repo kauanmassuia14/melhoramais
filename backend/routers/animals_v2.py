@@ -113,7 +113,7 @@ def eval_to_dict(e: GeneticsGeneticEvaluation) -> dict:
     if isinstance(e.metrics, str):
         try:
             metrics = json.loads(e.metrics)
-        except:
+        except Exception:
             metrics = {}
 
     # Compatibility mapping: map standardized names (from processor.py) to standard frontend fields
@@ -223,7 +223,7 @@ def get_animal_comparison(
         if isinstance(ev.metrics, str):
             try:
                 raw_metrics = json.loads(ev.metrics)
-            except:
+            except Exception:
                 raw_metrics = {}
 
         normalized_metrics: dict = {}

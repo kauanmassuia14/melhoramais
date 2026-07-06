@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import statistics
+import json
+from uuid import UUID
 
-from .database import get_db
-from .models import Animal, Farm, ColumnMapping, User
+from .database import get_db, get_max_completed_safra
+from .models import GeneticsAnimal, GeneticsFarm, GeneticsGeneticEvaluation, User
 from .auth.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/benchmark", tags=["benchmark"])
@@ -17,7 +19,7 @@ PLATFORMS = {
     "ANCP": {
         "name": "ANCP",
         "description": "Associação Nacional de Criadores e Prodembros",
-        "index_column": "anc_mg",  # Main index column for sorting
+        "index_column": "anc_mg",  # Main index column for sorting (legacy)
         "index_name": "MG (Média Genética)",
         "characteristics": [
             {"code": "mg", "name": "Média Genética", "column": "anc_mg", "description": "Média ponderada das DEPs do animal. Quanto maior, melhor o valor genético."},
@@ -72,6 +74,95 @@ PLATFORMS = {
 }
 
 
+def normalize_char_code(char_code: str) -> str:
+    code = char_code.lower()
+    for prefix in ("anc_", "gen_", "pmg_"):
+        if code.startswith(prefix):
+            return code[len(prefix):]
+    return code
+
+
+def get_evaluation_value(evaluation: GeneticsGeneticEvaluation, char_code: str) -> Optional[float]:
+    metrics = evaluation.metrics if isinstance(evaluation.metrics, dict) else {}
+    char_code_lower = normalize_char_code(char_code)
+    
+    # 1. Main Indices
+    if char_code_lower in ("mg", "iqg", "iabc"):
+        if evaluation.indice_principal is not None:
+            return float(evaluation.indice_principal)
+            
+    # 2. Platform-specific mappings
+    platform = evaluation.fonte_origem
+    keys_to_try = []
+    
+    if platform == "ANCP":
+        if char_code_lower == "mg":
+            keys_to_try = ["MGTe", "MG"]
+        elif char_code_lower == "te":
+            keys_to_try = ["TE"]
+        elif char_code_lower == "m":
+            keys_to_try = ["MP120", "DIPM"]
+        elif char_code_lower == "p":
+            keys_to_try = ["DP210", "DP120"]
+        elif char_code_lower == "sp":
+            keys_to_try = ["DP450", "DP365"]
+        elif char_code_lower == "e":
+            keys_to_try = ["CAR", "IMS"]
+        elif char_code_lower == "sao":
+            keys_to_try = ["DAOL"]
+        elif char_code_lower == "leg":
+            keys_to_try = ["DACAB"]
+        elif char_code_lower == "pp30":
+            keys_to_try = ["D3P"]
+    elif platform == "GENEPLUS":
+        if char_code_lower == "iqg":
+            keys_to_try = ["IQG"]
+        elif char_code_lower == "pmm":
+            keys_to_try = ["PMm"]
+        elif char_code_lower == "p":
+            keys_to_try = ["PD", "PD120"]
+        elif char_code_lower == "sp":
+            keys_to_try = ["PS"]
+        elif char_code_lower == "e":
+            keys_to_try = ["CAR"]
+        elif char_code_lower == "sao":
+            keys_to_try = ["AOL"]
+        elif char_code_lower == "leg":
+            keys_to_try = ["EGS", "ACAB"]
+        elif char_code_lower == "pp30":
+            keys_to_try = ["PP30"]
+    elif platform == "PMGZ":
+        if char_code_lower == "iabc":
+            keys_to_try = ["IABCZ"]
+        elif char_code_lower == "zpmm":
+            keys_to_try = ["PM-EMg"]
+        elif char_code_lower == "p":
+            keys_to_try = ["PD-EDg"]
+        elif char_code_lower == "sp":
+            keys_to_try = ["PS-EDg"]
+        elif char_code_lower == "sao":
+            keys_to_try = ["AOLg"]
+        elif char_code_lower == "leg":
+            keys_to_try = ["ACABg"]
+            
+    # Try defined keys in metrics
+    for k in keys_to_try:
+        metric_block = metrics.get(k)
+        if isinstance(metric_block, dict):
+            val = metric_block.get("dep")
+            if val is not None:
+                return float(val)
+                
+    # Generic fallback: search keys case-insensitively
+    for k, block in metrics.items():
+        if k.lower() == char_code_lower and isinstance(block, dict):
+            val = block.get("dep")
+            if val is not None:
+                return float(val)
+                
+    return None
+
+
 @router.get("/platforms")
 async def get_platforms(
     db: Session = Depends(get_db),
@@ -114,7 +205,7 @@ async def get_benchmark_groups(
     end_date: Optional[date] = Query(None, description="End date for filter"),
     sexo: Optional[str] = Query(None, description="Sex filter (M, F)"),
     situacao: Optional[str] = Query(None, description="Status filter (ATIVO, INATIVO)"),
-    farm_id: Optional[int] = Query(None, description="Farm ID filter"),
+    farm_id: Optional[str] = Query(None, description="Farm ID filter"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -135,36 +226,24 @@ async def get_benchmark_groups(
     if not char_info:
         raise HTTPException(status_code=404, detail=f"Characteristic {characteristic} not found")
     
-    column_name = char_info["column"]
-    
-    # Base query
-    query = db.query(Animal)
+    # Base query for GeneticsAnimal
+    query = db.query(GeneticsAnimal)
     
     # Apply filters
     if farm_id:
-        query = query.filter(Animal.id_farm == farm_id)
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
     elif current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(Animal.id_farm == current_user.id_farm)
+        query = query.filter(GeneticsAnimal.farm_id == str(current_user.id_farm))
     
     if sexo:
-        query = query.filter(Animal.sexo == sexo)
-    
-    if situacao:
-        # Assuming there's a situacao column, but we don't have one yet
-        # For now, ignore this filter
-        pass
+        query = query.filter(GeneticsAnimal.sexo == sexo)
     
     if start_date:
-        query = query.filter(Animal.data_nascimento >= start_date)
+        query = query.filter(GeneticsAnimal.nascimento >= start_date)
     if end_date:
-        query = query.filter(Animal.data_nascimento <= end_date)
+        query = query.filter(GeneticsAnimal.nascimento <= end_date)
     
-    # Get only animals with the characteristic value
-    query = query.filter(getattr(Animal, column_name).isnot(None))
-    
-    # Get all animals for calculations
     all_animals = query.all()
-    
     if not all_animals:
         return {
             "platform": platform_code,
@@ -172,30 +251,68 @@ async def get_benchmark_groups(
             "groups": [],
             "total_animals": 0
         }
+        
+    animal_ids = [a.id for a in all_animals]
+    max_safra = get_max_completed_safra()
     
+    # Fetch all evaluations for these animals
+    evals = db.query(GeneticsGeneticEvaluation).filter(
+        GeneticsGeneticEvaluation.animal_id.in_(animal_ids),
+        GeneticsGeneticEvaluation.fonte_origem == platform_code,
+        GeneticsGeneticEvaluation.safra <= max_safra
+    ).order_by(
+        GeneticsGeneticEvaluation.safra.desc(),
+        GeneticsGeneticEvaluation.created_at.desc()
+    ).all()
+    
+    # Map to latest eval per animal in memory
+    eval_map = {}
+    for ev in evals:
+        if ev.animal_id not in eval_map:
+            eval_map[ev.animal_id] = ev
+            
+    # Compile animals that actually have a value for this characteristic
+    animals_with_val = []
+    for animal in all_animals:
+        ev = eval_map.get(animal.id)
+        if ev:
+            val = get_evaluation_value(ev, characteristic)
+            if val is not None:
+                animals_with_val.append((animal, val))
+                
+    if not animals_with_val:
+        return {
+            "platform": platform_code,
+            "characteristic": char_info["name"],
+            "groups": [],
+            "total_animals": 0
+        }
+        
     # Calculate general average (Group C)
-    values = [getattr(a, column_name) for a in all_animals if getattr(a, column_name) is not None]
+    values = [val for _, val in animals_with_val]
     general_avg = statistics.mean(values) if values else 0
     general_std = statistics.stdev(values) if len(values) > 1 else 0
     
     # Group by farm to get "clients"
     farm_groups = {}
-    for animal in all_animals:
-        farm_id = animal.id_farm
-        if farm_id not in farm_groups:
-            farm_groups[farm_id] = []
-        farm_groups[farm_id].append(getattr(animal, column_name))
-    
+    for animal, val in animals_with_val:
+        f_id = str(animal.farm_id) if animal.farm_id else None
+        if not f_id:
+            continue
+        if f_id not in farm_groups:
+            farm_groups[f_id] = []
+        farm_groups[f_id].append(val)
+        
     # Calculate average per farm
     farm_averages = []
-    for farm_id, farm_values in farm_groups.items():
+    for f_id, farm_values in farm_groups.items():
         farm_avg = statistics.mean(farm_values)
         farm_averages.append({
-            "farm_id": farm_id,
+            "farm_id": f_id,
             "average": farm_avg,
             "count": len(farm_values)
         })
-    
+        
     # Sort by average descending
     farm_averages.sort(key=lambda x: x["average"], reverse=True)
     
@@ -208,12 +325,12 @@ async def get_benchmark_groups(
     
     # Get farm names
     farm_names = {}
-    farm_ids = [fa["farm_id"] for fa in farm_averages]
-    if farm_ids:
-        farms = db.query(Farm).filter(Farm.id_farm.in_(farm_ids)).all()
+    farm_uuids = [UUID(fa["farm_id"]) for fa in farm_averages if fa["farm_id"]]
+    if farm_uuids:
+        farms = db.query(GeneticsFarm).filter(GeneticsFarm.id.in_(farm_uuids)).all()
         for farm in farms:
-            farm_names[farm.id_farm] = farm.nome_farm
-    
+            farm_names[str(farm.id)] = farm.nome
+            
     # Build response
     groups = []
     
@@ -223,7 +340,7 @@ async def get_benchmark_groups(
     if top_5_farms:
         top_5_total = sum([fa["count"] for fa in top_5_farms])
         top_5_avg = statistics.mean([fa["average"] for fa in top_5_farms])
-    
+        
     groups.append({
         "name": "Top 5 Clientes",
         "description": "5 clientes com maior média do índice principal",
@@ -245,7 +362,7 @@ async def get_benchmark_groups(
         "name": "Todos os Clientes",
         "description": "Todos os clientes cadastrados no sistema",
         "average": round(all_farms_avg, 3),
-        "count": all_animals.__len__(),
+        "count": len(animals_with_val),
         "farm_count": all_farms_count
     })
     
@@ -263,7 +380,7 @@ async def get_benchmark_groups(
         "characteristic": char_info["name"],
         "characteristic_description": char_info["description"],
         "groups": groups,
-        "total_animals": len(all_animals),
+        "total_animals": len(animals_with_val),
         "total_farms": all_farms_count
     }
 
@@ -275,7 +392,7 @@ async def compare_characteristics(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     sexo: Optional[str] = Query(None),
-    farm_id: Optional[int] = Query(None),
+    farm_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -292,41 +409,61 @@ async def compare_characteristics(
     for char in platform["characteristics"]:
         if char["code"] in char_codes:
             char_map[char["code"]] = char
-    
+            
     if not char_map:
         raise HTTPException(status_code=400, detail="No valid characteristics provided")
-    
-    # Base query
-    query = db.query(Animal)
+        
+    # Base query for GeneticsAnimal
+    query = db.query(GeneticsAnimal)
     if farm_id:
-        query = query.filter(Animal.id_farm == farm_id)
+        query = query.filter(GeneticsAnimal.farm_id == farm_id)
     elif current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(Animal.id_farm == current_user.id_farm)
-    
+        query = query.filter(GeneticsAnimal.farm_id == str(current_user.id_farm))
+        
     if sexo:
-        query = query.filter(Animal.sexo == sexo)
+        query = query.filter(GeneticsAnimal.sexo == sexo)
     if start_date:
-        query = query.filter(Animal.data_nascimento >= start_date)
+        query = query.filter(GeneticsAnimal.nascimento >= start_date)
     if end_date:
-        query = query.filter(Animal.data_nascimento <= end_date)
-    
-    # Filter animals with at least one characteristic
-    column_names = [char_map[code]["column"] for code in char_map]
-    for col in column_names:
-        query = query.filter(getattr(Animal, col).isnot(None))
-    
+        query = query.filter(GeneticsAnimal.nascimento <= end_date)
+        
     animals = query.all()
-    
     if not animals:
         return {"message": "No animals found with the selected characteristics"}
+        
+    # Get latest evaluations
+    animal_ids = [a.id for a in animals]
+    max_safra = get_max_completed_safra()
     
+    evals = db.query(GeneticsGeneticEvaluation).filter(
+        GeneticsGeneticEvaluation.animal_id.in_(animal_ids),
+        GeneticsGeneticEvaluation.fonte_origem == platform_code,
+        GeneticsGeneticEvaluation.safra <= max_safra
+    ).order_by(
+        GeneticsGeneticEvaluation.safra.desc(),
+        GeneticsGeneticEvaluation.created_at.desc()
+    ).all()
+    
+    # Map to latest eval per animal in memory
+    eval_map = {}
+    for ev in evals:
+        if ev.animal_id not in eval_map:
+            eval_map[ev.animal_id] = ev
+            
     # Calculate statistics for each characteristic
     results = []
     for code, char in char_map.items():
-        values = [getattr(a, char["column"]) for a in animals if getattr(a, char["column"]) is not None]
+        values = []
+        for animal in animals:
+            ev = eval_map.get(animal.id)
+            if ev:
+                val = get_evaluation_value(ev, code)
+                if val is not None:
+                    values.append(val)
+                    
         if not values:
             continue
-        
+            
         results.append({
             "code": code,
             "name": char["name"],
@@ -347,7 +484,7 @@ async def compare_characteristics(
                 "99": round(sorted(values)[int(len(values) * 0.99)], 3) if len(values) > 100 else None,
             }
         })
-    
+        
     return {
         "platform": platform_code,
         "total_animals": len(animals),
@@ -360,7 +497,7 @@ async def get_auction_data(
     platform_code: str = Query(..., description="Platform code"),
     characteristic: str = Query(..., description="Characteristic code"),
     limit: int = Query(50, ge=1, le=200),
-    farm_id: Optional[int] = Query(None),
+    farm_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -368,7 +505,7 @@ async def get_auction_data(
     
     if platform_code not in PLATFORMS:
         raise HTTPException(status_code=404, detail=f"Platform {platform_code} not found")
-    
+        
     platform = PLATFORMS[platform_code]
     
     # Find characteristic
@@ -377,65 +514,95 @@ async def get_auction_data(
         if char["code"] == characteristic:
             char_info = char
             break
-    
+            
     if not char_info:
         raise HTTPException(status_code=404, detail=f"Characteristic {characteristic} not found")
+        
+    # Get latest evaluations of all animals for this platform to calculate global percentiles
+    max_safra = get_max_completed_safra()
+    all_evals = db.query(GeneticsGeneticEvaluation).filter(
+        GeneticsGeneticEvaluation.fonte_origem == platform_code,
+        GeneticsGeneticEvaluation.safra <= max_safra
+    ).order_by(
+        GeneticsGeneticEvaluation.safra.desc(),
+        GeneticsGeneticEvaluation.created_at.desc()
+    ).all()
     
-    column_name = char_info["column"]
-    
-    # Base query
-    query = db.query(Animal)
-    if farm_id:
-        query = query.filter(Animal.id_farm == farm_id)
-    elif current_user.role != "admin" and current_user.id_farm:
-        query = query.filter(Animal.id_farm == current_user.id_farm)
-    
-    # Get animals with the characteristic, order by value descending
-    query = query.filter(getattr(Animal, column_name).isnot(None))
-    query = query.order_by(getattr(Animal, column_name).desc())
-    query = query.limit(limit)
-    
-    animals = query.all()
-    
-    # Get farm names
-    farm_ids = [a.id_farm for a in animals]
-    farms = db.query(Farm).filter(Farm.id_farm.in_(farm_ids)).all()
-    farm_names = {farm.id_farm: farm.nome_farm for farm in farms}
-    
-    # Calculate percentiles for ranking
-    all_query = db.query(Animal).filter(getattr(Animal, column_name).isnot(None))
-    all_values = [getattr(a, column_name) for a in all_query.all()]
+    # In-memory deduplication to get latest evaluation per animal
+    all_eval_map = {}
+    for ev in all_evals:
+        if ev.animal_id not in all_eval_map:
+            all_eval_map[ev.animal_id] = ev
+            
+    # Extract values for the characteristic across the entire population
+    all_values = []
+    for ev in all_eval_map.values():
+        val = get_evaluation_value(ev, characteristic)
+        if val is not None:
+            all_values.append(val)
     all_values.sort()
     
+    # Query target animals (by farm filter)
+    target_animals_query = db.query(GeneticsAnimal)
+    if farm_id:
+        target_animals_query = target_animals_query.filter(GeneticsAnimal.farm_id == farm_id)
+    elif current_user.role != "admin" and current_user.id_farm:
+        target_animals_query = target_animals_query.filter(GeneticsAnimal.farm_id == str(current_user.id_farm))
+    target_animals = target_animals_query.all()
+    
+    # Associate target animals with their values
+    animals_with_values = []
+    for animal in target_animals:
+        ev = all_eval_map.get(animal.id)
+        if ev:
+            val = get_evaluation_value(ev, characteristic)
+            if val is not None:
+                animals_with_values.append((animal, ev, val))
+                
+    # Sort target animals by value descending
+    animals_with_values.sort(key=lambda x: x[2], reverse=True)
+    
+    # Apply limit
+    selected_subset = animals_with_values[:limit]
+    
+    # Get farm names for the subset
+    subset_farm_ids = {UUID(str(a.farm_id)) for a, _, _ in selected_subset if a.farm_id}
+    farm_names = {}
+    if subset_farm_ids:
+        farms = db.query(GeneticsFarm).filter(GeneticsFarm.id.in_(list(subset_farm_ids))).all()
+        farm_names = {str(farm.id): farm.nome for farm in farms}
+        
     # Build auction list
     auction_animals = []
-    for animal in animals:
-        value = getattr(animal, column_name)
+    for animal, ev, value in selected_subset:
         # Calculate percentile
         if all_values:
             rank = sum(1 for v in all_values if v <= value)
             percentile = (rank / len(all_values)) * 100
         else:
             percentile = 0
-        
+            
+        # Extract all characteristics for the animal
+        char_dict = {}
+        for char in platform["characteristics"]:
+            char_val = get_evaluation_value(ev, char["code"])
+            if char_val is not None:
+                char_dict[char["code"]] = round(char_val, 3)
+                
         auction_animals.append({
-            "id": animal.id_animal,
-            "rgn": animal.rgn_animal,
-            "nome": animal.nome_animal,
+            "id": str(animal.id),
+            "rgn": animal.rgn,
+            "nome": animal.nome or "—",
             "sexo": animal.sexo,
             "raca": animal.raca,
-            "farm_id": animal.id_farm,
-            "farm_name": farm_names.get(animal.id_farm, f"Fazenda {animal.id_farm}"),
+            "farm_id": str(animal.farm_id) if animal.farm_id else None,
+            "farm_name": farm_names.get(str(animal.farm_id), f"Fazenda {animal.farm_id}") if animal.farm_id else "—",
             "value": round(value, 3),
             "percentile": round(percentile, 1),
             "top_percent": f"TOP {round(100 - percentile, 1)}%" if percentile > 50 else f"TOP {round(percentile, 1)}%",
-            "characteristics": {
-                char["code"]: round(getattr(animal, char["column"]), 3)
-                for char in platform["characteristics"]
-                if hasattr(animal, char["column"]) and getattr(animal, char["column"]) is not None
-            }
+            "characteristics": char_dict
         })
-    
+        
     return {
         "platform": platform_code,
         "characteristic": char_info["name"],

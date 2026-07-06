@@ -482,7 +482,7 @@ class PMGZLoader(BaseLoader):
                     series = series.astype(str).str.strip()
                     series = series.str.replace(',', '.', regex=False)
                     series = series.replace(['-', '', 'nan', 'None', 'NaN', 'nat'], None)
-                except:
+                except Exception:
                     pass
             new_columns.append(series)
         df = pd.concat(new_columns, axis=1)

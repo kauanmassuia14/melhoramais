@@ -5,7 +5,7 @@ description = "Melhora+ Genetic Data Unifier Platform"
 authors = [
     {name = "Kauan Massuia",email = "kauan.massuia@sou.inteli.edu.br"}
 ]
-requires-python = ">=3.14,<4"
+requires-python = ">=3.11,<4"
 dependencies = [
     "pandas (>=3.0.1,<4.0.0)",
     "sqlalchemy (>=2.0.48,<3.0.0)",
