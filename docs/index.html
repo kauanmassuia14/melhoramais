@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melhora+ | Manual de Transição e Handoff de Engenharia</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Palette: Melhora+ Light Agro Theme */
+            --bg-main: #f5f8f6;
+            --bg-card: #ffffff;
+            --border-color: #dce6e0;
+            --primary: #2d6a4f;
+            --primary-hover: #1b4332;
+            --primary-light: #eaf2ee;
+            --accent: #8b5a2b;
+            --accent-light: #f7ede2;
+            --text-main: #1c2d24;
+            --text-muted: #577063;
+            --text-light: #8fa69a;
+            
+            --success: #1b5e20;
+            --success-light: #e8f5e9;
+            --warning: #b7791f;
+            --warning-light: #fffbeb;
+            --danger: #9c1c1c;
+            --danger-light: #fdf2f2;
+            
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --shadow-card: 0 10px 30px rgba(45, 106, 79, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        aside {
+            width: 300px;
+            background-color: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 2.5rem;
+            padding-left: 0.5rem;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            background-color: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 1.5rem;
+            font-family: 'Outfit', sans-serif;
+            box-shadow: 0 4px 10px rgba(45, 106, 79, 0.2);
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary-hover);
+        }
+        
+        .logo-plus {
+            color: #10b981;
+        }
+
+        .nav-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-main);
+            color: var(--primary);
+        }
+
+        .nav-item.active {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .nav-icon {
+            font-size: 1.2rem;
+            display: inline-block;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Main Content Container */
+        main {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 3rem 4rem;
+            max-width: 1200px;
+            overflow-x: hidden;
+        }
+
+        header {
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 2rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .badge-primary {
+            background-color: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .badge-warning {
+            background-color: var(--warning-light);
+            color: var(--warning);
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            color: var(--primary-hover);
+            margin-bottom: 0.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* Document Section Cards */
+        .doc-section {
+            display: none;
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .doc-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            color: var(--primary-hover);
+            margin-top: 2rem;
+            margin-bottom: 1.25rem;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary-light);
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            color: var(--text-main);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 1.25rem;
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        /* Alert Box */
+        .alert {
+            padding: 1.25rem 1.5rem;
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .alert-important {
+            background-color: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            color: var(--primary-hover);
+        }
+
+        .alert-warning {
+            background-color: var(--warning-light);
+            border-left: 4px solid var(--warning);
+            color: var(--text-main);
+        }
+        
+        .alert-danger {
+            background-color: var(--danger-light);
+            border-left: 4px solid var(--danger);
+            color: var(--danger);
+        }
+
+        .alert-icon {
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+
+        .alert-content p {
+            margin-bottom: 0;
+            color: inherit;
+            font-size: 0.95rem;
+        }
+
+        /* Cards Layout Grid */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.75rem;
+            box-shadow: var(--shadow-subtle);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-card);
+            border-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+
+        /* Architectural Diagram Component */
+        .diagram-container {
+            background: linear-gradient(135deg, #ffffff 0%, #f9fbf9 100%);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            margin-bottom: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .arch-flow {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .arch-node {
+            background-color: var(--bg-card);
+            border: 2px solid var(--primary-light);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            text-align: center;
+            width: 220px;
+            box-shadow: var(--shadow-subtle);
+            transition: var(--transition);
+        }
+
+        .arch-node:hover {
+            border-color: var(--primary);
+            box-shadow: 0 8px 24px rgba(45, 106, 79, 0.1);
+        }
+
+        .arch-node h4 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+
+        .arch-node span {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        .arch-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--text-light);
+            font-weight: 600;
+            font-size: 0.8rem;
+            flex-grow: 1;
+        }
+
+        .arch-arrow::after {
+            content: "➔";
+            font-size: 1.5rem;
+            color: var(--primary);
+            margin-top: 4px;
+        }
+
+        /* Code Block Styling */
+        pre {
+            background-color: #1e293b;
+            color: #f8fafc;
+            padding: 1.25rem 1.5rem;
+            border-radius: var(--radius-md);
+            overflow-x: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #334155;
+            position: relative;
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background-color: var(--primary-light);
+            color: var(--primary-hover);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+        }
+
+        pre code {
+            background-color: transparent;
+            color: inherit;
+            padding: 0;
+            border-radius: 0;
+        }
+        
+        .code-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-bottom: 1.5rem;
+            padding-left: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            background-color: var(--bg-card);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--primary-light);
+            color: var(--primary-hover);
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Action Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.95rem;
+            border: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Accordion Style panels for checklists */
+        .panel {
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 14px 20px;
+            background-color: #fafcfa;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid transparent;
+            transition: var(--transition);
+        }
+
+        .panel-header:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .panel-content {
+            padding: 20px;
+            display: none;
+            border-top: 1px solid var(--border-color);
+            background-color: white;
+        }
+
+        .panel.open .panel-content {
+            display: block;
+        }
+        
+        .panel.open .panel-header {
+            border-bottom-color: var(--border-color);
+            background-color: var(--primary-light);
+            color: var(--primary-hover);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 4rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 2rem;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 0.85rem;
+        }
+
+        /* Responsive Settings */
+        @media (max-width: 1024px) {
+            aside {
+                width: 240px;
+            }
+            main {
+                margin-left: 240px;
+                padding: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            aside {
+                position: relative;
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding: 1.5rem;
+            }
+            main {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .arch-flow {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            .arch-arrow::after {
+                content: "▼";
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Menu Navigation -->
+    <aside>
+        <div class="logo-container">
+            <div class="logo-icon">M</div>
+            <div class="logo-text">Melhora<span class="logo-plus">+</span></div>
+        </div>
+        
+        <ul class="nav-menu">
+            <li><a class="nav-item active" data-tab="visao-geral"><span class="nav-icon">🌟</span> Visão Geral & Arquitetura</a></li>
+            <li><a class="nav-item" data-tab="funcionalidades"><span class="nav-icon">⚙️</span> Funcionalidades</a></li>
+            <li><a class="nav-item" data-tab="contas"><span class="nav-icon">📦</span> Configuração de Contas</a></li>
+            <li><a class="nav-item" data-tab="migracao"><span class="nav-icon">🚀</span> Guia de Migração</a></li>
+            <li><a class="nav-item" data-tab="status"><span class="nav-icon">🛠️</span> Status do Projeto</a></li>
+            <li><a class="nav-item" data-tab="variaveis"><span class="nav-icon">🔑</span> Variáveis & Dicas</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main>
+        <header>
+            <span class="badge badge-primary">Handoff de Engenharia</span>
+            <h1>Manual de Transição Técnica — Melhora+</h1>
+            <p class="subtitle">Documentação integral de arquitetura, funcionalidades, migração e infraestrutura para novos desenvolvedores.</p>
+        </header>
+
+        <!-- 1. VISION & ARCHITECTURE -->
+        <section id="visao-geral" class="doc-section active">
+            <h2>Visão Geral & Arquitetura</h2>
+            <p>O <strong>Melhora+</strong> é uma plataforma agrícola de unificação e processamento de dados genéticos bovinos. O sistema resolve a fragmentação de relatórios fornecidos por diferentes associações pecuárias (ANCP, PMGZ e Geneplus), oferecendo um dashboard consolidado, análises estatísticas intra-rebanho e geração de relatórios em formato PDF customizado para proprietários rurais.</p>
+            
+            <div class="diagram-container">
+                <h3>Arquitetura Consolidada do Sistema</h3>
+                <p>Uma arquitetura de três camadas moderna e escalável, projetada para desacoplamento completo.</p>
+                <div class="arch-flow">
+                    <div class="arch-node">
+                        <h4>Frontend Web</h4>
+                        <span>Next.js 15 (App Router)</span>
+                        <span>TailwindCSS Design System</span>
+                        <span>Hospedado no Vercel</span>
+                    </div>
+                    <div class="arch-arrow">HTTP / JSON</div>
+                    <div class="arch-node">
+                        <h4>Backend REST API</h4>
+                        <span>FastAPI (Python)</span>
+                        <span>SQLAlchemy 2.0 ORM</span>
+                        <span>Hospedado no Render / Railway</span>
+                    </div>
+                    <div class="arch-arrow">TCP / SSL</div>
+                    <div class="arch-node">
+                        <h4>Banco de Dados</h4>
+                        <span>PostgreSQL (Neon.tech)</span>
+                        <span>Esquema Multi-tenant</span>
+                        <span>Serverless / Auto-scaling</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Camada de Apresentação (Frontend)</h3>
+                    <p>Interface responsiva de alta densidade desenvolvida em <strong>Next.js 15</strong> e estilizada com o <strong>Agro-Centric Design System</strong>. Consome a API do backend de forma assíncrona, gerenciando sessões de usuário via Tokens JWT.</p>
+                </div>
+                <div class="card">
+                    <h3>Camada de Serviços (Backend)</h3>
+                    <p>API REST robusta baseada em <strong>FastAPI</strong> que gerencia o processamento assíncrono de arquivos pesados (.xlsx/.xls), efetua conversão e limpeza de colunas pecuárias e gera relatórios gráficos complexos de forma otimizada.</p>
+                </div>
+            </div>
+
+            <div class="alert alert-important">
+                <span class="alert-icon">💡</span>
+                <div class="alert-content">
+                    <strong>Estrutura de Multi-Tenancy:</strong> O banco de dados é estruturado para suportar múltiplas fazendas com dados isolados logicamente. Cada registro pecuário está atrelado a um ID de Fazenda (<code>id_farm</code>), garantindo privacidade total.
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. FEATURES -->
+        <section id="funcionalidades" class="doc-section">
+            <h2>Funcionalidades do Sistema</h2>
+            <p>O ecossistema Melhora+ é centrado no tratamento de planilhas pecuárias e análises genéticas complexas. Abaixo estão as principais funcionalidades implementadas:</p>
+
+            <div class="panel">
+                <div class="panel-header">1. Módulo de Upload & Processamento Genético Assíncrono <span>▼</span></div>
+                <div class="panel-content">
+                    <p>O usuário faz o upload de planilhas originais de associações pecuárias. O motor do backend (<code>backend/processor.py</code>) executa:</p>
+                    <ul>
+                        <li><strong>Deduplicação Inteligente:</strong> Cálculo de hash do arquivo (SHA-256) para evitar re-processamento.</li>
+                        <li><strong>Mapeamento Dinâmico de Colunas:</strong> A plataforma traduz cabeçalhos customizados das planilhas para a tabela mestre <code>silver.animais</code> sem necessidade de alterar o código (as regras são guardadas na tabela <code>ColumnMapping</code>).</li>
+                        <li><strong>Validação de Dados:</strong> Filtro automático de tipos de dados errados, datas fora de escopo pecuário ou sexagem inconsistente.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">2. Análise Intra-Rebanho (Intra-Herd Processor) <span>▼</span></div>
+                <div class="panel-content">
+                    <p>Gera cálculos estatísticos de ranqueamento interno e distribuição percentil das avaliações genéticas de um lote ou fazenda específica:</p>
+                    <ul>
+                        <li>Distribuição de pesos à desmama (P210), ano (P365) e sobreano (P450).</li>
+                        <li>Índices de fertilidade (IPP) e carcaça (AOL, EGP).</li>
+                        <li>Ranqueamento por percentil pecuário, organizando os animais em categorias elites.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">3. Motor de Relatórios Customizados (PDF Generator V2) <span>▼</span></div>
+                <div class="panel-content">
+                    <p>Construído sobre a biblioteca <strong>ReportLab</strong> e <strong>Matplotlib</strong>, o gerador monta relatórios em PDF de alta qualidade gráfica contendo:</p>
+                    <ul>
+                        <li>Gráficos de dispersão e histogramas da qualidade genética da fazenda.</li>
+                        <li>Comparativo de evolução entre safras anteriores.</li>
+                        <li>Listagem formatada dos melhores reprodutores e matrizes da propriedade.</li>
+                        <li>O relatório é gerado em tempo de execução via API Stream de dados, reduzindo o consumo de memória RAM no servidor.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">4. Dashboard Agro & Benchmarking Inter-Fazendas <span>▼</span></div>
+                <div class="panel-content">
+                    <p>Painel gerencial que consolida os KPIs gerais da conta:</p>
+                    <ul>
+                        <li>Total de animais ativos divididos por raça e sexo.</li>
+                        <li>Comparativo de pontuações de DEPs/EPDs entre diferentes propriedades do mesmo dono.</li>
+                        <li>Histórico detalhado de processamento com relatórios de logs para fácil manutenção pelo produtor.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="alert alert-important">
+                <span class="alert-icon">⚙️</span>
+                <div class="alert-content">
+                    <strong>Matriz de Tradução Pecuária:</strong> As planilhas das plataformas ANCP, PMGZ e Geneplus possuem nomes de colunas diferentes para os mesmos índices. A tabela abaixo resume o mapeamento universal realizado pelo sistema:
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Conceito Unificado</th>
+                        <th>ANCP</th>
+                        <th>PMGZ</th>
+                        <th>Geneplus</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Identificação (RGN)</strong></td>
+                        <td>RGN</td>
+                        <td>Registro</td>
+                        <td>PREFIXO_RGN</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Peso Desmama</strong></td>
+                        <td>PESO_DESM</td>
+                        <td>P210</td>
+                        <td>P_DESM</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Peso Sobreano</strong></td>
+                        <td>PESO_SOBRE</td>
+                        <td>P450</td>
+                        <td>P_SOBRE</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Área Olho Lombo</strong></td>
+                        <td>AOL</td>
+                        <td>AOL</td>
+                        <td>AOL</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 3. ACCOUNT SETUP -->
+        <section id="contas" class="doc-section">
+            <h2>Configuração de Contas para Transição</h2>
+            <p>Para transferir o projeto para uma nova equipe de engenharia sem perdas, siga o checklist de criação e migração de contas externas:</p>
+
+            <div class="panel">
+                <div class="panel-header">Passo 1: Organizar e Configurar o GitHub <span>▼</span></div>
+                <div class="panel-content">
+                    <p>A equipe precisará de uma conta no GitHub para receber o código-fonte.</p>
+                    <ol>
+                        <li>Acesse <a href="https://github.com" target="_blank">GitHub</a> e crie uma conta institucional/organizacional ou pessoal para o novo responsável.</li>
+                        <li><strong>Para clonar o projeto atualmente:</strong>
+                            <pre><code>git clone git@github.com:kauanmassuia14/melhoramais.git</code></pre>
+                        </li>
+                        <li><strong>Transferência do Repositório:</strong> Vá em <code>Settings</code> > <code>Danger Zone</code> > <code>Transfer ownership</code> no repositório do GitHub e envie para o novo nome de usuário ou organização criada.</li>
+                        <li><strong>Configurar GitHub Pages:</strong> Se desejar manter esta página de documentação ativa no GitHub Pages do repositório:
+                            <ul>
+                                <li>Vá em <code>Settings</code> > <code>Pages</code>.</li>
+                                <li>Em "Build and deployment", selecione o branch principal (ex: <code>main</code> ou <code>feat/byanka</code>) e escolha a pasta <code>/docs</code>.</li>
+                                <li>Clique em <code>Save</code>. O manual ficará público no link <code>https://[seu-usuario].github.io/melhoramais/</code>.</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Passo 2: Configurar o Neon.tech (Banco de Dados PostgreSQL) <span>▼</span></div>
+                <div class="panel-content">
+                    <p>O banco de dados de produção está hospedado na plataforma serverless Neon.tech. Para configurar um novo banco:</p>
+                    <ol>
+                        <li>Acesse <a href="https://neon.tech" target="_blank">Neon.tech</a> e crie uma conta gratuita ou plano Team.</li>
+                        <li>Crie um novo projeto chamado <code>melhoramais-agro</code>. Selecione a região preferencialmente mais próxima de onde sua API estará hospedada (ex: AWS US East ou AWS South America/São Paulo para menor latência).</li>
+                        <li>Vá para o painel principal, copie a connection string do PostgreSQL (formato <code>postgresql://neondb_owner:...@ep-cool-resonance-...</code>).</li>
+                        <li>Certifique-se de salvar essa string temporariamente. Ela será configurada como a variável de ambiente <code>DATABASE_URL</code> no seu servidor.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Passo 3: Configurar Plataformas de Hospedagem (Render / Railway / Vercel) <span>▼</span></div>
+                <div class="panel-content">
+                    <p>O projeto está dividido em duas partes hospedadas de forma independente:</p>
+                    <ul>
+                        <li><strong>Frontend (Next.js):</strong> Recomendamos hospedar na <strong>Vercel</strong> devido ao suporte nativo para Next.js App Router e otimização de imagens de forma transparente.</li>
+                        <li><strong>Backend (FastAPI):</strong> Pode ser migrado para o <strong>Render</strong> ou <strong>Railway</strong>. O Render oferece planos gratuitos/econômicos excelentes para APIs Python rodando em contêineres Docker ou direto por scripts Python.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. MIGRATION GUIDE -->
+        <section id="migracao" class="doc-section">
+            <h2>Guia Prático de Migração para o Render</h2>
+            <p>Se você precisa desativar a conta atual no Railway e migrar o backend de forma simples para a plataforma <strong>Render.com</strong>, siga os passos abaixo:</p>
+
+            <div class="panel">
+                <div class="panel-header">Passo 1: Criar o "Web Service" no Render <span>▼</span></div>
+                <div class="panel-content">
+                    <ol>
+                        <li>Entre no seu painel da <a href="https://render.com" target="_blank">Render</a> e clique em <strong>New +</strong> > <strong>Web Service</strong>.</li>
+                        <li>Conecte sua conta do GitHub e selecione o repositório <code>melhoramais</code>.</li>
+                        <li>Configure as opções básicas do Web Service:
+                            <ul>
+                                <li><strong>Name:</strong> <code>melhoramais-backend</code></li>
+                                <li><strong>Environment:</strong> <code>Python 3</code></li>
+                                <li><strong>Region:</strong> Selecione a mesma região do banco de dados Neon para evitar latência.</li>
+                                <li><strong>Branch:</strong> Escolha a branch de produção estável (ex: <code>main</code>).</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Passo 2: Configurar Comandos de Build & Start <span>▼</span></div>
+                <div class="panel-content">
+                    <p>Como a nossa estrutura de arquivos coloca a API FastAPI sob a pasta de origem, configure os comandos da seguinte forma:</p>
+                    
+                    <span class="code-title">Build Command:</span>
+                    <pre><code>pip install -r backend/requirements.txt</code></pre>
+                    
+                    <span class="code-title">Start Command:</span>
+                    <pre><code>python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT</code></pre>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Passo 3: Adicionar as Variáveis de Ambiente no Render <span>▼</span></div>
+                <div class="panel-content">
+                    <p>No menu lateral esquerdo do Render, clique em <strong>Environment</strong> e adicione as seguintes chaves:</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Variável (Key)</th>
+                                <th>Valor Exemplo / Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>DATABASE_URL</code></td>
+                                <td>String de conexão obtida no Neon PostgreSQL (certifique-se de usar o prefixo <code>postgresql://</code>).</td>
+                            </tr>
+                            <tr>
+                                <td><code>JWT_SECRET</code></td>
+                                <td>Uma string aleatória em formato hexadecimal para encriptar os tokens JWT de login.</td>
+                            </tr>
+                            <tr>
+                                <td><code>ALLOWED_ORIGINS</code></td>
+                                <td>Link do frontend hospedado na Vercel (ex: <code>https://melhoramais-edfn.vercel.app</code>) para evitar bloqueios de CORS.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Passo 4: Executar as Migrações e Criar o Esquema no Novo Banco Neon <span>▼</span></div>
+                <div class="panel-content">
+                    <p>Quando a API rodar pela primeira vez no novo banco de dados Neon, as tabelas estarão vazias. Para criar a estrutura automaticamente:</p>
+                    <ol>
+                        <li>Configure temporariamente o arquivo local <code>.env</code> com a <code>DATABASE_URL</code> do novo banco Neon.</li>
+                        <li>Execute o script de criação de esquema:
+                            <pre><code>python backend/create_schema.py</code></pre>
+                        </li>
+                        <li>Rode os scripts adicionais de migração na pasta do backend caso precise estruturar novos campos adicionados nas últimas sprints.</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">Passo 5: Atualizar a URL da API no Frontend (Vercel) <span>▼</span></div>
+                <div class="panel-content">
+                    <ol>
+                        <li>Acesse o painel da sua aplicação frontend na Vercel.</li>
+                        <li>Vá em <code>Settings</code> > <code>Environment Variables</code>.</li>
+                        <li>Altere o valor de <code>NEXT_PUBLIC_API_URL</code> para o endereço HTTPS fornecido pelo Render (ex: <code>https://melhoramais-backend.onrender.com</code>).</li>
+                        <li>Redesloque a aplicação (Redeploy) na Vercel para aplicar a alteração nas páginas estáticas de build.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. PROJECT STATUS -->
+        <section id="status" class="doc-section">
+            <h2>Status do Projeto & Handoff</h2>
+            <p>Lista do estado real de implementação de cada componente do sistema na data de hoje (Agosto/2026):</p>
+
+            <div class="grid-2">
+                <div class="card" style="border-left: 4px solid var(--success)">
+                    <span class="badge badge-primary" style="background-color: var(--success-light); color: var(--success);">Pronto / Funcional</span>
+                    <h3 style="margin-top: 1rem;">O que está pronto:</h3>
+                    <ul>
+                        <li>Autenticação de Usuário e Controle de Níveis (Admin vs. Fazendeiro).</li>
+                        <li>Parser de planilhas ANCP, PMGZ e Geneplus.</li>
+                        <li>Salvamento de Mapeamentos de Colunas dinamicamente por Fazenda.</li>
+                        <li>Consulta completa e avançada de Animais com filtros.</li>
+                        <li>Estrutura de Multi-tenant implementada na API.</li>
+                        <li>Geração básica de relatórios PDF.</li>
+                    </ul>
+                </div>
+                
+                <div class="card" style="border-left: 4px solid var(--warning)">
+                    <span class="badge badge-warning">Em Desenvolvimento / Melhorias</span>
+                    <h3 style="margin-top: 1rem;">O que precisa de atenção:</h3>
+                    <ul>
+                        <li><strong>Análise Intra-rebanho:</strong> A lógica de processamento estatístico foi adicionada ao backend (<code>backend/intra_herd_processor.py</code>), mas necessita de validação com dados reais de campo.</li>
+                        <li>Os componentes de interface para a Análise Intra-rebanho estão no Git na pasta <code>frontend/src/app/analise-intra-rebanho/</code> mas precisam de homologação final.</li>
+                        <li>Exportação avançada de gráficos complexos no PDF (ocasionalmente consome muita memória na geração assíncrona).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h2>Pontos a Melhorar</h2>
+            <ul>
+                <li><strong>Caching de Consultas:</strong> A tabela de animais cresce exponencialmente. Adicionar paginação estrita no frontend e Redis cache para listagem de animais.</li>
+                <li><strong>Tratamento de Arquivos Grandes:</strong> Uploads de arquivos XLSX com mais de 50.000 linhas devem ser migrados para tarefas assíncronas em background real (ex: Celery + Redis) ao invés de rodar na thread principal da request FastAPI.</li>
+                <li><strong>Interface Mobile:</strong> Embora a tabela pecuária seja responsiva, a experiência do produtor no celular ao carregar mapeamentos de planilhas complexas pode ser melhorada com fluxos simplificados (Wizard guiado).</li>
+            </ul>
+
+            <h2>Próximos Passos Sugeridos</h2>
+            <ol>
+                <li>Implementar rotinas de testes automatizados na pasta <code>tests/</code> para validar a integridade dos parsers de planilha genérica contra novos layouts de relatórios das associações.</li>
+                <li>Concluir a integração visual da tela de Análise Intra-Rebanho para exibir os gráficos estatísticos de curva de distribuição Gaussiana dos animais.</li>
+                <li>Habilitar backup diário automático (Point-in-time recovery) no painel do Neon PostgreSQL.</li>
+            </ol>
+        </section>
+
+        <!-- 6. ENVIRONMENT & COMMANDS -->
+        <section id="variaveis" class="doc-section">
+            <h2>Variáveis de Ambiente & Comandos Úteis</h2>
+            <p>Guia rápido de referência de comandos para setup local de novos desenvolvedores:</p>
+
+            <h3>Configuração de Desenvolvimento Local</h3>
+            <p>Para rodar o backend localmente com o banco de desenvolvimento local (SQLite):</p>
+            <pre><code># Instalar dependências (dentro da pasta backend)
+pip install -r requirements.txt
+
+# Iniciar servidor de desenvolvimento local
+python -m uvicorn backend.main:app --reload --port 8000</code></pre>
+
+            <p>Para rodar o frontend localmente:</p>
+            <pre><code># Instalar pacotes (dentro da pasta frontend)
+npm install
+
+# Rodar servidor Next.js
+npm run dev</code></pre>
+
+            <h3>Variáveis de Ambiente Recomendadas (Local)</h3>
+            <p>Crie um arquivo <code>.env</code> na raiz do backend:</p>
+            <pre><code>DATABASE_URL=sqlite:///./test.db
+JWT_SECRET=crie-um-segredo-longo-aqui
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001</code></pre>
+
+            <p>Crie um arquivo <code>.env.local</code> na raiz do frontend:</p>
+            <pre><code>NEXT_PUBLIC_API_URL=http://localhost:8000</code></pre>
+        </section>
+
+        <footer>
+            <p>© 2026 Melhora+. Documento de Handoff Técnico. Gerado em 03/08/2026.</p>
+        </footer>
+    </main>
+
+    <script>
+        // Tab switching logic
+        document.querySelectorAll('.nav-item').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                // Remove active classes
+                document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.doc-section').forEach(sec => sec.classList.remove('active'));
+                
+                // Add active to current
+                button.classList.add('active');
+                const targetTab = button.getAttribute('data-tab');
+                document.getElementById(targetTab).classList.add('active');
+                
+                // Smooth scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
+
+        // Accordion Panel Toggle
+        document.querySelectorAll('.panel-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const panel = header.parentElement;
+                panel.classList.toggle('open');
+            });
+        });
+    </script>
+</body>
+</html>
